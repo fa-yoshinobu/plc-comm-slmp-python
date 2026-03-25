@@ -24,7 +24,7 @@ On the user's current multi-CPU environment:
 ## 3. Executed Command
 
 ```powershell
-python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --probe cpu1_g,U3E0\G10,0x001E,0xFA --probe cpu1_hg,U3E0\HG20,0x0032,0xFA --probe cpu2_g,U3E1\G10,0x001E,0xFA --probe cpu2_hg,U3E1\HG20,0x0032,0xFA --probe cpu3_g,U3E2\G10,0x001E,0xFA --probe cpu3_hg,U3E2\HG20,0x0032,0xFA --probe cpu4_g,U3E3\G10,0x001E,0xFA --probe cpu4_hg,U3E3\HG20,0x0032,0xFA
+python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --probe cpu1_g,U3E0\G10,0x001E,0xFA --probe cpu1_hg,U3E0\HG20,0x0032,0xFA --probe cpu2_g,U3E1\G10,0x001E,0xFA --probe cpu2_hg,U3E1\HG20,0x0032,0xFA --probe cpu3_g,U3E2\G10,0x001E,0xFA --probe cpu3_hg,U3E2\HG20,0x0032,0xFA --probe cpu4_g,U3E3\G10,0x001E,0xFA --probe cpu4_hg,U3E3\HG20,0x0032,0xFA
 ```
 
 ## 4. Baseline Read Result

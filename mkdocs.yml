@@ -30,6 +30,11 @@ validation:
   nav:
     omitted_files: ignore
 
+exclude_docs: |
+  internal_docs/**
+  maintainer/**
+  validation/**
+
 nav:
   - Overview: index.md
   - User Docs:
@@ -41,17 +46,6 @@ nav:
       - Client: api/client.md
       - Core: api/core.md
       - Constants: api/constants.md
-  - QA Reports:
-      - Reports Overview: validation/reports/index.md
-      - Compatibility Matrix: validation/reports/PLC_COMPATIBILITY.md
-      - Stability: validation/reports/STABILITY.md
-  - Maintainer Docs:
-      - Maintainer Home: maintainer/README.md
-      - Open Items: maintainer/open_items.md
-      - Protocol Spec: maintainer/PROTOCOL_SPEC.md
-      - Testing Guide: maintainer/TESTING_GUIDE.md
-      - Script Reference: maintainer/SCRIPT_REFERENCE.md
-      - Release Guide: maintainer/RELEASE_PROCESS.md
   - Change Log: CHANGELOG.md
 
 

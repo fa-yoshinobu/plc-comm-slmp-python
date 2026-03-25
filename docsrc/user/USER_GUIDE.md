@@ -14,10 +14,10 @@ pip install slmp-connect
 from slmp import SlmpClient
 from slmp.constants import FrameType, PLCSeries
 
-# iQ-R series (R04/R08/R16…) → FRAME_4E + IQR
-# Q/L series                  → FRAME_3E + QL
+# iQ-R series (R04/R08/R16…) ↁEFRAME_4E + IQR
+# Q/L series                  ↁEFRAME_3E + QL
 client = SlmpClient(
-    host="192.168.1.10",
+    host="192.168.250.100",
     port=1025,
     frame_type=FrameType.FRAME_4E,
     plc_series=PLCSeries.IQR,
@@ -41,7 +41,7 @@ with client:
     |---|---|---|
     | iQ-R (e.g. R04CPU) | `FRAME_4E` | `PLCSeries.IQR` |
     | Q / L Series | `FRAME_3E` | `PLCSeries.QL` |
-    | If unknown | — | — |
+    | If unknown |  E|  E|
 
     If unknown, you can auto-detect using `resolve_profile()` below.
 
@@ -50,7 +50,7 @@ with client:
 ```python
 from slmp import SlmpClient
 
-client = SlmpClient(host="192.168.1.10", port=1025)
+client = SlmpClient(host="192.168.250.100", port=1025)
 rec = client.resolve_profile()
 print(f"detected: frame={rec.frame_type}, series={rec.plc_series}, confident={rec.is_confident}")
 
@@ -67,7 +67,7 @@ from slmp import open_and_connect
 
 async def main():
     # Auto-detect frame_type / plc_series and connect
-    async with await open_and_connect("192.168.1.10", port=1025) as client:
+    async with await open_and_connect("192.168.250.100", port=1025) as client:
         data = await client.read_devices("D100", 1)
         print(f"D100: {data[0]}")
 
@@ -121,7 +121,7 @@ data = client.read_devices("D100", 1, target=target)
 | `"L"` | signed 32-bit int | 2 |
 | `"F"` | float32 | 2 |
 
-### read_typed / read_typed_sync — Read one device with type conversion
+### read_typed / read_typed_sync  ERead one device with type conversion
 
 ```python
 # async
@@ -133,7 +133,7 @@ from slmp.utils import read_typed_sync
 f = read_typed_sync(client, "D100", "F")
 ```
 
-### write_typed / write_typed_sync — Write one device with type conversion
+### write_typed / write_typed_sync  EWrite one device with type conversion
 
 ```python
 from slmp.utils import write_typed_sync
@@ -141,7 +141,7 @@ write_typed_sync(client, "D100", "F", 3.14)
 write_typed_sync(client, "D102", "L", -50000)
 ```
 
-### read_named / read_named_sync — Batch read using address strings
+### read_named / read_named_sync  EBatch read using address strings
 
 Read multiple devices at once using type codes embedded in addresses.
 
@@ -156,7 +156,7 @@ result = read_named_sync(client, ["D100", "D101:F", "D102:S", "D0.3"])
 # result = {"D100": 42, "D101:F": 3.14, "D102:S": -1, "D0.3": True}
 ```
 
-### write_named / write_named_sync — Batch write using address strings
+### write_named / write_named_sync  EBatch write using address strings
 
 Write multiple devices at once using the same notation as `read_named`.
 
@@ -222,7 +222,7 @@ import asyncio
 from slmp.utils import poll
 
 async def main():
-    async with await open_and_connect("192.168.1.10") as client:
+    async with await open_and_connect("192.168.250.100") as client:
         async for snapshot in poll(client, ["D100", "D101:F", "M0.0"], interval=1.0):
             print(snapshot)
 
@@ -232,7 +232,7 @@ asyncio.run(main())
 from slmp.utils import poll_sync
 from slmp import SlmpClient
 
-with SlmpClient("192.168.1.10", 1025) as client:
+with SlmpClient("192.168.250.100", 1025) as client:
     for snapshot in poll_sync(client, ["D100", "D101:F", "M0.0"], interval=1.0):
         print(snapshot)
         # {"D100": 42, "D101:F": 3.14, "M0.0": True}
@@ -257,7 +257,7 @@ async def poller(client, stop_event):
         await asyncio.sleep(1.0)
 
 async def main():
-    inner = AsyncSlmpClient("192.168.1.10", 1025)
+    inner = AsyncSlmpClient("192.168.250.100", 1025)
     client = QueuedAsyncSlmpClient(inner)
     stop = asyncio.Event()
 
@@ -279,7 +279,7 @@ asyncio.run(main())
 ```python
 # Read from multiple PLCs simultaneously
 results = await asyncio.gather(
-    read_one_plc("192.168.1.10", 1025),
+    read_one_plc("192.168.250.100", 1025),
     read_one_plc("192.168.1.11", 1025),
 )
 ```
@@ -302,15 +302,15 @@ results = await asyncio.gather(
 from slmp import SlmpClient
 from slmp.errors import SlmpError
 
-with SlmpClient("192.168.1.10", 1025) as client:
+with SlmpClient("192.168.250.100", 1025) as client:
     try:
         data = client.read_devices("D100", 1)
     except SlmpError as e:
         print(f"PLC error: end_code=0x{e.end_code:04X}")
     except TimeoutError:
-        print("Connection timeout — Check IP address and port number")
+        print("Connection timeout  ECheck IP address and port number")
     except ConnectionRefusedError:
-        print("Connection refused — Check port number and SLMP settings on the PLC")
+        print("Connection refused  ECheck port number and SLMP settings on the PLC")
 ```
 
 ### Get raw response without raising exceptions

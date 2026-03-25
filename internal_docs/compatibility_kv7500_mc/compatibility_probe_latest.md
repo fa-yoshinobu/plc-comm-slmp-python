@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19 15:43:56
 - PLC Label: KV7500_MC
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Requested series: auto

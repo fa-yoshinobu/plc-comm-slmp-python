@@ -9,7 +9,7 @@
 
 ## Target
 
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - TCP port: `1025`
 - UDP port: `1027`
 - Transport tested: TCP and UDP
@@ -76,7 +76,7 @@ Observed values were all zero in this probe session.
 Validated by:
 
 ```text
-python scripts/slmp_special_device_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --network 0x01 --station 0x02 --module-io 0x03FF --multidrop 0x00
+python scripts/slmp_special_device_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --network 0x01 --station 0x02 --module-io 0x03FF --multidrop 0x00
 ```
 
 Result:

@@ -12,7 +12,7 @@ from slmp.client import SlmpClient
 from slmp.constants import FrameType, PLCSeries
 
 
-def iql_master_validation(host: str = "192.168.250.101", port: int = 1025) -> None:
+def iql_master_validation(host: str = "192.168.250.100", port: int = 1025) -> None:
     """Run the master validation matrix for iQ-L."""
 
     print(f"Master Command Validation Matrix for iQ-L ({host}:{port})")
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.250.101")
+    parser.add_argument("--host", default="192.168.250.100")
     parser.add_argument("--port", type=int, default=1025)
     args = parser.parse_args()
     iql_master_validation(host=args.host, port=args.port)

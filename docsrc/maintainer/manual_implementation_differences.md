@@ -6,7 +6,7 @@ This file records places where the implementation follows a practical rule that 
 
 - last updated: 2026-03-14
 - validated target: Mitsubishi MELSEC iQ-R `R08CPU`
-- host: `192.168.250.101`
+- host: `192.168.250.100`
 
 ## 1. `LT/LST` Read Semantics
 

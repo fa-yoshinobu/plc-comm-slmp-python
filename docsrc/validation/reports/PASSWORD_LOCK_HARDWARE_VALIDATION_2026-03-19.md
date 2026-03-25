@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19
 - Validated target: `iQ-R R08CPU`
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Transport: `TCP 1025`
 - Series mode: `iqr`
 

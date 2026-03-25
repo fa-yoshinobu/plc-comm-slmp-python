@@ -93,7 +93,7 @@ Recommended device set:
 Convenience script for the default comparison case:
 
 ```powershell
-python scripts/slmp_mixed_block_compare.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_mixed_block_compare.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 ## What To Record From Python

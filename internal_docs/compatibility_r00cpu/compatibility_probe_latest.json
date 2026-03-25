@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-03-19 15:18:12",
-  "host": "192.168.250.101",
+  "host": "192.168.250.100",
   "plc_label": "R00CPU",
   "port": 1025,
   "requested_frame_type": "auto",

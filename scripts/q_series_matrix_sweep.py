@@ -10,7 +10,7 @@ from slmp.client import SlmpClient
 from slmp.constants import FrameType, PLCSeries
 
 
-def sweep_combinations(host: str = "192.168.250.101", port: int = 1025) -> None:
+def sweep_combinations(host: str = "192.168.250.100", port: int = 1025) -> None:
     """Sweep through different frame types and PLC series combinations for Q-series."""
 
     combinations = [
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.250.101")
+    parser.add_argument("--host", default="192.168.250.100")
     parser.add_argument("--port", type=int, default=1025)
     args = parser.parse_args()
     sweep_combinations(host=args.host, port=args.port)

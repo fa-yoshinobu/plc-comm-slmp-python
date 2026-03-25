@@ -25,13 +25,13 @@ without mixing that workflow into unrelated live-verification commands.
 Typical read-only sweep:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
 ```
 
 Optional temporary write/readback/restore sweep:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series ql --device U01\G22 --points 1 --points 2 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series ql --device U01\G22 --points 1 --points 2 --write-check
 ```
 
 ## Behavior

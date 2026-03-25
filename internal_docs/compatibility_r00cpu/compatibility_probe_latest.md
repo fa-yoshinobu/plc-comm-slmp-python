@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19 15:18:12
 - PLC Label: R00CPU
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Requested series: auto

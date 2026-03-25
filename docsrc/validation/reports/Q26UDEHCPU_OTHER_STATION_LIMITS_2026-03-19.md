@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19
 - Scope: `scripts/slmp_other_station_check.py`
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Target PLC: `Q26UDEHCPU` built-in Ethernet
 
 ## Purpose
@@ -13,11 +13,11 @@ Record the observed behavior of `SELF` versus `NW1` and `NW2` other-station rout
 
 | Command | Result | Detail |
 |---|---|---|
-| `python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target SELF` | PASS | `Resolved frame=3e`, `access_profile=ql`, `D1000` read succeeded with `values=[0]`, `read_type_name()` returned `SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000` |
-| `python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST1` | FAIL | `timed out` |
-| `python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST2` | FAIL | `timed out` |
-| `python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target NW2-ST1` | FAIL | `timed out` |
-| `python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target NW2-ST2` | FAIL | `timed out` |
+| `python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target SELF` | PASS | `Resolved frame=3e`, `access_profile=ql`, `D1000` read succeeded with `values=[0]`, `read_type_name()` returned `SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000` |
+| `python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST1` | FAIL | `timed out` |
+| `python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST2` | FAIL | `timed out` |
+| `python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW2-ST1` | FAIL | `timed out` |
+| `python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW2-ST2` | FAIL | `timed out` |
 
 ## Interpretation
 

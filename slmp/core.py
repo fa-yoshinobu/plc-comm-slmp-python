@@ -237,8 +237,8 @@ def recommend_profile(info: TypeNameInfo) -> SlmpProfileRecommendation:
 
     Applies the same heuristics as the .NET ``SlmpProfileHeuristics.Recommend``:
 
-    1. Model-code range check (0x4800窶・x4FFF 竊・iQ-R; 0x0000窶・x00FF / 0x0200窶・x03FF 竊・Q/L).
-    2. Model-name prefix check (``R*`` 竊・iQ-R; ``Q*`` / ``L*`` / ``FX*`` 竊・Q/L).
+    1. Model-code range check (0x4800-0x4FFF -> iQ-R; 0x0000-0x00FF / 0x0200-0x03FF -> Q/L).
+    2. Model-name prefix check (``R*`` -> iQ-R; ``Q*`` / ``L*`` / ``FX*`` -> Q/L).
     3. Falls back to iQ-R / Unknown when undetermined.
 
     Args:
@@ -682,7 +682,7 @@ def _encode_link_direct_device_spec(
     extension: ExtensionSpec,
     include_direct_memory_at_end: bool,
 ) -> bytes:
-    """Encode a link direct device spec (J笆｡\\device) verified by GOT pcap.
+    """Encode a link direct device spec (J\\device) verified by GOT pcap.
 
     Format: reserved(2) + dev_no(3) + dev_code(1) + reserved(2) + j_net(1) + reserved(1) + 0xF9(1)
     Always uses QL (3-byte device number) format.

@@ -8,9 +8,9 @@
 ## 1. Executed Commands
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --port 1027 --series iqr --transport udp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 1 --points 4
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --port 1027 --series iqr --transport udp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 1 --points 4
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --port 1027 --series iqr --transport udp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --port 1027 --series iqr --transport udp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --port 1027 --series iqr --transport udp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --port 1027 --series iqr --transport udp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 1 --points 4
 ```
 
 ## 2. Result Summary

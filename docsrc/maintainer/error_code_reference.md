@@ -6,7 +6,7 @@ This is the maintainer-facing end-code table for the validated target.
 
 - date: 2026-03-14
 - PLC: Mitsubishi MELSEC iQ-R `R08CPU`
-- host: `192.168.250.101`
+- host: `192.168.250.100`
 
 This table records what the project actually observed on the validated target. It is intentionally practical rather than universal.
 

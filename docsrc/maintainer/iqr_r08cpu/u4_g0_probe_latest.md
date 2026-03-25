@@ -2,7 +2,7 @@
 
 - Date: `2026-03-13`
 - Target: direct `R08CPU`
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Transport: `TCP 1025`
 - Assumption supplied during verification:
   - engineering-tool notation `U4\\G0`

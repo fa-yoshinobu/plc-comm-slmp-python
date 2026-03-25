@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19 15:24:42
 - PLC Label: L26CPU_BT_SN11112
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Requested series: auto

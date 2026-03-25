@@ -1,7 +1,7 @@
 # R/ZR Overlap Verification
 
 - Timestamp: `2026-03-13 17:23:49 `
-- Target: `direct R08CPU`, host `192.168.250.101`, `TCP 1025`
+- Target: `direct R08CPU`, host `192.168.250.100`, `TCP 1025`
 - Series: `iqr`
 - Scope: verify whether writing `R` can be read back through the overlapping `ZR` alias, and vice versa
 

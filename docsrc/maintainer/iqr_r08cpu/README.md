@@ -7,7 +7,7 @@ Target:
 
 - series: `iqr`
 - model: `R08CPU`
-- host used in the current baseline: `192.168.250.101`
+- host used in the current baseline: `192.168.250.100`
 - primary ports: `TCP 1025`, `UDP 1027`
 
 ## Start Here

@@ -28,7 +28,7 @@ async def open_and_connect(
 
     Internally calls :meth:`~slmp.async_client.AsyncSlmpClient.resolve_profile`
     which tries four frame/series combinations in order:
-    (4E, iQ-R) → (3E, Q/L) → (3E, iQ-R) → (4E, Q/L).
+    (4E, iQ-R) ↁE(3E, Q/L) ↁE(3E, iQ-R) ↁE(4E, Q/L).
 
     After a successful detection the client's :attr:`frame_type` and
     :attr:`plc_series` are set to the detected values and the connection is
@@ -39,9 +39,9 @@ async def open_and_connect(
         port: SLMP port. Defaults to 5000 (GX Works3 / GX Works2 simulator default).
             Common port values:
 
-            - ``5000`` — GX Works3 / GX Works2 built-in simulator (default here)
-            - ``1025`` — iQ-R / iQ-F series built-in Ethernet SLMP port
-            - ``5007`` — Q/L series built-in Ethernet SLMP port
+            - ``5000``  EGX Works3 / GX Works2 built-in simulator (default here)
+            - ``1025``  EiQ-R / iQ-F series built-in Ethernet SLMP port
+            - ``5007``  EQ/L series built-in Ethernet SLMP port
 
             Check the PLC or simulator network settings when the default does not work.
         timeout: Per-candidate connection timeout in seconds.
@@ -73,7 +73,7 @@ async def read_typed(
     Args:
         client: Connected AsyncSlmpClient.
         device: Device address string or DeviceRef.
-        dtype: Type code —
+        dtype: Type code  E
             "U" unsigned 16-bit int,
             "S" signed 16-bit int,
             "D" unsigned 32-bit int,
@@ -111,7 +111,7 @@ async def write_typed(
     Args:
         client: Connected AsyncSlmpClient.
         device: Device address string or DeviceRef.
-        dtype: Type code — same as :func:`read_typed`.
+        dtype: Type code  Esame as :func:`read_typed`.
         value: Value to write.
     """
     key = dtype.upper()
@@ -143,7 +143,7 @@ def read_typed_sync(
     Args:
         client: Connected SlmpClient.
         device: Device address string or DeviceRef.
-        dtype: Type code — "U", "S", "D", "L", "F".
+        dtype: Type code  E"U", "S", "D", "L", "F".
 
     Returns:
         Converted value as int or float.
@@ -176,7 +176,7 @@ def write_typed_sync(
     Args:
         client: Connected SlmpClient.
         device: Device address string or DeviceRef.
-        dtype: Type code — "U", "S", "D", "L", "F".
+        dtype: Type code  E"U", "S", "D", "L", "F".
         value: Value to write.
     """
     key = dtype.upper()
@@ -209,7 +209,7 @@ async def write_bit_in_word(
     Args:
         client: Connected AsyncSlmpClient.
         device: Word device address.
-        bit_index: Bit position within the word (0–15).
+        bit_index: Bit position within the word (0 E5).
         value: New bit state.
     """
     if not 0 <= bit_index <= 15:
@@ -234,7 +234,7 @@ def write_bit_in_word_sync(
     Args:
         client: Connected SlmpClient.
         device: Word device address.
-        bit_index: Bit position within the word (0–15).
+        bit_index: Bit position within the word (0 E5).
         value: New bit state.
     """
     if not 0 <= bit_index <= 15:
@@ -261,12 +261,12 @@ async def read_named(
 
     Address format examples:
 
-    - ``"D100"`` — unsigned 16-bit int
-    - ``"D100:F"`` — float32
-    - ``"D100:S"`` — signed 16-bit int
-    - ``"D100:D"`` — unsigned 32-bit int
-    - ``"D100:L"`` — signed 32-bit int
-    - ``"D100.3"`` — bit 3 within word (bool)
+    - ``"D100"``  Eunsigned 16-bit int
+    - ``"D100:F"``  Efloat32
+    - ``"D100:S"``  Esigned 16-bit int
+    - ``"D100:D"``  Eunsigned 32-bit int
+    - ``"D100:L"``  Esigned 32-bit int
+    - ``"D100.3"``  Ebit 3 within word (bool)
 
     Args:
         client: Connected AsyncSlmpClient.
@@ -652,7 +652,7 @@ class QueuedAsyncSlmpClient:
 
     Usage::
 
-        inner = AsyncSlmpClient("192.168.1.10")
+        inner = AsyncSlmpClient("192.168.250.100")
         client = QueuedAsyncSlmpClient(inner)
         async with client:
             value = await client.read_devices("D100", 1)

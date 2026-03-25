@@ -7,8 +7,8 @@
 ## 1. Observed Traffic
 
 - Transport: TCP
-- Client: `192.168.250.102:5031`
-- PLC: `192.168.250.101:1025`
+- Client: `192.168.250.100:5031`
+- PLC: `192.168.250.100:1025`
 - Total packets: `1049`
 - SLMP request types observed:
   - `0401/0082` read: `524` requests

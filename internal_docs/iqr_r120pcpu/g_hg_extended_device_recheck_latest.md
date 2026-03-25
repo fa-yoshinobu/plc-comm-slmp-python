@@ -1,7 +1,7 @@
 # G/HG Extended Specification Recheck Report
 
 - Date: 2026-03-19 09:13:16
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Series: iqr

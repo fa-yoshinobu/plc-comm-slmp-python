@@ -1,7 +1,7 @@
 # G/HG Extended Specification Coverage Report
 
 - Date: 2026-03-19 16:58:13
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transports: udp
 - Series: iqr

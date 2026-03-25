@@ -2,7 +2,7 @@
 
 - Date: 2026-03-13 17:05:00
 - PLC: Mitsubishi MELSEC iQ-R `R08CPU`
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Series: `iqr`
 - Device: `SD420`
 - Method: single-client repeated `0401` word read at fixed device

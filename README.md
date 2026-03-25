@@ -15,7 +15,6 @@ A high-performance, strictly typed Python client library for Mitsubishi SLMP (Se
 - **Strict Protocol Compliance**: Based on official Mitsubishi Electric English specifications.
 - **Binary Support**: Efficient Binary 3E/4E frame communication.
 - **Modern Python**: Fully type-hinted (Mypy-ready) and asynchronous-friendly.
-- **Zero Mojibake**: Strictly English-based documentation and UTF-8 standards.
 - **CI-Ready**: Built-in quality checks and single-file CLI tool distribution.
 
 ## Quick Start
@@ -28,13 +27,13 @@ pip install slmp-connect-python
 ### Quick Command (Copy/Paste)
 
 ```bash
-python scripts/slmp_connection_check.py --host 192.168.250.101 --series auto --frame-type auto
+python scripts/slmp_connection_check.py --host 192.168.250.100 --series auto --frame-type auto
 ```
 
 Optional UDP check (port 1027):
 
 ```bash
-python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1027 --transport udp --series auto --frame-type auto
+python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1027 --transport udp --series auto --frame-type auto
 ```
 
 ### Basic Usage
@@ -42,7 +41,7 @@ python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1027 --tra
 from slmp.client import SlmpClient
 
 # Connect to a MELSEC iQ-R PLC
-client = SlmpClient("192.168.1.10", 1025)
+client = SlmpClient("192.168.250.100", 1025)
 
 # Read D100 - D104 (5 words)
 values = client.read_devices("D100", 5)
@@ -62,7 +61,7 @@ This list reflects device codes accepted by the parser and typed APIs. Actual av
 | Word devices (direct) | SD, D, W, SW, TN, STN, CN, Z, LZ, R, ZR, RD | Supported | `W/SW` use hexadecimal numbering. |
 | Long timer / counter families | LTS, LTC, LTN, LSTS, LSTC, LSTN, LCS, LCC, LCN | Supported (direct) | Some PLCs reject direct access; prefer long-timer helpers when available. |
 | Extended Specification qualified devices | `Uxx\\Gyy`, `Uxx\\HGyy` | Supported via Extended Specification APIs | Direct `G/HG` access is not supported. |
-| Link direct devices | `J□\\device` (e.g. `J2\\SW10`, `J1\\X10`) | Supported via Extended Specification APIs | CC-Link IE network device access. Use `read_devices_ext` / `write_devices_ext`. |
+| Link direct devices | `Jx\\device` (e.g. `J2\\SW10`, `J1\\X10`) | Supported via Extended Specification APIs | CC-Link IE network device access. Use `read_devices_ext` / `write_devices_ext`. |
 | Not supported | S | Not supported | Step relay (`S`) is intentionally disabled. |
 
 ## Verified Hardware

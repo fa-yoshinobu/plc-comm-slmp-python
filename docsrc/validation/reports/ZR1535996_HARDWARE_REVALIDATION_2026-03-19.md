@@ -14,7 +14,7 @@ Executed from the repository working tree:
 ```python
 from slmp.client import SlmpClient
 
-HOST = "192.168.250.101"
+HOST = "192.168.250.100"
 PORT = 1025
 DEVICE = "ZR1535996"
 WRITE_VALUE = 1234
@@ -27,7 +27,7 @@ with SlmpClient(HOST, port=PORT, transport="tcp", plc_series="ql") as cli:
 
 ## 3. Observed Result
 
-- host: `192.168.250.101`
+- host: `192.168.250.100`
 - port: `1025`
 - transport: `tcp`
 - series: `ql`

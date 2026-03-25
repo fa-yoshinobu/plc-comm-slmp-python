@@ -11,7 +11,7 @@ Date: 2026-03-19
 ## 2. Command
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --g-device U3E0\G10 --hg-device U3E0\HG20
+python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --g-device U3E0\G10 --hg-device U3E0\HG20
 ```
 
 ## 3. Result

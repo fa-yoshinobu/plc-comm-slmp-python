@@ -8,7 +8,7 @@
 ## 1. Executed Command
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --transport udp --target SELF --target SELF-CPU1 --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --transport udp --target SELF --target SELF-CPU1 --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
 ```
 
 ## 2. Sweep Dimensions

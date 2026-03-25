@@ -70,7 +70,7 @@ Instead:
 The same packed-unit rule applies to block write:
 
 ```python
-with SlmpClient("192.168.250.101", port=1025, transport="tcp", plc_series="iqr") as cli:
+with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_series="iqr") as cli:
     cli.write_block(
         bit_blocks=[("M1000", [0x0005])],
     )
@@ -160,10 +160,10 @@ for r in results:
 |--------|-------|---------|
 | `read_long_timer(head_no, points)` | LTN | `list[LongTimerResult]` with `.current_value`, `.set_value`, `.contact` (LTS), `.coil` (LTC) |
 | `read_long_retentive_timer(head_no, points)` | LSTN | `list[LongTimerResult]` for LST |
-| `read_ltc_states(head_no, points)` | LTN → LTC coil | `list[bool]` |
-| `read_lts_states(head_no, points)` | LTN → LTS contact | `list[bool]` |
-| `read_lstc_states(head_no, points)` | LSTN → LSTC coil | `list[bool]` |
-| `read_lsts_states(head_no, points)` | LSTN → LSTS contact | `list[bool]` |
+| `read_ltc_states(head_no, points)` | LTN ↁELTC coil | `list[bool]` |
+| `read_lts_states(head_no, points)` | LTN ↁELTS contact | `list[bool]` |
+| `read_lstc_states(head_no, points)` | LSTN ↁELSTC coil | `list[bool]` |
+| `read_lsts_states(head_no, points)` | LSTN ↁELSTS contact | `list[bool]` |
 
 > Long timer / retentive timer set values (LT, LST) are not direct device codes and can only be read via these helpers.
 
@@ -175,8 +175,8 @@ Accessed via `read_devices_ext()` / `write_devices_ext()`.
 
 | Notation | Description | Example |
 |----------|-------------|---------|
-| `U□\G` | Buffer memory (word) | `U3\G100` |
-| `U□\HG` | Buffer memory extended (word) | `U3E0\HG1000` |
+| `Ux\G` | Buffer memory (word) | `U3\G100` |
+| `Ux\HG` | Buffer memory extended (word) | `U3E0\HG1000` |
 
 ```python
 from slmp import SlmpClient, ExtensionSpec
@@ -185,7 +185,7 @@ values = client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
 client.write_devices_ext("U3\\G100", [1, 2, 3, 4], extension=ExtensionSpec())
 ```
 
-`U□` is the slot number in hex (e.g. `U3`, `U3E0`). Direct `G` / `HG` access without `U□\` prefix is not supported.
+`Ux` is the slot number in hex (e.g. `U3`, `U3E0`). Direct `G` / `HG` access without `Ux\` prefix is not supported.
 
 ---
 
@@ -231,8 +231,8 @@ By default, requests target the directly connected PLC (own station). To route t
 ```python
 from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
-# Constructor default — all requests go to Network 1, Station 1
-client = SlmpClient("192.168.1.10", default_target=SlmpTarget(network=0x01, station=0x01))
+# Constructor default  Eall requests go to Network 1, Station 1
+client = SlmpClient("192.168.250.100", default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
 target = SlmpTarget(network=0x01, station=0x01)
@@ -248,7 +248,7 @@ values = client.read_words("D100", 10, target=target)
 | `module_io` | `0x03FF` | Module I/O No. (`0x03FF` = own station / control CPU) |
 | `multidrop` | `0x00` | Multidrop station No. (`0x00` = no multidrop) |
 
-`ModuleIONo` enum — shortcuts for `module_io`:
+`ModuleIONo` enum  Eshortcuts for `module_io`:
 
 | Name | Value | Description |
 |------|-------|-------------|

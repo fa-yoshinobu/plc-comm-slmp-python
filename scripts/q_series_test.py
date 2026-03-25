@@ -12,7 +12,7 @@ from slmp.client import SlmpClient
 from slmp.constants import FrameType, PLCSeries
 
 
-def test_q_series(host: str = "192.168.250.101", port: int = 1025) -> None:
+def test_q_series(host: str = "192.168.250.100", port: int = 1025) -> None:
     """Run validation tests for Q-series."""
 
     print(f"Connecting to {host}:{port} (3E Frame, QL Series)...")
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.250.101")
+    parser.add_argument("--host", default="192.168.250.100")
     parser.add_argument("--port", type=int, default=1025)
     args = parser.parse_args()
     test_q_series(host=args.host, port=args.port)

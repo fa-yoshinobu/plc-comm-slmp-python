@@ -68,7 +68,7 @@ class SlmpClient:
 
     Examples:
         >>> from slmp.client import SlmpClient
-        >>> with SlmpClient("192.168.1.10", 1025) as client:
+        >>> with SlmpClient("192.168.250.100", 1025) as client:
         ...     values = client.read_devices("D100", 5)
         ...     print(values)
         [0, 0, 0, 0, 0]

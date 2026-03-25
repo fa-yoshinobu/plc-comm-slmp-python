@@ -1,4 +1,4 @@
-# SLMP Connect Python v0.1.0
+﻿# SLMP Connect Python v0.1.0
 
 ## Summary
 
@@ -41,7 +41,7 @@ The following checks were completed for this release:
 ## Validated Environment
 
 - Mitsubishi MELSEC iQ-R `R08CPU`
-- host `192.168.250.101`
+- host `192.168.250.100`
 - `TCP 1025`
 - `UDP 1027`
 - `series=iqr`
@@ -67,4 +67,5 @@ The following checks were completed for this release:
 ## Full Changelog
 
 See `CHANGELOG.md` for the full project history.
+
 

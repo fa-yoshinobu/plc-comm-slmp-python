@@ -8,24 +8,24 @@
 ## 1. Executed Commands
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 1 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 1 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 1 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G30 --device U3E1\HG30 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G30 --device U3E2\HG30 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G30 --device U3E3\HG30 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G50 --device U3E1\HG50 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G50 --device U3E2\HG50 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G50 --device U3E3\HG50 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G70 --device U3E1\HG70 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G70 --device U3E2\HG70 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G70 --device U3E3\HG70 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G90 --device U3E1\HG90 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G90 --device U3E2\HG90 --points 1 --points 4 --write-check
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G90 --device U3E3\HG90 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 1 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 1 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 1 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G10 --device U3E1\HG20 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G10 --device U3E2\HG20 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G10 --device U3E3\HG20 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G30 --device U3E1\HG30 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G30 --device U3E2\HG30 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G30 --device U3E3\HG30 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G50 --device U3E1\HG50 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G50 --device U3E2\HG50 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G50 --device U3E3\HG50 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G70 --device U3E1\HG70 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G70 --device U3E2\HG70 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G70 --device U3E3\HG70 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU2 --device U3E1\G90 --device U3E1\HG90 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU3 --device U3E2\G90 --device U3E2\HG90 --points 1 --points 4 --write-check
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --target SELF-CPU4 --device U3E3\G90 --device U3E3\HG90 --points 1 --points 4 --write-check
 ```
 
 ## 2. Target / Qualifier Alignment

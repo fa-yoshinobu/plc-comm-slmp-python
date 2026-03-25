@@ -1,4 +1,4 @@
-# SLMP Connect Python v0.1.2
+﻿# SLMP Connect Python v0.1.2
 
 ## Summary
 
@@ -39,8 +39,8 @@ The following checks were completed for this release:
 
 - target series/model: Mitsubishi MELSEC iQ-R `R08CPU`
 - transport: `TCP 1025`
-- host/port: `192.168.250.101:1025`
-- focused script: `python scripts/slmp_mixed_block_compare.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --retry-mixed-on-error`
+- host/port: `192.168.250.100:1025`
+- focused script: `python scripts/slmp_mixed_block_compare.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --retry-mixed-on-error`
 - report updates:
   - `internal_docsrc/iqr_r08cpu/mixed_block_compare_latest.md`
   - `internal_docsrc/iqr_r08cpu/slmp_connect_python_comparison_checklist.md`
@@ -66,4 +66,5 @@ The following checks were completed for this release:
 ## Full Changelog
 
 See `CHANGELOG.md` for the full project history.
+
 

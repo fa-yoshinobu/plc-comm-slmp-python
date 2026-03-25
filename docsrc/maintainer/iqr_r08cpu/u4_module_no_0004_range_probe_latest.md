@@ -2,7 +2,7 @@
 
 - Date: `2026-03-13`
 - Target: direct `R08CPU`
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Transport: `TCP 1025`
 - Method: `0601/1601` via raw extend-unit access
 - Note: this report only shows that `module_no=0x0004` is readable/writable at low addresses. It does not prove equivalence with engineering-tool `U4\G*`.

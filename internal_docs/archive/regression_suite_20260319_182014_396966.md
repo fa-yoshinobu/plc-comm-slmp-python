@@ -1,37 +1,37 @@
 # Regression Suite Report
 
 - Timestamp: 2026-03-19T18:20:14
-- Python: `C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe`
-- Working directory: `D:\PLC_COMM_PROJ\plc-comm-slmp-python`
+- Python: `Python\pythoncore-3.14-64\python.exe`
+- Working directory: `plc-comm-slmp-python`
 - Fail fast: False
 - Live connection check enabled: False
 
 | Step | Status | Detail |
 |---|---|---|
-| unit_tests | PASS | rc=0; elapsed=5.76s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m unittest discover -s tests -v` |
-| ruff | PASS | rc=0; elapsed=0.11s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m ruff check slmp tests scripts` |
-| mypy | PASS | rc=0; elapsed=2.36s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m mypy slmp scripts` |
-| cli_help:slmp_connection_check.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_connection_check.py --help` |
-| cli_help:slmp_compatibility_probe.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_compatibility_probe.py --help` |
-| cli_help:slmp_compatibility_matrix_render.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_compatibility_matrix_render.py --help` |
-| cli_help:slmp_device_range_probe.py | PASS | rc=0; elapsed=0.18s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_device_range_probe.py --help` |
-| cli_help:slmp_register_boundary_probe.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_register_boundary_probe.py --help` |
-| cli_help:slmp_device_access_matrix_sync.py | PASS | rc=0; elapsed=0.21s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_device_access_matrix_sync.py --help` |
-| cli_help:slmp_init_model_docs.py | PASS | rc=0; elapsed=0.18s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_init_model_docs.py --help` |
-| cli_help:slmp_other_station_check.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_other_station_check.py --help` |
-| cli_help:slmp_open_items_recheck.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_open_items_recheck.py --help` |
-| cli_help:slmp_pending_live_verification.py | PASS | rc=0; elapsed=0.18s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_pending_live_verification.py --help` |
-| cli_help:slmp_manual_write_verification.py | PASS | rc=0; elapsed=0.21s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_manual_write_verification.py --help` |
-| cli_help:slmp_manual_label_verification.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_manual_label_verification.py --help` |
-| cli_help:slmp_supported_device_rw_probe.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_supported_device_rw_probe.py --help` |
-| cli_help:slmp_special_device_probe.py | PASS | rc=0; elapsed=0.21s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_special_device_probe.py --help` |
-| cli_help:slmp_read_soak.py | PASS | rc=0; elapsed=0.21s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_read_soak.py --help` |
-| cli_help:slmp_mixed_read_load.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_mixed_read_load.py --help` |
-| cli_help:slmp_tcp_concurrency.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_tcp_concurrency.py --help` |
-| cli_help:slmp_extended_device_device_recheck.py | PASS | rc=0; elapsed=0.19s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_extended_device_device_recheck.py --help` |
-| cli_help:slmp_g_hg_extended_device_recheck.py | PASS | rc=0; elapsed=0.21s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_recheck.py --help` |
-| cli_help:slmp_g_hg_extended_device_coverage.py | PASS | rc=0; elapsed=0.20s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_coverage.py --help` |
-| cli_help:slmp_mixed_block_compare.py | PASS | rc=0; elapsed=0.22s; command=`C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_mixed_block_compare.py --help` |
+| unit_tests | PASS | rc=0; elapsed=5.76s; command=`Python\pythoncore-3.14-64\python.exe -m unittest discover -s tests -v` |
+| ruff | PASS | rc=0; elapsed=0.11s; command=`Python\pythoncore-3.14-64\python.exe -m ruff check slmp tests scripts` |
+| mypy | PASS | rc=0; elapsed=2.36s; command=`Python\pythoncore-3.14-64\python.exe -m mypy slmp scripts` |
+| cli_help:slmp_connection_check.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_connection_check.py --help` |
+| cli_help:slmp_compatibility_probe.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_compatibility_probe.py --help` |
+| cli_help:slmp_compatibility_matrix_render.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_compatibility_matrix_render.py --help` |
+| cli_help:slmp_device_range_probe.py | PASS | rc=0; elapsed=0.18s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_device_range_probe.py --help` |
+| cli_help:slmp_register_boundary_probe.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_register_boundary_probe.py --help` |
+| cli_help:slmp_device_access_matrix_sync.py | PASS | rc=0; elapsed=0.21s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_device_access_matrix_sync.py --help` |
+| cli_help:slmp_init_model_docs.py | PASS | rc=0; elapsed=0.18s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_init_model_docs.py --help` |
+| cli_help:slmp_other_station_check.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_other_station_check.py --help` |
+| cli_help:slmp_open_items_recheck.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_open_items_recheck.py --help` |
+| cli_help:slmp_pending_live_verification.py | PASS | rc=0; elapsed=0.18s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_pending_live_verification.py --help` |
+| cli_help:slmp_manual_write_verification.py | PASS | rc=0; elapsed=0.21s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_manual_write_verification.py --help` |
+| cli_help:slmp_manual_label_verification.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_manual_label_verification.py --help` |
+| cli_help:slmp_supported_device_rw_probe.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_supported_device_rw_probe.py --help` |
+| cli_help:slmp_special_device_probe.py | PASS | rc=0; elapsed=0.21s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_special_device_probe.py --help` |
+| cli_help:slmp_read_soak.py | PASS | rc=0; elapsed=0.21s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_read_soak.py --help` |
+| cli_help:slmp_mixed_read_load.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_mixed_read_load.py --help` |
+| cli_help:slmp_tcp_concurrency.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_tcp_concurrency.py --help` |
+| cli_help:slmp_extended_device_device_recheck.py | PASS | rc=0; elapsed=0.19s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_extended_device_device_recheck.py --help` |
+| cli_help:slmp_g_hg_extended_device_recheck.py | PASS | rc=0; elapsed=0.21s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_recheck.py --help` |
+| cli_help:slmp_g_hg_extended_device_coverage.py | PASS | rc=0; elapsed=0.20s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_coverage.py --help` |
+| cli_help:slmp_mixed_block_compare.py | PASS | rc=0; elapsed=0.22s; command=`Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_mixed_block_compare.py --help` |
 
 ## Captured Output
 
@@ -40,31 +40,31 @@
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m unittest discover -s tests -v
+Python\pythoncore-3.14-64\python.exe -m unittest discover -s tests -v
 ```
 
 stdout:
 
 ```text
-DEBUG: core file = D:\PLC_COMM_PROJ\plc-comm-slmp-python\slmp\core.py
+DEBUG: core file = plc-comm-slmp-python\slmp\core.py
 
 WARNING: Could not connect to Sim at 127.0.0.1:5511
 Make sure GX Simulator 3 is running and 'Start Simulation' is active.
-[DONE] output=C:\Users\Lenovo\AppData\Local\Temp\tmpp_53sr8s\PLC_COMPATIBILITY.md
-[DONE] policy=C:\Users\Lenovo\AppData\Local\Temp\tmpp_53sr8s\compatibility_policy.json
+[DONE] output=Temp\tmpp_53sr8s\PLC_COMPATIBILITY.md
+[DONE] policy=Temp\tmpp_53sr8s\compatibility_policy.json
 === Compatibility Probe ===
 PLC Label=Q26UDEHCPU_BuiltIn
-Host=192.0.2.10, Port=1025, Transport=tcp
+Host=192.168.250.100, Port=1025, Transport=tcp
 Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 Combinations=3e/ql
 Commands=0101,0401,0406
 [OK] 3e/ql 0101 Read Type Name: type_name=OK (model=Q26UDHCPU, Q26UDEHCPU, model_code=0x026C (620))
 [OK] 3e/ql 0401 Batch Read: word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[True])
 [OK] 3e/ql 0406 Block Read: block_read_word_only=OK (device=D140, result=[]); block_read_bit_only=OK (device=M140, result=[]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[], bit_blocks=[]))
-[DONE] markdown=C:\Users\Lenovo\AppData\Local\Temp\tmpsa0uut82\compatibility_probe_latest.md
-[DONE] json=C:\Users\Lenovo\AppData\Local\Temp\tmpsa0uut82\compatibility_probe_latest.json
+[DONE] markdown=Temp\tmpsa0uut82\compatibility_probe_latest.md
+[DONE] json=Temp\tmpsa0uut82\compatibility_probe_latest.json
 === SLMP Binary Connection Check ===
-Host=192.0.2.10, Port=5000, Transport=tcp, Requested access_profile=auto
+Host=192.168.250.100, Port=5000, Transport=tcp, Requested access_profile=auto
 Requested frame=auto
 Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 [INFO] Candidate order=3e/ql, 4e/ql, 3e/iqr, 4e/iqr
@@ -73,7 +73,7 @@ Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
   values=[True]
 === COMPLETED ===
 === SLMP Binary Connection Check ===
-Host=192.0.2.10, Port=5000, Transport=tcp, Requested access_profile=ql
+Host=192.168.250.100, Port=5000, Transport=tcp, Requested access_profile=ql
 Requested frame=auto
 Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 [INFO] Candidate order=3e/ql, 4e/ql
@@ -82,7 +82,7 @@ Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
   values=[True]
 === COMPLETED ===
 === SLMP Binary Connection Check ===
-Host=192.0.2.10, Port=5000, Transport=tcp, Requested access_profile=ql
+Host=192.168.250.100, Port=5000, Transport=tcp, Requested access_profile=ql
 Requested frame=4e
 Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 [INFO] Candidate order=4e/ql
@@ -97,7 +97,7 @@ Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 [INFO] Type name suggests access_profile=ql
 === COMPLETED ===
 === SLMP Binary Connection Check ===
-Host=192.0.2.10, Port=5000, Transport=tcp, Requested access_profile=auto
+Host=192.168.250.100, Port=5000, Transport=tcp, Requested access_profile=auto
 Requested frame=auto
 Target=network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 [INFO] Candidate order=4e/ql, 3e/ql, 4e/iqr, 3e/iqr
@@ -117,21 +117,21 @@ Temporary write completed. Verify the reflected value in your engineering tool.
 temporary write: DDD[0]:1:4 0x00200010 (2097168), raw=10 00 20 00 -> 0x00200011 (2097169), raw=11 00 20 00
 Temporary write completed. Verify the reflected value in your engineering tool.
 [OK] array DDD[0]:1:4: before=0x00200010 (2097168), raw=10 00 20 00, test=0x00200011 (2097169), raw=11 00 20 00, restored=0x00200010 (2097168), raw=10 00 20 00
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmp3vblbsin\manual_label_verification_latest.md
+[DONE] report=Temp\tmp3vblbsin\manual_label_verification_latest.md
 [NG] NW1-ST1: name=NW1-ST1, network=0x01, station=0x01, module_io=0x03FF, multidrop=0x00, error=timed out
 [INFO] Practical note: Validated Q26UDEHCPU built-in Ethernet accepted SELF route probing but timed out on tested NW1/NW2 other-station probes; compare failures against live routing evidence before assuming broader Q-series support.
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpk4uu8up_\other_station_check_latest.md
+[DONE] report=Temp\tmpk4uu8up_\other_station_check_latest.md
 [INFO] Candidate order=3e/ql, 4e/ql, 3e/iqr, 4e/iqr
 [INFO] Resolved frame=4e, access_profile=iqr
 [INFO] Read Type Name: model=R08CPU, model_code=0x4801 (18433)
 [INFO] Detected family=iQ-R
 [OK] remote1: name=remote1, network=0x00, station=0x01, module_io=0x03FF, multidrop=0x00, access_profile=iqr, device=D1000, points=1, bit_unit=False, values=[True], model=R08CPU, model_code=0x4801 (18433), detected_family=iQ-R
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpw_bux1fv\other_station_check_latest.md
+[DONE] report=Temp\tmpw_bux1fv\other_station_check_latest.md
 [INFO] Candidate order=3e/ql, 4e/ql, 3e/iqr, 4e/iqr
 [INFO] Resolved frame=3e, access_profile=ql
 [INFO] Read Type Name unavailable: error=type name unsupported
 [OK] SELF: name=SELF, network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00, access_profile=ql, device=D1000, points=1, bit_unit=False, values=[0], type_name_error=type name unsupported
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmphhi4h5st\other_station_check_latest.md
+[DONE] report=Temp\tmphhi4h5st\other_station_check_latest.md
 [INFO] Candidate order=4e/ql, 3e/ql, 4e/iqr, 3e/iqr
 [INFO] Compatibility policy loaded
 [INFO] Resolved frame=4e, access_profile=ql
@@ -139,7 +139,7 @@ Temporary write completed. Verify the reflected value in your engineering tool.
 [INFO] Detected family=iQ-R
 [INFO] Policy preferred profiles=4e/ql, 3e/ql, 4e/iqr, 3e/iqr
 [OK] SELF: name=SELF, network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00, access_profile=ql, device=D1000, points=1, bit_unit=False, values=[0], model=R08CPU, model_code=0x4801 (18433), detected_family=iQ-R
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmp1s83_9c4\other_station_check_latest.md
+[DONE] report=Temp\tmp1s83_9c4\other_station_check_latest.md
 [NG] 041A label array read: label missing
 [SKIP] 141A label array write: array read unavailable; no safe same-value payload
 [NG] 041C label random read: label missing
@@ -167,7 +167,7 @@ Temporary write completed. Verify the reflected value in your engineering tool.
 [OK] 1617 clear error: end_code=0x0000
 [SKIP] 2101 ondemand: manual-defined as PLC-initiated data; use receive_ondemand() with a PLC-side trigger
 [SKIP] 1006 remote reset: excluded from live verification scope
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmp3uuompvl\pending_live_verification_latest.md
+[DONE] report=Temp\tmp3uuompvl\pending_live_verification_latest.md
 [OK] 041A label array read: LabelW:type=0x02,unit=1,array_len=2,data_len=2
 [OK] 141A label array write: LabelW:type=0x02,unit=1,array_len=2,data_len=2
 [OK] 041C label random read: LabelW:type=0x02,len=2,data_len=2
@@ -195,9 +195,9 @@ Temporary write completed. Verify the reflected value in your engineering tool.
 [OK] 1617 clear error: end_code=0x0000
 [SKIP] 2101 ondemand: manual-defined as PLC-initiated data; use receive_ondemand() with a PLC-side trigger
 [SKIP] 1006 remote reset: excluded from live verification scope
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmp99tyc7uk\pending_live_verification_latest.md
+[DONE] report=Temp\tmp99tyc7uk\pending_live_verification_latest.md
 === G/HG Extended Specification Coverage Sweep ===
-Host=192.0.2.10, Port=1025, Transports=['tcp', 'udp'], Series=iqr
+Host=192.168.250.100, Port=1025, Transports=['tcp', 'udp'], Series=iqr
 [INFO] Targets=['SELF', 'NW1-ST2']
 [INFO] Devices=['U3E0\\G10']
 [INFO] Points=[1]
@@ -218,9 +218,9 @@ Host=192.0.2.10, Port=1025, Transports=['tcp', 'udp'], Series=iqr
 [OK] Read Type Name: target=NW1-ST2, transport=udp, model=R120CPU, model_code=0x4804 (18436)
 [INFO] Frame dump directory: internal_docs\iqr_r120cpu\frame_dumps_g_hg_extended_device_coverage
 [OK] udp NW1-ST2 U3E0\G10 points=1 direct=0xFA: device=U3E0\G10, points=1, before=[0x0000], mode=read_only
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmp6ur6zv8m\g_hg_extended_device_coverage_latest.md
+[DONE] report=Temp\tmp6ur6zv8m\g_hg_extended_device_coverage_latest.md
 === G/HG Extended Specification Coverage Sweep ===
-Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=iqr
+Host=192.168.250.100, Port=1025, Transports=['tcp'], Series=iqr
 [INFO] Targets=['SELF']
 [INFO] Devices=['U3E0\\G10', 'U3E0\\HG20']
 [INFO] Points=[1, 4]
@@ -232,9 +232,9 @@ Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=iqr
 [OK] U3E0\G10 points=4 direct=0xFA: device=U3E0\G10, points=4, before=[0x0000, 0x0001, 0x0002, 0x0003], mode=read_only
 [OK] U3E0\HG20 points=1 direct=0xFA: device=U3E0\HG20, points=1, before=[0x0000], mode=read_only
 [OK] U3E0\HG20 points=4 direct=0xFA: device=U3E0\HG20, points=4, before=[0x0000, 0x0001, 0x0002, 0x0003], mode=read_only
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpdw3tpws3\g_hg_extended_device_coverage_latest.md
+[DONE] report=Temp\tmpdw3tpws3\g_hg_extended_device_coverage_latest.md
 === G/HG Extended Specification Coverage Sweep ===
-Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=ql
+Host=192.168.250.100, Port=1025, Transports=['tcp'], Series=ql
 [INFO] Targets=['SELF']
 [INFO] Devices=['U01\\G22']
 [INFO] Points=[1]
@@ -243,9 +243,9 @@ Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=ql
 [INFO] Read Type Name unavailable: target=SELF, transport=tcp, error=type name unsupported
 [INFO] Frame dump directory: internal_docs\ql_unknown_target\frame_dumps_g_hg_extended_device_coverage
 [OK] U01\G22 points=1 direct=0xF8: device=U01\G22, points=1, before=[0x0000], mode=read_only
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpm71mcqmh\g_hg_extended_device_coverage_latest.md
+[DONE] report=Temp\tmpm71mcqmh\g_hg_extended_device_coverage_latest.md
 === G/HG Extended Specification Coverage Sweep ===
-Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=ql
+Host=192.168.250.100, Port=1025, Transports=['tcp'], Series=ql
 [INFO] Targets=['SELF']
 [INFO] Devices=['U01\\G22']
 [INFO] Points=[2]
@@ -254,7 +254,7 @@ Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=ql
 [OK] Read Type Name: target=SELF, transport=tcp, model=FX5UC-32MT/D, model_code=0x0000 (0)
 [INFO] Frame dump directory: internal_docs\ql_fx5uc_32mt_d\frame_dumps_g_hg_extended_device_coverage
 [OK] U01\G22 points=2 direct=0xF8: device=U01\G22, points=2, before=[0x1000, 0x1001], write=[0x0020, 0x0021], readback=[0x0020, 0x0021], restored=[0x1000, 0x1001], restore=ok
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpiagbdw3z\g_hg_extended_device_coverage_latest.md
+[DONE] report=Temp\tmpiagbdw3z\g_hg_extended_device_coverage_latest.md
 [RUN] unit_tests
 [PASS] unit_tests rc=0 elapsed=0.00s
 [RUN] ruff
@@ -303,7 +303,7 @@ Host=192.0.2.10, Port=1025, Transports=['tcp'], Series=ql
 [PASS] cli_help:slmp_g_hg_extended_device_coverage.py rc=0 elapsed=0.00s
 [RUN] cli_help:slmp_mixed_block_compare.py
 [PASS] cli_help:slmp_mixed_block_compare.py rc=0 elapsed=0.00s
-[DONE] report=C:\Users\Lenovo\AppData\Local\Temp\tmpkks7xuh7\regression_suite_latest.md
+[DONE] report=Temp\tmpkks7xuh7\regression_suite_latest.md
 ```
 
 stderr:
@@ -559,7 +559,7 @@ OK (skipped=5)
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m ruff check slmp tests scripts
+Python\pythoncore-3.14-64\python.exe -m ruff check slmp tests scripts
 ```
 
 stdout:
@@ -573,7 +573,7 @@ All checks passed!
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe -m mypy slmp scripts
+Python\pythoncore-3.14-64\python.exe -m mypy slmp scripts
 ```
 
 stdout:
@@ -587,7 +587,7 @@ Success: no issues found in 37 source files
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_connection_check.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_connection_check.py --help
 ```
 
 stdout:
@@ -683,7 +683,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_compatibility_probe.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_compatibility_probe.py --help
 ```
 
 stdout:
@@ -771,7 +771,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_compatibility_matrix_render.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_compatibility_matrix_render.py --help
 ```
 
 stdout:
@@ -801,7 +801,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_device_range_probe.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_device_range_probe.py --help
 ```
 
 stdout:
@@ -852,7 +852,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_register_boundary_probe.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_register_boundary_probe.py --help
 ```
 
 stdout:
@@ -895,7 +895,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_device_access_matrix_sync.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_device_access_matrix_sync.py --help
 ```
 
 stdout:
@@ -917,7 +917,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_init_model_docs.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_init_model_docs.py --help
 ```
 
 stdout:
@@ -943,7 +943,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_other_station_check.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_other_station_check.py --help
 ```
 
 stdout:
@@ -998,7 +998,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_open_items_recheck.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_open_items_recheck.py --help
 ```
 
 stdout:
@@ -1034,7 +1034,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_pending_live_verification.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_pending_live_verification.py --help
 ```
 
 stdout:
@@ -1087,7 +1087,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_manual_write_verification.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_manual_write_verification.py --help
 ```
 
 stdout:
@@ -1142,7 +1142,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_manual_label_verification.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_manual_label_verification.py --help
 ```
 
 stdout:
@@ -1195,7 +1195,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_supported_device_rw_probe.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_supported_device_rw_probe.py --help
 ```
 
 stdout:
@@ -1242,7 +1242,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_special_device_probe.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_special_device_probe.py --help
 ```
 
 stdout:
@@ -1282,7 +1282,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_read_soak.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_read_soak.py --help
 ```
 
 stdout:
@@ -1325,7 +1325,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_mixed_read_load.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_mixed_read_load.py --help
 ```
 
 stdout:
@@ -1372,7 +1372,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_tcp_concurrency.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_tcp_concurrency.py --help
 ```
 
 stdout:
@@ -1413,7 +1413,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_extended_device_device_recheck.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_extended_device_device_recheck.py --help
 ```
 
 stdout:
@@ -1486,7 +1486,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_recheck.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_recheck.py --help
 ```
 
 stdout:
@@ -1555,7 +1555,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_coverage.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_g_hg_extended_device_coverage.py --help
 ```
 
 stdout:
@@ -1639,7 +1639,7 @@ options:
 Command:
 
 ```text
-C:\Users\Lenovo\AppData\Local\Python\pythoncore-3.14-64\python.exe D:\PLC_COMM_PROJ\plc-comm-slmp-python\scripts\slmp_mixed_block_compare.py --help
+Python\pythoncore-3.14-64\python.exe plc-comm-slmp-python\scripts\slmp_mixed_block_compare.py --help
 ```
 
 stdout:

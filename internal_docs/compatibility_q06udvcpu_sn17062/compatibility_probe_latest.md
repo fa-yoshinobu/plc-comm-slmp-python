@@ -2,7 +2,7 @@
 
 - Date: 2026-03-19 15:22:46
 - PLC Label: Q06UDVCPU_SN17062
-- Host: 192.168.250.101
+- Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Requested series: auto

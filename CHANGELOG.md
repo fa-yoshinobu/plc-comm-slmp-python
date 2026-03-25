@@ -10,10 +10,10 @@ All notable changes to this project will be documented in this file.
 - **3E Frame Support**: Formally enabled and documented support for SLMP 3E frames (binary).
 - **Module I/O Keywords**: Added `ModuleIONo` enum and keyword support (e.g. `OWN_STATION`, `MULTIPLE_CPU_1`) in `SLMPTarget`.
 - **Comprehensive Device Coverage**: Ported all device-related APIs (random, block, monitor, memory, label, remote) to the async client.
-- **`node_search` (sync)**: Added `SlmpClient.node_search()` — UDP broadcast node discovery, matching the existing async implementation.
-- **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` — UDP fire-and-forget IP address configuration (command 0x0E31).
-- **`resolve_profile` (sync + async)**: Added `SlmpClient.resolve_profile()` and `AsyncSlmpClient.resolve_profile()` — automatically probes four frame/series combinations and returns an `SlmpProfileRecommendation`.
-- **`SlmpProfileClass` enum**: `MODERN_IQR`, `LEGACY_QL`, `UNKNOWN` — classifies the detected PLC profile.
+- **`node_search` (sync)**: Added `SlmpClient.node_search()`  EUDP broadcast node discovery, matching the existing async implementation.
+- **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()`  EUDP fire-and-forget IP address configuration (command 0x0E31).
+- **`resolve_profile` (sync + async)**: Added `SlmpClient.resolve_profile()` and `AsyncSlmpClient.resolve_profile()`  Eautomatically probes four frame/series combinations and returns an `SlmpProfileRecommendation`.
+- **`SlmpProfileClass` enum**: `MODERN_IQR`, `LEGACY_QL`, `UNKNOWN`  Eclassifies the detected PLC profile.
 - **`SlmpProfileRecommendation` dataclass**: Frozen dataclass returned by `resolve_profile()` and `recommend_profile()`, carrying `frame_type`, `plc_series`, `profile_class`, and `is_confident`.
 - **`recommend_profile(info)`**: Heuristic function that maps a `TypeNameInfo` (model code range or name prefix) to an `SlmpProfileRecommendation`.
 - **`open_and_connect` improvement**: Now delegates to `resolve_profile()` internally for automatic frame/series detection.
@@ -116,7 +116,7 @@ Initial packaged release for the current repository scope.
 ### Validated Environment
 
 - Mitsubishi MELSEC iQ-R `R08CPU`
-- Host `192.168.250.101`
+- Host `192.168.250.100`
 - `TCP 1025`
 - `UDP 1027`
 - library mode `series=iqr`

@@ -8,7 +8,7 @@ Target:
 - series: `iqr`
 - CPU: `R08CPU`
 - Ethernet module: `RJ71EN71`
-- host used in the current baseline: `192.168.250.101`
+- host used in the current baseline: `192.168.250.100`
 - verified ports: `TCP 1025`, `UDP 1027`
 
 ## Intended Use

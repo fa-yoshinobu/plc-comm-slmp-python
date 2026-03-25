@@ -10,7 +10,7 @@ from slmp.client import SlmpClient
 from slmp.constants import FrameType, PLCSeries
 
 
-def fx5_discovery(host: str = "192.168.250.101", port: int = 1025) -> None:
+def fx5_discovery(host: str = "192.168.250.100", port: int = 1025) -> None:
     """Test various connection combinations for FX5 PLC."""
 
     # Discovery combinations specifically for FX5
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.250.101")
+    parser.add_argument("--host", default="192.168.250.100")
     parser.add_argument("--port", type=int, default=1025)
     args = parser.parse_args()
     fx5_discovery(host=args.host, port=args.port)

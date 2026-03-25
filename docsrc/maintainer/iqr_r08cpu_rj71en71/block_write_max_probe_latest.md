@@ -2,7 +2,7 @@
 
 - Date: 2026-03-13 16:58:50
 - Path under test: R08CPU + RJ71EN71 (assumed current route by operator setup)
-- Host: `192.168.250.101`
+- Host: `192.168.250.100`
 - Port: `1025`
 - Transport: `tcp`
 - Series: `iqr`

@@ -816,8 +816,10 @@ class TestCli(unittest.TestCase):
             patch.object(cli, "SlmpClient", ConnectionCheckClient),
             patch.object(cli, "_load_compatibility_policy", return_value=None),
         ):
-            rc_auto = cli.connection_check_main(["--host", "192.0.2.10", "--series", "ql"])
-            rc_explicit = cli.connection_check_main(["--host", "192.0.2.10", "--series", "ql", "--frame-type", "4e"])
+            rc_auto = cli.connection_check_main(["--host", "192.168.250.100", "--series", "ql"])
+            rc_explicit = cli.connection_check_main(
+                ["--host", "192.168.250.100", "--series", "ql", "--frame-type", "4e"]
+            )
 
         self.assertEqual(rc_auto, 0)
         self.assertEqual(rc_explicit, 0)
@@ -877,7 +879,7 @@ class TestCli(unittest.TestCase):
             patch.object(cli, "SlmpClient", AutoSeriesConnectionCheckClient),
             patch.object(cli, "_load_compatibility_policy", return_value=None),
         ):
-            rc = cli.connection_check_main(["--host", "192.0.2.10", "--series", "auto"])
+            rc = cli.connection_check_main(["--host", "192.168.250.100", "--series", "auto"])
 
         self.assertEqual(rc, 0)
         self.assertEqual(AutoSeriesConnectionCheckClient.init_calls, [("3e", "ql")])
@@ -943,7 +945,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.connection_check_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "auto",
                         "--frame-type",
@@ -1021,7 +1023,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.other_station_check_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "auto",
                         "--frame-type",
@@ -1118,7 +1120,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.other_station_check_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "auto",
                         "--frame-type",
@@ -1185,7 +1187,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.other_station_check_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "auto",
                         "--frame-type",
@@ -1267,7 +1269,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.other_station_check_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "auto",
                         "--frame-type",
@@ -1343,7 +1345,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.compatibility_probe_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--plc-label",
                         "Q26UDEHCPU_BuiltIn",
                         "--series",
@@ -1437,7 +1439,7 @@ class TestCli(unittest.TestCase):
     def test_manual_label_verification_main_requires_label_args(self) -> None:
         """Test test_manual_label_verification_main_requires_label_args."""
         with self.assertRaises(SystemExit) as ctx:
-            cli.manual_label_verification_main(["--host", "192.0.2.10"])
+            cli.manual_label_verification_main(["--host", "192.168.250.100"])
         self.assertEqual(ctx.exception.code, 2)
 
     def test_manual_label_verification_main_processes_random_and_array_labels(self) -> None:
@@ -1519,7 +1521,7 @@ class TestCli(unittest.TestCase):
                     rc = cli.manual_label_verification_main(
                         [
                             "--host",
-                            "192.0.2.10",
+                            "192.168.250.100",
                             "--series",
                             "iqr",
                             "--monitoring-timer",
@@ -1691,7 +1693,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.pending_live_verification_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "iqr",
                         "--monitoring-timer",
@@ -1755,7 +1757,7 @@ class TestCli(unittest.TestCase):
                 rc = cli.pending_live_verification_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "iqr",
                         "--label-array",
@@ -2289,7 +2291,7 @@ class TestDeviceApi(unittest.TestCase):
                 rc = cli.g_hg_extended_device_coverage_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "iqr",
                         "--device",
@@ -2352,7 +2354,7 @@ class TestDeviceApi(unittest.TestCase):
                 rc = cli.g_hg_extended_device_coverage_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "ql",
                         "--device",
@@ -2451,7 +2453,7 @@ class TestDeviceApi(unittest.TestCase):
                 rc = cli.g_hg_extended_device_coverage_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "iqr",
                         "--transport",
@@ -2522,7 +2524,7 @@ class TestDeviceApi(unittest.TestCase):
                 rc = cli.g_hg_extended_device_coverage_main(
                     [
                         "--host",
-                        "192.0.2.10",
+                        "192.168.250.100",
                         "--series",
                         "ql",
                         "--device",

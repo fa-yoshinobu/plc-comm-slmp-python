@@ -3,7 +3,7 @@
 - Date: 2026-03-19
 - Repository: `plc-comm-slmp-python`
 - Target:
-  - host `192.168.250.101`
+  - host `192.168.250.100`
   - port `1025`
   - transport `tcp`
   - `network=0x01`

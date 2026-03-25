@@ -42,7 +42,7 @@ There are three different failure layers:
 from slmp import SlmpClient
 from slmp.errors import SlmpError
 
-with SlmpClient("192.168.250.101", port=1025, transport="tcp", plc_series="iqr") as cli:
+with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_series="iqr") as cli:
     try:
         cli.read_devices("D100", 1)
     except SlmpError as e:
@@ -55,7 +55,7 @@ with SlmpClient("192.168.250.101", port=1025, transport="tcp", plc_series="iqr")
 
 High-level APIs raise `SlmpError` by default. Use `raise_on_error=False` when you need the raw response.
 
-For error handling implementation examples, see the [User Guide — Error Handling](USER_GUIDE.md).
+For error handling implementation examples, see the [User Guide  EError Handling](USER_GUIDE.md).
 
 ## 4. Reading the Result Correctly
 

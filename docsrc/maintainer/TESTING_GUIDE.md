@@ -77,7 +77,7 @@ Installed entry points are listed in [Script Reference](SCRIPT_REFERENCE.md).
 If you want a single local gate plus an optional safe live smoke check:
 
 ```powershell
-python scripts/slmp_regression_suite.py --include-live-connection-check --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_regression_suite.py --include-live-connection-check --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 ## 5. Live Test Environment
@@ -85,7 +85,7 @@ python scripts/slmp_regression_suite.py --include-live-connection-check --host 1
 Current project example target:
 
 - PLC: Mitsubishi MELSEC iQ-R `R08CPU`
-- host: `192.168.250.101`
+- host: `192.168.250.100`
 - TCP: `1025`
 - UDP: `1027`
 - series: `iqr`
@@ -115,7 +115,7 @@ This keeps destructive or noisy checks until the end.
 TCP:
 
 ```powershell
-python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 For Q-series internal ports such as `Q26UDEHCPU`, add `--frame-type auto` or `--frame-type 3e`. Auto selects `3e` for `ql` and `4e` for `iqr`. You can also use `--series auto`; the connection check probes `SM400` to resolve the family, and `0101 type name` is attempted automatically only on `4E`. Use `model_code` first, and fall back to the returned `model` text when the local code table does not have a match.
@@ -123,13 +123,13 @@ For Q-series internal ports such as `Q26UDEHCPU`, add `--frame-type auto` or `--
 TCP with a harmless device read:
 
 ```powershell
-python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --read-device D1000 --points 1
+python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --read-device D1000 --points 1
 ```
 
 UDP:
 
 ```powershell
-python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1027 --transport udp --series iqr
+python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1027 --transport udp --series iqr
 ```
 
 Expected result:
@@ -145,7 +145,7 @@ Expected result:
 Use this after PLC-side device-range settings changed:
 
 ```powershell
-python scripts/slmp_device_range_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_plc_boundary_specs_20260313.txt --include-writeback
+python scripts/slmp_device_range_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_plc_boundary_specs_20260313.txt --include-writeback
 ```
 
 Report:
@@ -157,7 +157,7 @@ Report:
 Use this for `Z`, `LZ`, `R`, `ZR`, and `RD` edge behavior:
 
 ```powershell
-python scripts/slmp_register_boundary_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_register_boundary_focus_specs_20260313.txt
+python scripts/slmp_register_boundary_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_register_boundary_focus_specs_20260313.txt
 ```
 
 Report:
@@ -169,7 +169,7 @@ Report:
 Use this when you want to rebuild `PLC_COMPATIBILITY.md` from structured probe output rather than hand-maintained notes:
 
 ```powershell
-python scripts/slmp_compatibility_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --plc-label R08CPU_Main
+python scripts/slmp_compatibility_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --plc-label R08CPU_Main
 ```
 
 Default behavior is read-only. The probe emits:
@@ -209,13 +209,13 @@ Interpretation rules:
 Use this to validate explicit target headers. `--series auto` now probes the route with `0401` only and falls back across `ql/iqr` until one read succeeds. `--frame-type auto` tries `3e` and `4e` as needed. The reported `access_profile` is only the route-probe encoding that worked first. Once a route probe succeeds, the tool also attempts `read_type_name()` on that same path for reporting, but a `0101` failure stays non-fatal:
 
 ```powershell
-python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST1
+python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST1
 ```
 
 Own-station multiple-CPU shorthand is also supported at the parser level:
 
 ```powershell
-python scripts/slmp_other_station_check.py --host 192.168.250.101 --port 1025 --transport tcp --series auto --frame-type auto --target SELF-CPU1
+python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target SELF-CPU1
 ```
 
 Report:
@@ -231,7 +231,7 @@ Validated practical note:
 Use this when you changed an unresolved area:
 
 ```powershell
-python scripts/slmp_open_items_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_open_items_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 Report:
@@ -243,13 +243,13 @@ Report:
 Use this when you changed implemented command-family behavior:
 
 ```powershell
-python scripts/slmp_pending_live_verification.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_pending_live_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 If you have real external-device-accessible labels, override the placeholders:
 
 ```powershell
-python scripts/slmp_pending_live_verification.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --label-random DDD[0] --label-array DDD[0]:1:20
+python scripts/slmp_pending_live_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --label-random DDD[0] --label-array DDD[0]:1:20
 ```
 
 Notes:
@@ -267,7 +267,7 @@ Report:
 Use this for `G/HG` and `LT/LST` related open items:
 
 ```powershell
-python scripts/slmp_special_device_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_special_device_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 Report:
@@ -279,13 +279,13 @@ Report:
 Use this after changing the iQ-R `G/HG` Extended Specification builder or when you want a focused `read -> temporary write -> readback -> restore` check for the captured `U3E0\G10` / `U3E0\HG20` style path:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 Optional exact target overrides:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --g-device U3E0\G10 --hg-device U3E0\HG20 --g-write-value 0x001E --hg-write-value 0x0032
+python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --g-device U3E0\G10 --hg-device U3E0\HG20 --g-write-value 0x001E --hg-write-value 0x0032
 ```
 
 Report:
@@ -301,13 +301,13 @@ Frame dumps:
 Use this when you want the same `read -> temporary write -> readback -> restore` flow for arbitrary qualified Extended Specification word devices such as `U01\G22` or future `U4\G0` checks:
 
 ```powershell
-python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series ql --probe u01_g22,U01\G22,0x0004,0xF8
+python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series ql --probe u01_g22,U01\G22,0x0004,0xF8
 ```
 
 Repeat `--probe` to run multiple devices in one report:
 
 ```powershell
-python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.101 --port 1025 --transport tcp --series ql --probe u01_g22,U01\G22,0x0004,0xF8 --probe u4_g0,U4\G0,0x0001,0xF8
+python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series ql --probe u01_g22,U01\G22,0x0004,0xF8 --probe u4_g0,U4\G0,0x0001,0xF8
 ```
 
 Report:
@@ -327,13 +327,13 @@ Multi-CPU `G/HG` expansion checklist:
 Use this when you want horizontal coverage across multiple qualified `G/HG` devices, point counts, transports, or named targets without changing the focused recheck commands:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --device U3E0\G10 --device U3E0\HG20 --points 1 --points 4
 ```
 
 You can also sweep multiple transports and named targets in one report:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.101 --series iqr --transport tcp --transport udp --target SELF --target SELF-CPU1 --device U3E0\G10 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --transport udp --target SELF --target SELF-CPU1 --device U3E0\G10 --points 1 --points 4
 ```
 
 If `read_type_name()` is unsupported on the resolved path, the sweep continues and records the coverage rows anyway.
@@ -351,7 +351,7 @@ Frame dumps:
 Use this for automated smoke checks of the currently supported writable families:
 
 ```powershell
-python scripts/slmp_supported_device_rw_probe.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_supported_device_rw_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 ### Mixed Block Comparison
@@ -359,7 +359,7 @@ python scripts/slmp_supported_device_rw_probe.py --host 192.168.250.101 --port 1
 Use this when you want request/response hex plus before/after/restore details for the checklist-style `D300` + `M200` block scenarios:
 
 ```powershell
-python scripts/slmp_mixed_block_compare.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr
+python scripts/slmp_mixed_block_compare.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
 First-pass comparison rule:
@@ -377,19 +377,19 @@ Report:
 Read soak:
 
 ```powershell
-python scripts/slmp_read_soak.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --device D1000 --rounds 5000 --rotate-span 200
+python scripts/slmp_read_soak.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --device D1000 --rounds 5000 --rotate-span 200
 ```
 
 Mixed read load:
 
 ```powershell
-python scripts/slmp_mixed_read_load.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --base-device D1000 --rounds 2000
+python scripts/slmp_mixed_read_load.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --base-device D1000 --rounds 2000
 ```
 
 TCP concurrency:
 
 ```powershell
-python scripts/slmp_tcp_concurrency.py --host 192.168.250.101 --port 1025 --series iqr --device D1000 --clients 1,2,4,8,16,32 --rounds-per-client 100
+python scripts/slmp_tcp_concurrency.py --host 192.168.250.100 --port 1025 --series iqr --device D1000 --clients 1,2,4,8,16,32 --rounds-per-client 100
 ```
 
 ## 9. Human-in-the-Loop Checks
@@ -399,13 +399,13 @@ python scripts/slmp_tcp_concurrency.py --host 192.168.250.101 --port 1025 --seri
 Use this to temporarily write representative devices from the matrix:
 
 ```powershell
-python scripts/slmp_manual_write_verification.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --device-code D --device-code M
+python scripts/slmp_manual_write_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --device-code D --device-code M
 ```
 
 Resume from the last report:
 
 ```powershell
-python scripts/slmp_manual_write_verification.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --resume-from-report internal_docsrc/iqr_r08cpu/manual_write_verification_latest.md
+python scripts/slmp_manual_write_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --resume-from-report internal_docsrc/iqr_r08cpu/manual_write_verification_latest.md
 ```
 
 ### Manual Label Verification
@@ -413,7 +413,7 @@ python scripts/slmp_manual_write_verification.py --host 192.168.250.101 --port 1
 Use this for explicit labels rather than the matrix:
 
 ```powershell
-python scripts/slmp_manual_label_verification.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --label-random LabelB --label-random LabelW --label-array DDD[0]:1:20
+python scripts/slmp_manual_label_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --label-random LabelB --label-random LabelW --label-array DDD[0]:1:20
 ```
 
 Both scripts:
@@ -428,7 +428,7 @@ Both scripts:
 Use Extended Specification checks only when your change touches that area:
 
 ```powershell
-python scripts/slmp_connection_check.py --host 192.168.250.101 --port 1025 --transport tcp --series iqr --extended_device all --extended_device-j-network 0x0001 --extended_device-u-io 0x0000 --extended_device-cpu-io 0x03E0
+python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --extended_device all --extended_device-j-network 0x0001 --extended_device-u-io 0x0000 --extended_device-cpu-io 0x03E0
 ```
 
 If you need frame dumps or packet captures for local debugging:
