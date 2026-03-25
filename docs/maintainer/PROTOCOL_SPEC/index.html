@@ -1,0 +1,2058 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://fa-yoshinobu.github.io/plc-comm-slmp-python/maintainer/PROTOCOL_SPEC/">
+      
+      
+        <link rel="prev" href="../open_items/">
+      
+      
+        <link rel="next" href="../TESTING_GUIDE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Protocol Spec - SLMP Connect Python (slmp) API Reference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#slmp-specification-4e-frame-binary" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-header__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SLMP Connect Python (slmp) API Reference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Protocol Spec
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-nav__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    SLMP Connect Python (slmp) API Reference
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/USER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/SAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/ERROR_CODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/BIT_DEVICE_ACCESS_TABLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device Table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QA Reports
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    QA Reports
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reports Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/PLC_COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/STABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Maintainer Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../open_items/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open Items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol Spec
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-4e-binary-frame-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 4E Binary Frame Format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#21-request-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Request Frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#22-response-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Response Frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#23-endianness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Endianness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-command-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Command Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#31-typed-apis-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Typed APIs Implemented
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#32-full-raw-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Full Raw Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#33-typed-result-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Typed Result Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-device-encoding-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Device Encoding Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#41-normal-device-access-00000003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Normal Device Access (0000..0003)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#42-supported-device-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Supported Device Codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-protocol-extension-specification-00800083" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. protocol extension Specification (0080..0083)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#51-extension-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Extension Fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#52-direct-memory-specification-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Direct Memory Specification Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53-typed-extension-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Typed Extension APIs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#54-observed-environment-gap-manual-vs-plc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Observed Environment Gap (Manual vs PLC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-transport-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Transport Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#71-file-command-compliance-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 File Command Compliance Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#72-verified-practical-access-path-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Verified Practical Access Path Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-connection-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Connection Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-source-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Source Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPT_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Script Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_PROCESS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change Log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-4e-binary-frame-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 4E Binary Frame Format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#21-request-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Request Frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#22-response-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Response Frame
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#23-endianness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Endianness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-command-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Command Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#31-typed-apis-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Typed APIs Implemented
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#32-full-raw-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Full Raw Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#33-typed-result-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Typed Result Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-device-encoding-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Device Encoding Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#41-normal-device-access-00000003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Normal Device Access (0000..0003)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#42-supported-device-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Supported Device Codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-protocol-extension-specification-00800083" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. protocol extension Specification (0080..0083)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#51-extension-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Extension Fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#52-direct-memory-specification-constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Direct Memory Specification Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#53-typed-extension-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Typed Extension APIs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#54-observed-environment-gap-manual-vs-plc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Observed Environment Gap (Manual vs PLC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-transport-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Transport Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#71-file-command-compliance-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 File Command Compliance Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#72-verified-practical-access-path-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Verified Practical Access Path Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-connection-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Connection Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-source-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Source Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="slmp-specification-4e-frame-binary">SLMP Specification (4E Frame, Binary)</h1>
+<p>This document is the authoritative communication specification for this repository.</p>
+<p>Known intentional differences between manual expectations and the current implementation are tracked separately in:</p>
+<ul>
+<li><code>internal_docsrc/manual_implementation_differences.md</code></li>
+</ul>
+<h2 id="1-scope">1. Scope</h2>
+<ul>
+<li>Protocol: SLMP (Seamless Message Protocol)</li>
+<li>Frame type: 4E frame only</li>
+<li>Data code: binary only</li>
+<li>Out of scope: 3E frame and ASCII code mode</li>
+</ul>
+<h2 id="2-4e-binary-frame-format">2. 4E Binary Frame Format</h2>
+<h2 id="21-request-frame">2.1 Request Frame</h2>
+<p>Field order and size:
+1. <code>Subheader</code> (2 bytes): <code>0x54 0x00</code>
+2. <code>Serial No.</code> (2 bytes, little-endian)
+3. <code>Reserved</code> (2 bytes): <code>0x00 0x00</code>
+4. <code>Network No.</code> (1 byte)
+5. <code>Station No.</code> (1 byte)
+6. <code>Module I/O No.</code> (2 bytes, little-endian)
+7. <code>Multidrop Station No.</code> (1 byte)
+8. <code>Request data length</code> (2 bytes, little-endian)
+9. <code>Monitoring timer</code> (2 bytes, little-endian)
+10. <code>Command</code> (2 bytes, little-endian)
+11. <code>Subcommand</code> (2 bytes, little-endian)
+12. <code>Request data</code> (variable)</p>
+<p><code>Request data length</code> is the byte count from <code>Monitoring timer</code> through the end of <code>Request data</code>.</p>
+<h2 id="22-response-frame">2.2 Response Frame</h2>
+<p>Field order and size:
+1. <code>Subheader</code> (2 bytes): <code>0xD4 0x00</code>
+2. <code>Serial No.</code> (2 bytes, little-endian)
+3. <code>Reserved</code> (2 bytes)
+4. <code>Network No.</code> (1 byte)
+5. <code>Station No.</code> (1 byte)
+6. <code>Module I/O No.</code> (2 bytes, little-endian)
+7. <code>Multidrop Station No.</code> (1 byte)
+8. <code>Response data length</code> (2 bytes, little-endian)
+9. <code>End code</code> (2 bytes, little-endian)
+10. <code>Response data</code> (variable)</p>
+<p><code>Response data length</code> is the byte count from <code>End code</code> through the end of <code>Response data</code>.</p>
+<h2 id="23-endianness">2.3 Endianness</h2>
+<p>All numeric fields are handled as little-endian in binary mode unless a command-specific field explicitly defines byte-level data semantics.</p>
+<h2 id="3-command-coverage">3. Command Coverage</h2>
+<h2 id="31-typed-apis-implemented">3.1 Typed APIs Implemented</h2>
+<p>Device access:
+1. <code>0401</code> Read
+2. <code>1401</code> Write
+3. <code>0403</code> Read Random
+4. <code>1402</code> Write Random
+5. <code>0801</code> Entry Monitor Device
+6. <code>0802</code> Execute Monitor
+7. <code>0406</code> Read Block
+8. <code>1406</code> Write Block
+9. Long timer helpers:
+   - <code>read_long_timer(...)</code> (via <code>LTN</code>, 4-word units)
+   - <code>read_long_retentive_timer(...)</code> (via <code>LSTN</code>, 4-word units)
+   - <code>read_ltc_states(...)</code>, <code>read_lts_states(...)</code>
+   - <code>read_lstc_states(...)</code>, <code>read_lsts_states(...)</code></p>
+<p>Memory / extend unit:
+1. <code>0613</code> Memory Read
+2. <code>1613</code> Memory Write
+3. <code>0601</code> Extend Unit Read
+4. <code>1601</code> Extend Unit Write
+5. High-level helpers:
+   - <code>extend_unit_read_words(...)</code>, <code>extend_unit_write_words(...)</code>
+   - <code>extend_unit_read_word(...)</code>, <code>extend_unit_write_word(...)</code>
+   - <code>extend_unit_read_dword(...)</code>, <code>extend_unit_write_dword(...)</code>
+   - <code>cpu_buffer_read_bytes(...)</code>, <code>cpu_buffer_read_words(...)</code>
+   - <code>cpu_buffer_read_word(...)</code>, <code>cpu_buffer_write_word(...)</code>
+   - <code>cpu_buffer_read_dword(...)</code>, <code>cpu_buffer_write_dword(...)</code>
+   - <code>cpu_buffer_write_bytes(...)</code>, <code>cpu_buffer_write_words(...)</code></p>
+<p>Label access:
+1. <code>041A</code> Array Label Read
+2. <code>141A</code> Array Label Write
+3. <code>041C</code> Label Read Random
+4. <code>141B</code> Label Write Random
+5. Typed builders/parsers:
+   - <code>build_array_label_read_payload</code>, <code>build_array_label_write_payload</code>
+   - <code>build_label_read_random_payload</code>, <code>build_label_write_random_payload</code>
+   - <code>parse_array_label_read_response</code>, <code>parse_label_read_random_response</code>
+6. Typed result models:
+   - <code>LabelArrayReadResult</code>, <code>LabelRandomReadResult</code></p>
+<p>Remote control and status:
+1. <code>1001</code> Remote Run
+2. <code>1002</code> Remote Stop
+3. <code>1003</code> Remote Pause
+4. <code>1005</code> Remote Latch Clear
+5. <code>1006</code> Remote Reset
+6. <code>0101</code> Read Type Name</p>
+<p>Remote password:
+1. <code>1631</code> Lock
+2. <code>1630</code> Unlock</p>
+<p>File control (major typed operations):
+1. <code>1810</code> Read Directory/File
+2. <code>1811</code> Search Directory/File
+3. <code>1820</code> New File
+4. <code>1822</code> Delete File
+5. <code>1825</code> Change File State
+6. <code>1826</code> Change File Date
+7. <code>1827</code> Open File
+8. <code>1828</code> Read File
+9. <code>1829</code> Write File
+10. <code>182A</code> Close File</p>
+<p>Other:
+1. <code>0619</code> Self Test
+2. <code>1617</code> Clear Error
+3. <code>2101</code> Ondemand receive</p>
+<h2 id="32-full-raw-wrappers">3.2 Full Raw Wrappers</h2>
+<p>Raw wrappers are available for all command groups implemented in this repository, including label and other file/maintenance commands.
+- <code>1827</code> raw open returns raw response bytes (file pointer number payload)
+- <code>1829</code> raw write returns raw response bytes (written-byte-count payload)
+- <code>*_raw</code> wrappers are maintainer-only tools for library development and protocol investigation
+- typed helpers remain the canonical public API for normal users
+- <code>2101</code> is not sent as an external-device request; use <code>receive_ondemand(...)</code></p>
+<h2 id="33-typed-result-models">3.3 Typed Result Models</h2>
+<p>The library exposes typed result classes for major multi-field responses:
+1. <code>TypeNameInfo</code>
+2. <code>RandomReadResult</code>
+3. <code>MonitorResult</code>
+4. <code>BlockReadResult</code>
+5. <code>LongTimerResult</code>
+6. <code>LabelArrayReadResult</code>
+7. <code>LabelRandomReadResult</code></p>
+<h2 id="4-device-encoding-rules">4. Device Encoding Rules</h2>
+<h2 id="41-normal-device-access-00000003">4.1 Normal Device Access (0000..0003)</h2>
+<p>For binary requests:
+- Q/L compatible subcommands (<code>0000</code>, <code>0001</code>):
+  - Device number: 3 bytes
+  - Device code: 1 byte
+- iQ-R/iQ-L subcommands (<code>0002</code>, <code>0003</code>):
+  - Device number: 4 bytes
+  - Device code: 2 bytes</p>
+<p>Bit-unit data packing:
+- 2 points per byte
+- high nibble: first point
+- low nibble: second point</p>
+<p>Random bit write (<code>1402</code>) state value:
+- Q/L (<code>0001</code>/<code>0081</code>): 1 byte per point (<code>01</code> set, <code>00</code> reset)
+- iQ-R/iQ-L (<code>0003</code>/<code>0083</code>): 2 bytes per point (<code>01 00</code> set, <code>00 00</code> reset)</p>
+<p>Block read/write compatibility handling:
+- <code>read_block</code> and <code>write_block</code> send mixed word+bit blocks in one <code>0406/1406</code> request by default, matching the manual.
+- If a target environment needs a compatibility fallback, <code>split_mixed_blocks=True</code> sends two commands (word-only, bit-only).
+- For write-side compatibility, <code>retry_mixed_on_error=True</code> first sends one mixed <code>1406</code> request and retries as split word-only and bit-only writes only when the PLC returns a known mixed-write rejection end code. The current retry set is <code>0xC056</code>, <code>0xC05B</code>, and <code>0xC061</code>.
+- Practical recommendation on current hardware evidence: if mixed write reliability matters more than keeping the manual's one-request form, prefer <code>split_mixed_blocks=True</code>.
+- As of 2026-03-19, this project has no live-verified PLC path where the first one-request mixed <code>1406</code> write was accepted.
+- <code>bit_blocks</code> does not use one value per bit.
+- Each bit-block point is handled as one packed 16-bit unit for the specified bit device family.
+- Example:
+  - <code>read_block(bit_blocks=[("M1000", 1)])</code> returns one packed 16-bit value for <code>M1000..M1015</code>
+  - <code>write_block(bit_blocks=[("M1000", [0x0005])])</code> writes the packed pattern for <code>M1000..M1015</code></p>
+<p>Long timer / long retentive timer handling:
+- The supported read specification in this project is to read <code>LTN</code> / <code>LSTN</code> in 4-word units and decode the effective <code>LT/LST</code> contact and coil state from the response.
+- <code>LTC</code>/<code>LTS</code> and <code>LSTC</code>/<code>LSTS</code> are therefore not treated as the primary direct read target in this implementation.
+- The helper decodes each 4-word block as:
+  - <code>current_value</code>: <code>word0 + (word1 &lt;&lt; 16)</code>
+  - <code>status_word</code>: <code>word2</code>
+  - <code>coil</code>: <code>status_word bit0</code>
+  - <code>contact</code>: <code>status_word bit1</code>
+- Convenience helpers are provided for the effective direct-state view:
+  - <code>read_ltc_states(...)</code> returns the decoded <code>coil</code> bits from <code>LTN</code>
+  - <code>read_lts_states(...)</code> returns the decoded <code>contact</code> bits from <code>LTN</code>
+  - <code>read_lstc_states(...)</code> returns the decoded <code>coil</code> bits from <code>LSTN</code>
+  - <code>read_lsts_states(...)</code> returns the decoded <code>contact</code> bits from <code>LSTN</code>
+- Practical mapping on the validated iQ-R target:</p>
+<table>
+<thead>
+<tr>
+<th>direct-style device</th>
+<th>practical read API</th>
+<th>decoded source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LTC</code></td>
+<td><code>read_ltc_states(...)</code></td>
+<td><code>LTN</code> status-word coil bit</td>
+</tr>
+<tr>
+<td><code>LTS</code></td>
+<td><code>read_lts_states(...)</code></td>
+<td><code>LTN</code> status-word contact bit</td>
+</tr>
+<tr>
+<td><code>LSTC</code></td>
+<td><code>read_lstc_states(...)</code></td>
+<td><code>LSTN</code> status-word coil bit</td>
+</tr>
+<tr>
+<td><code>LSTS</code></td>
+<td><code>read_lsts_states(...)</code></td>
+<td><code>LSTN</code> status-word contact bit</td>
+</tr>
+<tr>
+<td>- This matches the manual note that <code>LTN</code> / <code>LSTN</code> responses include current value, contact bit, and coil bit in one 4-word response block.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- Latest live note on the validated iQ-R target:</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>1402</code> random bit writes to <code>LTC</code>/<code>LTS</code> and <code>LSTC</code>/<code>LSTS</code> were verified with helper-backed readback and restore after correcting the helper mapping to the manual (<code>LTC/LSTC=coil</code>, <code>LTS/LSTS=contact</code>)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- this repository does not pursue direct-programmatic <code>LTC/LTS/LSTC/LSTS</code> support as a separate target</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>1402</code> random dword writes to <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> were verified with readback and restore</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>1401</code>/<code>1402</code> manual-style long-counter writes were also verified:</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>LCS</code> via <code>1401</code> word bulk write</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>LCC</code> via <code>1401</code> bit bulk write and <code>1402</code> bit random write</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <code>LCN</code> via <code>1401</code> word bulk write and <code>1402</code> dword random write</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- Operational summary on the validated iQ-R target:</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>family</th>
+<th>supported read interpretation</th>
+<th>current write interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LTC</code> / <code>LTS</code></td>
+<td>use <code>LTN</code> 4-word decode</td>
+<td><code>1402</code> bit random write verified with helper-backed readback and restore; direct-device API support is not pursued</td>
+</tr>
+<tr>
+<td><code>LSTC</code> / <code>LSTS</code></td>
+<td>use <code>LSTN</code> 4-word decode</td>
+<td><code>1402</code> bit random write verified with helper-backed readback and restore; direct-device API support is not pursued</td>
+</tr>
+<tr>
+<td><code>LTN</code> / <code>LSTN</code></td>
+<td>direct current-value access</td>
+<td><code>1402</code> dword random write verified</td>
+</tr>
+<tr>
+<td><code>LCS</code></td>
+<td>direct access</td>
+<td><code>1401</code> word bulk write verified</td>
+</tr>
+<tr>
+<td><code>LCC</code></td>
+<td>direct access</td>
+<td><code>1401</code> bit bulk write and <code>1402</code> bit random write verified</td>
+</tr>
+<tr>
+<td><code>LCN</code></td>
+<td>direct access</td>
+<td><code>1401</code> word bulk write and <code>1402</code> dword random write verified</td>
+</tr>
+</tbody>
+</table>
+<h2 id="42-supported-device-codes">4.2 Supported Device Codes</h2>
+<p>Device code table is implemented in <code>slmp/constants.py</code> as <code>DEVICE_CODES</code>.
+It includes standard codes and long-timer/long-counter related codes defined in the source manual.</p>
+<h2 id="5-protocol-extension-specification-00800083">5. protocol extension Specification (0080..0083)</h2>
+<h2 id="51-extension-fields">5.1 Extension Fields</h2>
+<p>Typed model: <code>ExtensionSpec</code></p>
+<p>Fields:
+1. <code>extension_specification</code> (2 bytes)
+2. <code>extension_specification_modification</code> (1 byte)
+3. <code>device_modification_index</code> (1 byte)
+4. <code>device_modification_flags</code> (1 byte)
+5. <code>direct_memory_specification</code> (1 byte)</p>
+<p>Binary payload builder:
+- <code>encode_extended_device_spec(...)</code>
+- <code>build_device_modification_flags(...)</code></p>
+<h2 id="52-direct-memory-specification-constants">5.2 Direct Memory Specification Constants</h2>
+<ol>
+<li><code>0x00</code>: normal device</li>
+<li><code>0xF8</code>: module access device (<code>U\\G</code> type)</li>
+<li><code>0xF9</code>: link direct device (<code>J\\W</code> type)</li>
+<li><code>0xFA</code>: CPU buffer memory access device</li>
+</ol>
+<p>For <code>G/HG</code>, the practical meaning is that the access is unit/module-scoped, not a standalone normal device address.
+- <code>G</code> corresponds to a module access device (<code>U\\G</code> style, for example <code>U4\\G0</code> in engineering-tool notation).
+- <code>HG</code> is CPU-buffer related, but it is still not a standalone direct device on the validated target.
+- In both cases, plain <code>G0</code> / <code>HG0</code> without surrounding unit/module context is not sufficient on the validated target.
+- The <code>Uxxxx</code> qualifier is syntax only at the protocol builder level. The repository can encode it as an protocol extension specification, but the actual meaning depends on the PLC configuration and on whether the corresponding unit exists.
+- In the currently verified iQ-R path, that unit context is provided by <code>0601/1601</code> with <code>module_no=0x03E0</code>.
+- On the user's current multi-CPU environment, the practical Extended Specification qualifiers for <code>G/HG</code> are <code>U3E0</code>, <code>U3E1</code>, <code>U3E2</code>, and <code>U3E3</code>, representing CPU memories for CPU No.1 through CPU No.4 respectively.
+- Lower <code>U**</code> values must not be read as CPU-memory selectors by default. In the same workspace context, lower <code>U**</code> values are ordinary I/O unit addresses unless the PLC-side environment explicitly defines the <code>U3E0..U3E3</code> style CPU-memory mapping for <code>G/HG</code>.
+- Therefore, <code>U1\\G*</code>, <code>U4\\G*</code>, <code>U01\\G*</code>, and <code>U3E0\\G*</code> must not be generalized from one another unless a capture or live verification proves that the target interprets them in the same way.
+- For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository now special-cases <code>G/HG</code> requests to match the captured reordered payload layout. That layout now has direct capture evidence for <code>U3E0\G10</code>, <code>U3E0\HG20</code>, and <code>U01\G22</code>. The iQ-R <code>U3E0\G10</code> / <code>U3E0\HG20</code> path was revalidated on the current R120PCPU target for single-word <code>G10</code> / <code>HG20</code> read-write-readback with restore. Each target still requires its own validation.</p>
+<h2 id="53-typed-extension-apis">5.3 Typed Extension APIs</h2>
+<ol>
+<li><code>read_devices_ext</code>, <code>write_devices_ext</code></li>
+<li><code>read_random_ext</code></li>
+<li><code>write_random_words_ext</code>, <code>write_random_bits_ext</code></li>
+<li><code>register_monitor_devices_ext</code></li>
+<li><code>make_extension_spec(...)</code></li>
+</ol>
+<p>For convenience, the typed <code>_ext</code> APIs also accept qualified device strings such as <code>U3E0\G10</code>, <code>U3E0\HG20</code>, and <code>U01\G22</code>.</p>
+<ul>
+<li><code>Uxxxx\...</code> overrides <code>extension_specification</code> with hex <code>xxxx</code></li>
+<li>the device part after <code>\</code> is still parsed by the normal device parser</li>
+<li>this override does not prove what the target means by that <code>Uxxxx</code> value; it only controls the encoded Extended Specification qualifier</li>
+<li>the byte-level layout difference for <code>G/HG</code> is documented in <code>docsrc/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md</code></li>
+<li>the Q/L-style <code>U01\G22</code> capture evidence is documented in <code>docsrc/validation/reports/U01_G22_extended_device_CAPTURE_2026-03-19.md</code></li>
+<li>in the user's current multi-CPU environment, <code>U3E0..U3E3</code> are the meaningful <code>G/HG</code> qualifiers and map to CPU No.1..No.4 memory</li>
+<li>lower <code>U**</code> values remain plain I/O unit addresses unless the target family defines a CPU-memory mapping for that range</li>
+</ul>
+<h2 id="54-observed-environment-gap-manual-vs-plc">5.4 Observed Environment Gap (Manual vs PLC)</h2>
+<p>Before the capture-aligned iQ-R <code>G/HG</code> builder was added, the generic repository Extended Specification module/CPU-buffer style access for <code>G/HG</code> returned <code>0xC061</code>, even when:
+1. <code>direct_memory_specification</code> is changed (<code>0xFA</code> and <code>0xF8</code> tested)
+2. extension specification variants are changed (<code>0x03E0</code>, <code>0x3E00</code>, <code>0x0000</code> tested)
+3. both series modes are tested (<code>iqr</code> and <code>ql</code>)</p>
+<p>This means Extended Specification framing/parameter requirements on this PLC setup are stricter than what was inferred from manual examples alone. Later capture-based <code>U3E0\G10</code>, <code>U3E0\HG20</code>, and <code>U01\G22</code> success cases showed that <code>G/HG</code> are not universally impossible, and the current builder now matches that reordered payload layout in unit tests. A live R120PCPU smoke recheck also passed for single-word <code>G10</code> / <code>HG20</code>, but broader validation is still required.
+The concrete byte-order difference between the old generic builder and the captured working layout is recorded in <code>docsrc/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md</code>.
+At the moment, <code>G/HG</code> is the only family with a confirmed dedicated Extended Specification builder branch in this repository.
+Current operational status is tracked in:
+1. <code>internal_docsrc/open_items.md</code>
+2. <code>internal_docsrc/iqr_r08cpu/device_access_matrix.md</code></p>
+<p>Practical conclusion for this repository:
+- <code>G</code> should be documented and treated as a unit-qualified module-access device (<code>U\\G</code> style).
+- <code>HG</code> should be documented and treated as requiring explicit CPU-buffer / module context as well.
+- On the validated target, the only repository-verified operational form is still <code>0601/1601</code> with <code>module_no=0x03E0</code>.
+- The typed Extended Specification <code>_ext</code> APIs now generate the capture-aligned <code>G/HG</code> payload shape, and the iQ-R path has been hardware-revalidated on the current R120PCPU target for single-word <code>G10</code> / <code>HG20</code>.
+- The manual-side Extended Specification interpretation for <code>U4\\G0</code> is:
+  - direct memory <code>0xF8</code>
+  - device code <code>G</code>
+  - extension specification = intelligent-function-module start I/O number
+- A focused <code>U4\\G0</code> check used the manual-aligned start I/O interpretation <code>0x0004</code> (<code>0040H</code> -&gt; upper 3 digits), but that Extended Specification path still returned <code>0xC061</code> on the validated target.
+- Separate capture-based <code>U3E0\\G10</code>, <code>U3E0\\HG20</code>, and <code>U01\\G22</code> sessions later showed successful Extended Specification <code>G/HG</code> traffic. The current builder now reproduces that reordered payload shape, and a live R120PCPU smoke recheck passed for the iQ-R target, so the remaining task is coverage expansion rather than builder reproduction.
+- A separate <code>0601/1601</code> path through <code>module_no=0x0004</code> returned data for low addresses, but those values did not match the live engineering-tool view of <code>U4\\G0</code>; therefore that path must not be treated as a confirmed <code>U\\G</code> equivalent.</p>
+<h2 id="6-error-handling">6. Error Handling</h2>
+<ul>
+<li>Protocol-level validation failures raise <code>SLMPError</code>.</li>
+<li>Intentionally blocked families in typed APIs raise <code>SLMPUnsupportedDeviceError</code>.</li>
+<li>Current always-blocked family in typed APIs is <code>S</code>. Direct typed access to <code>G/HG</code> is still blocked, but Extended Specification <code>_ext</code> APIs now allow <code>G/HG</code>.</li>
+<li><code>R32768</code> and above are rejected by project policy with <code>ValueError</code> before frame encoding.</li>
+<li><code>End code != 0</code> raises <code>SLMPError</code> by default (<code>raise_on_error=True</code>).</li>
+<li>Response frame size consistency is validated against <code>response_data_length</code>.</li>
+<li>Known target-specific risk paths may emit <code>SLMPPracticalPathWarning</code>.</li>
+<li>Known target-specific boundary behavior may emit <code>SLMPBoundaryBehaviorWarning</code>.</li>
+</ul>
+<h2 id="7-transport-behavior">7. Transport Behavior</h2>
+<ul>
+<li>TCP and UDP are supported.</li>
+<li>TCP receives exactly one SLMP frame using <code>response_data_length</code>.</li>
+<li>For remote reset (<code>1006</code>), the typed helper defaults to subcommand <code>0000</code> with no-response handling because normal completion may not return a response.</li>
+<li><code>receive_request(...)</code> decodes an incoming 4E request frame from the PLC.</li>
+<li><code>receive_ondemand(...)</code> / <code>ondemand()</code> wait for an incoming PLC-initiated <code>2101/0000</code> message and return its send data.</li>
+</ul>
+<h2 id="71-file-command-compliance-notes">7.1 File Command Compliance Notes</h2>
+<ul>
+<li>The file subcommand matrix is validated per command:</li>
+<li><code>1810</code>, <code>1811</code>, <code>1820</code>, <code>1826</code>: <code>0000</code>, <code>0040</code></li>
+<li><code>1822</code>, <code>1824</code>, <code>1825</code>, <code>1827</code>: <code>0000</code>, <code>0004</code>, <code>0040</code></li>
+<li><code>1828</code>, <code>1829</code>, <code>182A</code>: <code>0000</code> only</li>
+<li>For file password subcommand <code>0040</code>, the password length must be <code>0</code> or <code>6..32</code>.</li>
+<li><code>file_change_state_by_name(...)</code> encodes the file attribute as a 2-byte field.</li>
+<li><code>file_close_handle(...)</code> accepts close types <code>0</code>, <code>1</code>, and <code>2</code>.</li>
+</ul>
+<h2 id="72-verified-practical-access-path-notes">7.2 Verified Practical Access Path Notes</h2>
+<ul>
+<li>In the current iQ-R environment, direct <code>G/HG</code> device access is not operational.</li>
+<li>Earlier Extended Specification <code>G/HG</code> requests built by the generic layout were not operational in the same environment. The current iQ-R builder now uses the capture-aligned layout, and single-word <code>G10</code> / <code>HG20</code> smoke checks passed on the current R120PCPU target.</li>
+<li>The currently verified raw module/CPU-buffer access path is <code>0601/1601</code> with <code>module_no=0x03E0</code>.</li>
+<li>The <code>cpu_buffer_*</code> helpers are thin convenience wrappers around that verified <code>0601/1601</code> path.</li>
+<li>Read-then-write-same-value smoke checks were completed for <code>cpu_buffer_write_word(...)</code> and <code>cpu_buffer_write_dword(...)</code> at head address <code>0x00000000</code>.</li>
+</ul>
+<h2 id="8-connection-verification">8. Connection Verification</h2>
+<p>Use:
+- <code>scripts/slmp_connection_check.py</code></p>
+<p>Capabilities:
+1. Base communication test via <code>0101</code> (Read Type Name)
+2. Optional normal device read via <code>0401</code>
+3. Optional protocol extension checks for J/U/CPU buffer (<code>--extended_device</code>)
+4. Optional local-only frame dumps for debugging (<code>--dump-frame-dir</code>)</p>
+<p>Additional operational scripts:
+1. <code>scripts/slmp_open_items_recheck.py</code> (recheck current open items only)
+2. <code>scripts/slmp_device_range_probe.py</code> (probe PLC-configured boundary behavior from a spec file)
+3. <code>scripts/slmp_register_boundary_probe.py</code> (repeatable focused boundary probe for <code>Z</code>, <code>LZ</code>, <code>R</code>, <code>ZR</code>, and <code>RD</code>)
+4. <code>scripts/slmp_init_model_docs.py</code> (create a new <code>internal_docsrc/&lt;series&gt;_&lt;model&gt;/</code> scaffold)
+5. <code>scripts/slmp_other_station_check.py</code> (verify multiple explicit target headers / other stations)
+6. <code>scripts/slmp_pending_live_verification.py</code> (execute pending command-family live checks)</p>
+<p>Installed console entry points:
+1. <code>slmp-connection-check</code>
+2. <code>slmp-device-range-probe</code>
+3. <code>slmp-register-boundary-probe</code>
+4. <code>slmp-init-model-docs</code>
+5. <code>slmp-other-station-check</code>
+6. <code>slmp-open-items-recheck</code>
+7. <code>slmp-pending-live-verification</code></p>
+<h2 id="9-source-files">9. Source Files</h2>
+<p>Core implementation:
+- <code>slmp/core.py</code>
+- <code>slmp/client.py</code>
+- <code>slmp/constants.py</code></p>
+<p>Validation:
+- <code>tests/test_slmp.py</code></p>
+<p>Generated live reports are tracked as <code>internal_docsrc/&lt;series&gt;_&lt;model&gt;/*_latest.md</code>, and each new run also writes a timestamped archive copy under <code>internal_docsrc/&lt;series&gt;_&lt;model&gt;/archive/</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

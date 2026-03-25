@@ -1,0 +1,22 @@
+﻿__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.venv/
+uv.lock
+*.egg-info/
+build/
+dist/
+publish/
+internal_docs/*/archive/
+internal_docs/*/frame_dumps*/
+*.pcap
+*.pcapng
+# Local files
+local_folder/
+*.log
+.vscode/
+.idea/
+_tmp*.py
+_tmp_run.py

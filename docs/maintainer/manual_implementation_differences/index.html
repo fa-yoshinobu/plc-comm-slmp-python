@@ -1,0 +1,1383 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://fa-yoshinobu.github.io/plc-comm-slmp-python/maintainer/manual_implementation_differences/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Manual vs Implementation Differences - SLMP Connect Python (slmp) API Reference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#manual-vs-implementation-differences" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-header__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SLMP Connect Python (slmp) API Reference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Manual vs Implementation Differences
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-nav__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    SLMP Connect Python (slmp) API Reference
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/USER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/SAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/ERROR_CODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/BIT_DEVICE_ACCESS_TABLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device Table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QA Reports
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    QA Reports
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reports Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/PLC_COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/STABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Maintainer Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../open_items/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open Items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROTOCOL_SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPT_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Script Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_PROCESS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change Log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#review-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review Baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-ltlst-read-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. LT/LST Read Semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-ghg-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. G/HG Access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-step-relay-s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Step Relay S
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mixed-block-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mixed Block Fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-remote-reset-1006" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Remote Reset 1006
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-rzr-boundary-acceptance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. R/ZR Boundary Acceptance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-lz-write-unit-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. LZ Write Unit Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-zr-numbering-base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. ZR Numbering Base
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#use-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="manual-vs-implementation-differences">Manual vs Implementation Differences</h1>
+<p>This file records places where the implementation follows a practical rule that is narrower, clearer, or different from what the manuals alone would suggest.</p>
+<h2 id="review-baseline">Review Baseline</h2>
+<ul>
+<li>last updated: 2026-03-14</li>
+<li>validated target: Mitsubishi MELSEC iQ-R <code>R08CPU</code></li>
+<li>host: <code>192.168.250.101</code></li>
+</ul>
+<h2 id="1-ltlst-read-semantics">1. <code>LT/LST</code> Read Semantics</h2>
+<p>Manual expectation:</p>
+<ul>
+<li><code>LTN</code> / <code>LSTN</code> responses include the effective contact and coil bits</li>
+<li>direct devices such as <code>LTC</code>, <code>LTS</code>, <code>LSTC</code>, and <code>LSTS</code> also exist</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>the supported read rule is the <code>LTN/LSTN</code> 4-word decode path</li>
+<li>public helpers:</li>
+<li><code>read_long_timer(...)</code></li>
+<li><code>read_long_retentive_timer(...)</code></li>
+<li><code>read_ltc_states(...)</code></li>
+<li><code>read_lts_states(...)</code></li>
+<li><code>read_lstc_states(...)</code></li>
+<li><code>read_lsts_states(...)</code></li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>the helper path is live-verified and manual-aligned on the validated target</li>
+<li>direct <code>LTC/LTS/LSTC/LSTS</code> reads remain rejected there</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>settled practical rule</li>
+</ul>
+<h2 id="2-ghg-access">2. <code>G/HG</code> Access</h2>
+<p>Manual expectation:</p>
+<ul>
+<li><code>G</code> is unit-qualified module access</li>
+<li><code>HG</code> is CPU-buffer related</li>
+<li>Extended Specification access should work when the correct context is supplied</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>direct typed device APIs intentionally reject <code>G</code> and <code>HG</code></li>
+<li>Extended Specification <code>_ext</code> APIs now build a capture-aligned <code>G/HG</code> payload that matches the recorded <code>U3E0\G10</code>, <code>U3E0\HG20</code>, and <code>U01\G22</code> sessions</li>
+<li>the current R120PCPU target passed a live single-word <code>G10</code> / <code>HG20</code> read-write-readback with restore</li>
+<li>the practical supported path is:</li>
+<li><code>cpu_buffer_read_*</code></li>
+<li><code>cpu_buffer_write_*</code></li>
+<li>implemented via <code>0601/1601</code> with <code>module_no=0x03E0</code></li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>direct <code>G/HG</code> normal-device access remains rejected on the validated target</li>
+<li>earlier repository Extended Specification <code>G/HG</code> requests still failed on the validated target</li>
+<li>separate capture-based <code>U3E0\G10</code>, <code>U3E0\HG20</code>, and <code>U01\G22</code> sessions proved that Extended Specification <code>G/HG</code> can work in real environments, and the current builder now reproduces that reordered payload shape</li>
+<li>the CPU-buffer helper path was live-verified</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>practical deviation in favor of the verified helper path, with Extended Specification <code>G/HG</code> coverage expansion still open</li>
+</ul>
+<h2 id="3-step-relay-s">3. Step Relay <code>S</code></h2>
+<p>Manual expectation:</p>
+<ul>
+<li><code>S</code> exists as a normal device family</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>typed device APIs intentionally reject <code>S</code></li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>live verification showed read OK but write <code>0x4030</code></li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>intentionally unsupported in typed device APIs on this project</li>
+</ul>
+<h2 id="4-mixed-block-fallback">4. Mixed Block Fallback</h2>
+<p>Manual expectation:</p>
+<ul>
+<li>mixed word and bit blocks are sent in one <code>0406/1406</code> request</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>default behavior still sends one mixed request</li>
+<li>optional compatibility fallbacks exist:</li>
+<li><code>split_mixed_blocks=True</code></li>
+<li><code>retry_mixed_on_error=True</code> for <code>write_block(...)</code> on known mixed-write rejection end codes (<code>0xC056</code>, <code>0xC05B</code>, <code>0xC061</code> currently)</li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>some PLC environments reject one mixed request</li>
+</ul>
+<p>Observed on the validated target:</p>
+<ul>
+<li>one-request mixed <code>write_block(D300 x2 + M200 x1 packed)</code> returned <code>0xC05B</code></li>
+<li>the PLC memory remained unchanged after that first failed request</li>
+<li><code>retry_mixed_on_error=True</code> then succeeded by retrying as separate word-only and bit-only writes</li>
+<li>later live checks on additional targets also rejected the first mixed write:</li>
+<li><code>L16HCPU</code> -&gt; <code>0xC056</code></li>
+<li><code>FX5UC-32MT/D</code> -&gt; <code>0xC061</code></li>
+<li><code>R08CPU + RJ71EN71</code> -&gt; <code>0xC05B</code></li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>keep the manual-aligned one-request mixed form implemented</li>
+<li>
+<p>but document <code>split_mixed_blocks=True</code> as the safest operational choice on current hardware evidence</p>
+</li>
+<li>
+<p>optional non-default deviation</p>
+</li>
+</ul>
+<h2 id="5-remote-reset-1006">5. Remote Reset <code>1006</code></h2>
+<p>Manual expectation:</p>
+<ul>
+<li>the manual is internally inconsistent between <code>0000</code> and <code>0001</code></li>
+<li>successful <code>0000</code> may return no response</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li><code>remote_reset()</code> defaults to <code>1006/0000</code></li>
+<li>no-response handling is the default behavior</li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>this best matches the manual note about successful completion without a response</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>manual ambiguity resolved by implementation choice</li>
+</ul>
+<h2 id="6-rzr-boundary-acceptance">6. <code>R/ZR</code> Boundary Acceptance</h2>
+<p>Manual expectation:</p>
+<ul>
+<li>many devices are rejected once the requested span crosses the configured upper bound</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>the library does not hard-code those limits for most families</li>
+<li>project policy now treats <code>R</code> as a fixed exception and rejects <code>R32768</code> and above before frame encoding</li>
+<li>other families still go to the PLC for the actual acceptance decision</li>
+</ul>
+<p>Observed on the validated target:</p>
+<ul>
+<li><code>R32767</code> and <code>ZR163839</code> were accepted as start addresses</li>
+<li><code>R32768</code> and <code>ZR163840</code> were rejected as start addresses</li>
+<li>a separate capture from another PLC environment showed successful direct <code>0401/1401</code> access to <code>ZR1535996</code></li>
+<li>a later repository-driven live recheck also completed <code>ZR1535996</code> write/readback successfully on that large-<code>ZR</code> target</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>target-specific live behavior recorded</li>
+</ul>
+<h2 id="7-lz-write-unit-rule">7. <code>LZ</code> Write Unit Rule</h2>
+<p>Manual expectation:</p>
+<ul>
+<li><code>C051H</code> covers word-count or unit violations</li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>the library does not add a PLC-specific client-side special case</li>
+<li>it sends the request and lets the PLC validate it</li>
+</ul>
+<p>Observed on the validated target:</p>
+<ul>
+<li><code>LZ1 x1</code> write -&gt; <code>0xC051</code></li>
+<li><code>LZ1 x2</code> write -&gt; <code>0x0000</code></li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>target-specific live behavior recorded</li>
+</ul>
+<h2 id="8-zr-numbering-base">8. <code>ZR</code> Numbering Base</h2>
+<p>Manual expectation:</p>
+<ul>
+<li>current device tables suggest hexadecimal-style <code>ZR</code></li>
+</ul>
+<p>Current implementation:</p>
+<ul>
+<li>the library uses decimal <code>ZR</code> numbering on the validated iQ-R target</li>
+</ul>
+<p>Reason:</p>
+<ul>
+<li>live verification showed decimal numbering is the working behavior there</li>
+<li>a separate <code>ZR1535996</code> capture also used decimal direct-device numbering on another PLC environment</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>manual/live discrepancy recorded; implementation follows live behavior</li>
+</ul>
+<h2 id="use-rule">Use Rule</h2>
+<p>If a future change introduces another manual-vs-live rule, add it here immediately with:</p>
+<ol>
+<li>manual expectation</li>
+<li>implemented behavior</li>
+<li>reason</li>
+<li>current status</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

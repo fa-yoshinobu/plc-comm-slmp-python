@@ -1,0 +1,13 @@
+# Example target list for scripts/slmp_other_station_check.py
+# Format:
+#   name,network,station,module_io,multidrop
+#
+# Notes:
+# - Keep this file in UTF-8.
+# - Replace the example station numbers with actual routing targets.
+# - For standard CPU direct access, module_io is typically 0x03FF.
+# - Duplicate this file per environment if different station layouts are used.
+
+current_cpu,0x00,0xFF,0x03FF,0x00
+remote_station_01,0x00,0x01,0x03FF,0x00
+remote_station_02,0x00,0x02,0x03FF,0x00

@@ -1,0 +1,17 @@
+# Other Station Check Report
+
+- Date: 2026-03-19 15:13:00
+- Host: 192.168.250.101
+- Port: 1025
+- Transport: tcp
+- Requested series: auto
+- Requested frame: auto
+- Resolved frame: auto
+- Resolved access profile: auto
+- Targets: 1
+- Device read: D1000, points=1, bit_unit=False
+- Practical note: Validated Q26UDEHCPU built-in Ethernet accepted SELF route probing but timed out on tested NW1/NW2 other-station probes; compare failures against live routing evidence before assuming broader Q-series support.
+
+| Item | Status | Detail |
+|---|---|---|
+| NW2-ST2 | NG | name=NW2-ST2, network=0x02, station=0x02, module_io=0x03FF, multidrop=0x00, error=timed out |

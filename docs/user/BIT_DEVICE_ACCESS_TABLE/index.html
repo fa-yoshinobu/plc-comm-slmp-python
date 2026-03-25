@@ -1,0 +1,2157 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://fa-yoshinobu.github.io/plc-comm-slmp-python/user/BIT_DEVICE_ACCESS_TABLE/">
+      
+      
+        <link rel="prev" href="../ERROR_CODES/">
+      
+      
+        <link rel="next" href="../../api/client/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Device Table - SLMP Connect Python (slmp) API Reference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bit-device-access-table" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-header__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SLMP Connect Python (slmp) API Reference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Device Table
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-nav__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    SLMP Connect Python (slmp) API Reference
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../USER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ERROR_CODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device Table
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device Table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packed-16-bit-meaning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packed 16-Bit Meaning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-family-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Family Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Interpretation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#write-side-reminder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Write-Side Reminder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-which-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When To Use Which Form
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-device-code-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Device Code Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Device Code Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bit-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bit Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#long-timer-retentive-timer-helpers-iq-r" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Long Timer / Retentive Timer Helpers (iQ-R)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-buffer-access-intelligent-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module Buffer Access (Intelligent Module)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#link-direct-device-cc-link-ie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Link Direct Device (CC-Link IE)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-station-routing-target-station" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other Station Routing (Target Station)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documents
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QA Reports
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    QA Reports
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reports Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/PLC_COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/STABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Maintainer Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/open_items/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open Items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/PROTOCOL_SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/TESTING_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/SCRIPT_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Script Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/RELEASE_PROCESS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change Log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packed-16-bit-meaning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packed 16-Bit Meaning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-family-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Family Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Interpretation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#write-side-reminder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Write-Side Reminder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-which-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When To Use Which Form
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-device-code-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Device Code Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Device Code Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bit-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bit Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#long-timer-retentive-timer-helpers-iq-r" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Long Timer / Retentive Timer Helpers (iQ-R)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-buffer-access-intelligent-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module Buffer Access (Intelligent Module)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#link-direct-device-cc-link-ie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Link Direct Device (CC-Link IE)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-station-routing-target-station" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other Station Routing (Target Station)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documents
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bit-device-access-table">Bit Device Access Table</h1>
+<p>This note explains how bit-device families such as <code>M</code>, <code>B</code>, <code>X</code>, and <code>Y</code> behave across the main read forms used in this project.</p>
+<h2 id="key-rule">Key Rule</h2>
+<p>The device code stays the same. What changes is:</p>
+<ol>
+<li>command</li>
+<li>subcommand</li>
+<li>interpretation unit</li>
+</ol>
+<p>For bit devices:</p>
+<ul>
+<li>normal bit read returns one value per bit</li>
+<li>normal word read returns one packed 16-bit value per point</li>
+<li>block bit read also returns one packed 16-bit value per point</li>
+</ul>
+<h2 id="packed-16-bit-meaning">Packed 16-Bit Meaning</h2>
+<p>If the device state is:</p>
+<ul>
+<li><code>M1000 = 1</code></li>
+<li><code>M1001 = 0</code></li>
+<li><code>M1002 = 1</code></li>
+<li><code>M1003 = 0</code></li>
+</ul>
+<p>then the packed value beginning at <code>M1000</code> is <code>0x0005</code>.</p>
+<p>The same rule applies to <code>B</code>, <code>X</code>, and <code>Y</code>.</p>
+<h2 id="device-family-notes">Device Family Notes</h2>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Number Format</th>
+<th>Example Start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>M</code></td>
+<td>decimal</td>
+<td><code>M1000</code></td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>hexadecimal</td>
+<td><code>B20</code></td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>hexadecimal</td>
+<td><code>X20</code></td>
+</tr>
+<tr>
+<td><code>Y</code></td>
+<td>hexadecimal</td>
+<td><code>Y20</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="access-mapping">Access Mapping</h2>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Operation</th>
+<th>Command</th>
+<th>API Example</th>
+<th>Point Meaning</th>
+<th>Returned Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>M</code></td>
+<td>bit read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("M1000", 4, bit_unit=True)</code></td>
+<td><code>4</code> bits</td>
+<td><code>[True, False, True, False]</code></td>
+</tr>
+<tr>
+<td><code>M</code></td>
+<td>word read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("M1000", 1, bit_unit=False)</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>M</code></td>
+<td>block bit read</td>
+<td><code>0406</code></td>
+<td><code>read_block(bit_blocks=[("M1000", 1)])</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>bit read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("B20", 4, bit_unit=True)</code></td>
+<td><code>4</code> bits</td>
+<td><code>[True, False, True, False]</code></td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>word read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("B20", 1, bit_unit=False)</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>block bit read</td>
+<td><code>0406</code></td>
+<td><code>read_block(bit_blocks=[("B20", 1)])</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>bit read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("X20", 4, bit_unit=True)</code></td>
+<td><code>4</code> bits</td>
+<td><code>[True, False, True, False]</code></td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>word read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("X20", 1, bit_unit=False)</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>X</code></td>
+<td>block bit read</td>
+<td><code>0406</code></td>
+<td><code>read_block(bit_blocks=[("X20", 1)])</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>Y</code></td>
+<td>bit read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("Y20", 4, bit_unit=True)</code></td>
+<td><code>4</code> bits</td>
+<td><code>[True, False, True, False]</code></td>
+</tr>
+<tr>
+<td><code>Y</code></td>
+<td>word read</td>
+<td><code>0401</code></td>
+<td><code>read_devices("Y20", 1, bit_unit=False)</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+<tr>
+<td><code>Y</code></td>
+<td>block bit read</td>
+<td><code>0406</code></td>
+<td><code>read_block(bit_blocks=[("Y20", 1)])</code></td>
+<td><code>1</code> packed 16-bit unit</td>
+<td><code>[0x0005]</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="practical-interpretation">Practical Interpretation</h2>
+<p>For <code>M/B/X/Y</code>, block read does not mean "boolean array block" in this library.</p>
+<p>Instead:</p>
+<ul>
+<li><code>bit_blocks=[("M1000", 1)]</code> means one packed 16-bit unit</li>
+<li><code>bit_blocks=[("M1000", 2)]</code> means two packed 16-bit units</li>
+<li><code>bit_blocks=[("M1000", 705)]</code> means <code>705</code> packed 16-bit units, not <code>705</code> individual bits</li>
+</ul>
+<h2 id="write-side-reminder">Write-Side Reminder</h2>
+<p>The same packed-unit rule applies to block write:</p>
+<pre><code class="language-python">with SlmpClient(&quot;192.168.250.101&quot;, port=1025, transport=&quot;tcp&quot;, plc_series=&quot;iqr&quot;) as cli:
+    cli.write_block(
+        bit_blocks=[(&quot;M1000&quot;, [0x0005])],
+    )
+</code></pre>
+<p>This writes the packed pattern for <code>M1000..M1015</code>.</p>
+<h2 id="when-to-use-which-form">When To Use Which Form</h2>
+<ul>
+<li>Use bit read when you want individual bit states.</li>
+<li>Use word read when you want one packed 16-bit snapshot from a bit device.</li>
+<li>Use block bit read when you want multiple packed 16-bit snapshots in one <code>0406</code> request.</li>
+</ul>
+<hr />
+<h2 id="supported-device-code-reference">Supported Device Code Reference</h2>
+<p>Comprehensive list of device codes accepted by the parser. Actual availability depends on PLC model and firmware.</p>
+<h3 id="bit-devices">Bit Devices</h3>
+<p>Accessed via <code>read_bits()</code> / <code>write_bits()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Device Name</th>
+<th>Address Base</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SM</td>
+<td>Special relay</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>X</td>
+<td>Input relay</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>Y</td>
+<td>Output relay</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>M</td>
+<td>Internal relay</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>L</td>
+<td>Latch relay</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>F</td>
+<td>Annunciator</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>V</td>
+<td>Edge relay</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>B</td>
+<td>Link relay</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>SB</td>
+<td>Link special relay</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>DX</td>
+<td>Direct input</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>DY</td>
+<td>Direct output</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>TS</td>
+<td>Timer contact</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>TC</td>
+<td>Timer coil</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>STS</td>
+<td>Retentive timer contact</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>STC</td>
+<td>Retentive timer coil</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>CS</td>
+<td>Counter contact</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>CC</td>
+<td>Counter coil</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>LTS</td>
+<td>Long timer contact</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>LTC</td>
+<td>Long timer coil</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>LSTS</td>
+<td>Long retentive timer contact</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>LSTC</td>
+<td>Long retentive timer coil</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>LCS</td>
+<td>Long counter contact</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>LCC</td>
+<td>Long counter coil</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><code>S</code> (step relay) is present in the device code table but is intentionally disabled.</p>
+</blockquote>
+<h3 id="word-devices">Word Devices</h3>
+<p>Accessed via <code>read_words()</code> / <code>write_words()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Device Name</th>
+<th>Address Base</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SD</td>
+<td>Special register</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>D</td>
+<td>Data register</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>W</td>
+<td>Link register</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>SW</td>
+<td>Link special register</td>
+<td>Hex</td>
+<td></td>
+</tr>
+<tr>
+<td>TN</td>
+<td>Timer current value</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>STN</td>
+<td>Retentive timer current value</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>CN</td>
+<td>Counter current value</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>Z</td>
+<td>Index register</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>LZ</td>
+<td>Long index register</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+<tr>
+<td>R</td>
+<td>File register</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>ZR</td>
+<td>File register (extended)</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>RD</td>
+<td>Refresh data register</td>
+<td>Decimal</td>
+<td></td>
+</tr>
+<tr>
+<td>LTN</td>
+<td>Long timer current value</td>
+<td>Decimal</td>
+<td>iQ-R; prefer <code>read_long_timer()</code></td>
+</tr>
+<tr>
+<td>LSTN</td>
+<td>Long retentive timer current value</td>
+<td>Decimal</td>
+<td>iQ-R; prefer <code>read_long_retentive_timer()</code></td>
+</tr>
+<tr>
+<td>LCN</td>
+<td>Long counter current value</td>
+<td>Decimal</td>
+<td>iQ-R</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="long-timer-retentive-timer-helpers-iq-r">Long Timer / Retentive Timer Helpers (iQ-R)</h2>
+<p>These helpers read device data in 4-word units (32-bit current value + 32-bit set value) and return <code>LongTimerResult</code> objects.</p>
+<pre><code class="language-python">results = client.read_long_timer(head_no=0, points=4)
+for r in results:
+    print(r.current_value, r.set_value, r.contact, r.coil)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Reads</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>read_long_timer(head_no, points)</code></td>
+<td>LTN</td>
+<td><code>list[LongTimerResult]</code> with <code>.current_value</code>, <code>.set_value</code>, <code>.contact</code> (LTS), <code>.coil</code> (LTC)</td>
+</tr>
+<tr>
+<td><code>read_long_retentive_timer(head_no, points)</code></td>
+<td>LSTN</td>
+<td><code>list[LongTimerResult]</code> for LST</td>
+</tr>
+<tr>
+<td><code>read_ltc_states(head_no, points)</code></td>
+<td>LTN → LTC coil</td>
+<td><code>list[bool]</code></td>
+</tr>
+<tr>
+<td><code>read_lts_states(head_no, points)</code></td>
+<td>LTN → LTS contact</td>
+<td><code>list[bool]</code></td>
+</tr>
+<tr>
+<td><code>read_lstc_states(head_no, points)</code></td>
+<td>LSTN → LSTC coil</td>
+<td><code>list[bool]</code></td>
+</tr>
+<tr>
+<td><code>read_lsts_states(head_no, points)</code></td>
+<td>LSTN → LSTS contact</td>
+<td><code>list[bool]</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Long timer / retentive timer set values (LT, LST) are not direct device codes and can only be read via these helpers.</p>
+</blockquote>
+<hr />
+<h2 id="module-buffer-access-intelligent-module">Module Buffer Access (Intelligent Module)</h2>
+<p>Accessed via <code>read_devices_ext()</code> / <code>write_devices_ext()</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Notation</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>U□\G</code></td>
+<td>Buffer memory (word)</td>
+<td><code>U3\G100</code></td>
+</tr>
+<tr>
+<td><code>U□\HG</code></td>
+<td>Buffer memory extended (word)</td>
+<td><code>U3E0\HG1000</code></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">from slmp import SlmpClient, ExtensionSpec
+
+values = client.read_devices_ext(&quot;U3\\G100&quot;, 4, extension=ExtensionSpec())
+client.write_devices_ext(&quot;U3\\G100&quot;, [1, 2, 3, 4], extension=ExtensionSpec())
+</code></pre>
+<p><code>U□</code> is the slot number in hex (e.g. <code>U3</code>, <code>U3E0</code>). Direct <code>G</code> / <code>HG</code> access without <code>U□\</code> prefix is not supported.</p>
+<hr />
+<h2 id="link-direct-device-cc-link-ie">Link Direct Device (CC-Link IE)</h2>
+<p>Accessed via <code>read_devices_ext()</code> / <code>write_devices_ext()</code>. Targets devices on a CC-Link IE network via the connected PLC.</p>
+<table>
+<thead>
+<tr>
+<th>Access Type</th>
+<th>Subcommand</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Word read/write</td>
+<td><code>0x0080</code></td>
+<td><code>J2\SW10</code>, <code>J1\W13</code></td>
+</tr>
+<tr>
+<td>Bit read/write (16-point units)</td>
+<td><code>0x0081</code></td>
+<td><code>J1\X10</code>, <code>J1\SB10</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>PLCSeries.QL</code> is forced automatically for all link direct operations regardless of the client <code>plc_series</code> setting.</p>
+<pre><code class="language-python">from slmp import SlmpClient, ExtensionSpec
+
+# Word read
+val = client.read_devices_ext(&quot;J2\\SW10&quot;, 1, extension=ExtensionSpec())
+
+# Bit read (16 points)
+bits = client.read_devices_ext(&quot;J1\\X10&quot;, 16, extension=ExtensionSpec(), bit_unit=True)
+
+# Word write
+client.write_devices_ext(&quot;J1\\SW14&quot;, [2], extension=ExtensionSpec())
+
+# Bit write
+client.write_devices_ext(&quot;J1\\X11&quot;, [True], extension=ExtensionSpec(), bit_unit=True)
+</code></pre>
+<p>Known limitations:</p>
+<table>
+<thead>
+<tr>
+<th>Device</th>
+<th>End Code</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>J1\B0</code> (B device)</td>
+<td><code>0x4031</code></td>
+<td>Not supported on CC-Link IE; GOT returns the same error</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="other-station-routing-target-station">Other Station Routing (Target Station)</h2>
+<p>By default, requests target the directly connected PLC (own station). To route to another station, specify <code>network</code> and <code>station</code> numbers via <code>SlmpTarget</code>.</p>
+<pre><code class="language-python">from slmp import SlmpClient, SlmpTarget, ModuleIONo
+
+# Constructor default — all requests go to Network 1, Station 1
+client = SlmpClient(&quot;192.168.1.10&quot;, default_target=SlmpTarget(network=0x01, station=0x01))
+
+# Per-call override
+target = SlmpTarget(network=0x01, station=0x01)
+values = client.read_words(&quot;D100&quot;, 10, target=target)
+</code></pre>
+<p><code>SlmpTarget</code> fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>network</code></td>
+<td><code>0x00</code></td>
+<td>Network number (<code>0x00</code> = local network)</td>
+</tr>
+<tr>
+<td><code>station</code></td>
+<td><code>0xFF</code></td>
+<td>Station number (<code>0xFF</code> = control CPU of self station)</td>
+</tr>
+<tr>
+<td><code>module_io</code></td>
+<td><code>0x03FF</code></td>
+<td>Module I/O No. (<code>0x03FF</code> = own station / control CPU)</td>
+</tr>
+<tr>
+<td><code>multidrop</code></td>
+<td><code>0x00</code></td>
+<td>Multidrop station No. (<code>0x00</code> = no multidrop)</td>
+</tr>
+</tbody>
+</table>
+<p><code>ModuleIONo</code> enum — shortcuts for <code>module_io</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OWN_STATION</code> / <code>CONTROL_CPU</code></td>
+<td><code>0x03FF</code></td>
+<td>Own station control CPU (default)</td>
+</tr>
+<tr>
+<td><code>MULTIPLE_CPU_1</code> / <code>REMOTE_HEAD_1</code></td>
+<td><code>0x03E0</code></td>
+<td>Multiple CPU No.1 / Remote head No.1</td>
+</tr>
+<tr>
+<td><code>MULTIPLE_CPU_2</code> / <code>REMOTE_HEAD_2</code></td>
+<td><code>0x03E1</code></td>
+<td>Multiple CPU No.2 / Remote head No.2</td>
+</tr>
+<tr>
+<td><code>MULTIPLE_CPU_3</code></td>
+<td><code>0x03E2</code></td>
+<td>Multiple CPU No.3</td>
+</tr>
+<tr>
+<td><code>MULTIPLE_CPU_4</code></td>
+<td><code>0x03E3</code></td>
+<td>Multiple CPU No.4</td>
+</tr>
+<tr>
+<td><code>CONTROL_SYSTEM_CPU</code></td>
+<td><code>0x03D0</code></td>
+<td>Control system CPU (redundant system)</td>
+</tr>
+<tr>
+<td><code>STANDBY_SYSTEM_CPU</code></td>
+<td><code>0x03D1</code></td>
+<td>Standby system CPU (redundant system)</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python"># Access Multiple CPU No.2 on own station
+target = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
+# Or by name string
+target = SlmpTarget(module_io=&quot;MULTIPLE_CPU_2&quot;)
+</code></pre>
+<hr />
+<h2 id="related-documents">Related Documents</h2>
+<ul>
+<li><a href="../USER_GUIDE/">User Guide</a></li>
+<li><a href="../../maintainer/PROTOCOL_SPEC/">Protocol Spec</a></li>
+<li><a href="../../maintainer/TESTING_GUIDE/">Testing Guide</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

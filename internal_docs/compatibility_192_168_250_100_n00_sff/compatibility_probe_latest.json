@@ -1,0 +1,607 @@
+{
+  "generated_at": "2026-03-23 18:03:43",
+  "host": "192.168.250.100",
+  "plc_label": "192.168.250.100_n00_sFF",
+  "port": 1025,
+  "requested_frame_type": "auto",
+  "requested_series": "auto",
+  "results": [
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=R08CPU, model_code=0x4801 (18433))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=R08CPU, model_code=0x4801 (18433)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=OK (word_device=D130)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130",
+              "name": "monitor_entry",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=OK (word_device=D130, values=[0])",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130, values=[0]",
+              "name": "monitor_execute",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])]))",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D140, result=[DeviceBlockResult(device='D140', values=[0])]",
+              "name": "block_read_word_only",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M140, result=[DeviceBlockResult(device='M140', values=[0])]",
+              "name": "block_read_bit_only",
+              "status": "OK"
+            },
+            {
+              "detail": "word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])",
+              "name": "block_read_mixed",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=OK (head=0x00000000, values=[0])",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "head=0x00000000, values=[0]",
+              "name": "memory_read",
+              "status": "OK"
+            }
+          ]
+        }
+      ],
+      "detected_model": "R08CPU",
+      "detected_series": "iqr",
+      "frame_type": "3e",
+      "model_code": "0x4801 (18433)"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=R08CPU, model_code=0x4801 (18433))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=R08CPU, model_code=0x4801 (18433)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=OK (word_device=D130)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130",
+              "name": "monitor_entry",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=OK (word_device=D130, values=[0])",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130, values=[0]",
+              "name": "monitor_execute",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])]))",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D140, result=[DeviceBlockResult(device='D140', values=[0])]",
+              "name": "block_read_word_only",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M140, result=[DeviceBlockResult(device='M140', values=[0])]",
+              "name": "block_read_bit_only",
+              "status": "OK"
+            },
+            {
+              "detail": "word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])",
+              "name": "block_read_mixed",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=OK (head=0x00000000, values=[0])",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "head=0x00000000, values=[0]",
+              "name": "memory_read",
+              "status": "OK"
+            }
+          ]
+        }
+      ],
+      "detected_model": "R08CPU",
+      "detected_series": "iqr",
+      "frame_type": "3e",
+      "model_code": "0x4801 (18433)"
+    },
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=R08CPU, model_code=0x4801 (18433))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=R08CPU, model_code=0x4801 (18433)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=OK (word_device=D130)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130",
+              "name": "monitor_entry",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=OK (word_device=D130, values=[0])",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130, values=[0]",
+              "name": "monitor_execute",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])]))",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D140, result=[DeviceBlockResult(device='D140', values=[0])]",
+              "name": "block_read_word_only",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M140, result=[DeviceBlockResult(device='M140', values=[0])]",
+              "name": "block_read_bit_only",
+              "status": "OK"
+            },
+            {
+              "detail": "word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])",
+              "name": "block_read_mixed",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=OK (head=0x00000000, values=[0])",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "head=0x00000000, values=[0]",
+              "name": "memory_read",
+              "status": "OK"
+            }
+          ]
+        }
+      ],
+      "detected_model": "R08CPU",
+      "detected_series": "iqr",
+      "frame_type": "4e",
+      "model_code": "0x4801 (18433)"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=R08CPU, model_code=0x4801 (18433))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=R08CPU, model_code=0x4801 (18433)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=OK (word_device=D130)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130",
+              "name": "monitor_entry",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=OK (word_device=D130, values=[0])",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130, values=[0]",
+              "name": "monitor_execute",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])]))",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D140, result=[DeviceBlockResult(device='D140', values=[0])]",
+              "name": "block_read_word_only",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M140, result=[DeviceBlockResult(device='M140', values=[0])]",
+              "name": "block_read_bit_only",
+              "status": "OK"
+            },
+            {
+              "detail": "word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])",
+              "name": "block_read_mixed",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=OK (head=0x00000000, values=[0])",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "head=0x00000000, values=[0]",
+              "name": "memory_read",
+              "status": "OK"
+            }
+          ]
+        }
+      ],
+      "detected_model": "R08CPU",
+      "detected_series": "iqr",
+      "frame_type": "4e",
+      "model_code": "0x4801 (18433)"
+    }
+  ],
+  "risk_groups": [
+    "safe"
+  ],
+  "schema_version": 1,
+  "selected_commands": [
+    "0101",
+    "0401",
+    "0403",
+    "0801",
+    "0802",
+    "0406",
+    "0619",
+    "0613"
+  ],
+  "target": {
+    "module_io": 1023,
+    "multidrop": 0,
+    "network": 0,
+    "station": 255
+  },
+  "transport": "tcp"
+}

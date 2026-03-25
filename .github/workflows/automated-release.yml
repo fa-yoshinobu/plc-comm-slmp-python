@@ -1,0 +1,25 @@
+name: Automated Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with: { python-version: "3.11" }
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+          ls -R dist/
+      - name: Upload
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: |
+          tag="${{ github.ref_name }}"; if [[ -z "$tag" || "$tag" == "main" ]]; then tag="v0.1.0"; fi
+          gh release upload "$tag" dist/* --clobber || gh release create "$tag" dist/* --title "Release $tag" --generate-notes

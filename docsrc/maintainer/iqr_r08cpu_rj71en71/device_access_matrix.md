@@ -1,0 +1,67 @@
+# Device Access Matrix
+
+- Generated: 2026-03-13 20:45:00
+- Source: `internal_docsrc/iqr_r08cpu_rj71en71/device_access_matrix.csv`
+
+## Summary
+
+- bit_read_OK: 24
+- bit_write_NG: 1
+- bit_write_OK: 23
+- dword_read_OK: 4
+- dword_write_OK: 4
+- extension_cpu_buffer_read_NG: 2
+- extension_cpu_buffer_write_SKIP: 2
+- extension_only_read_SKIP: 2
+- extension_only_write_SKIP: 2
+- word_read_OK: 11
+- word_write_OK: 11
+
+## Results
+
+| Device Code | Device | Kind | Unsupported | Read | Write | Manual Write | Note | Manual Write Note |
+|---|---|---|---|---|---|---|---|---|
+| B | B100 | bit |  | OK | OK |  | representative verification address |  |
+| CC | CC10 | bit |  | OK | OK |  | representative verification address |  |
+| CN | CN10 | word |  | OK | OK |  | representative verification address |  |
+| CS | CS10 | bit |  | OK | OK |  | representative verification address |  |
+| D | D1000 | word |  | OK | OK |  | representative verification address |  |
+| DX | DX100 | bit |  | OK | OK |  | representative verification address |  |
+| DY | DY100 | bit |  | OK | OK |  | representative verification address |  |
+| F | F100 | bit |  | OK | OK |  | representative verification address |  |
+| G | N/A | extension_only | YES | SKIP | SKIP |  | Blocked in typed APIs; re-evaluate after accepted U\G / Extended Specification condition is identified |  |
+| HG | N/A | extension_only | YES | SKIP | SKIP |  | Blocked in typed APIs; re-evaluate after accepted CPU-buffer / Extended Specification condition is identified |  |
+| L | L1000 | bit |  | OK | OK |  | representative verification address |  |
+| LCC | LCC10 | bit |  | OK | OK |  | representative verification address |  |
+| LCN | LCN10 | dword |  | OK | OK |  | representative verification address |  |
+| LCS | LCS10 | bit |  | OK | OK |  | representative verification address |  |
+| LSTC | LSTC10 | bit |  | OK | OK |  | Supported spec path uses LSTN decode (coil bit) and 1402 random bit write; direct 0401 read returns 0x4030 on the validated target |  |
+| LSTN | LSTN10 | dword |  | OK | OK |  | representative verification address |  |
+| LSTS | LSTS10 | bit |  | OK | OK |  | Supported spec path uses LSTN decode (contact bit) and 1402 random bit write; direct 0401 read returns 0x4030 on the validated target |  |
+| LTC | LTC10 | bit |  | OK | OK |  | Supported spec path uses LTN decode (coil bit) and 1402 random bit write; direct 0401 read returns 0x4030 on the validated target |  |
+| LTN | LTN10 | dword |  | OK | OK |  | representative verification address |  |
+| LTS | LTS10 | bit |  | OK | OK |  | Supported spec path uses LTN decode (contact bit) and 1402 random bit write; direct 0401 read returns 0x4030 on the validated target |  |
+| LZ | LZ1 | dword |  | OK | OK |  | representative verification address |  |
+| M | M1000 | bit |  | OK | OK |  | representative verification address |  |
+| R | R1000 | word |  | OK | OK |  | representative verification address |  |
+| RD | RD1000 | word |  | OK | OK |  | representative verification address |  |
+| S | S100 | bit | YES | OK | NG |  | Blocked in typed APIs; read OK but write returned 0x4030 on the validated target |  |
+| SB | SB100 | bit |  | OK | OK |  | representative verification address |  |
+| SD | SD100 | word |  | OK | OK |  | representative verification address |  |
+| SM | SM100 | bit |  | OK | OK |  | representative verification address |  |
+| STC | STC10 | bit |  | OK | OK |  | representative verification address |  |
+| STN | STN10 | word |  | OK | OK |  | representative verification address |  |
+| STS | STS10 | bit |  | OK | OK |  | representative verification address |  |
+| SW | SW100 | word |  | OK | OK |  | representative verification address |  |
+| TC | TC10 | bit |  | OK | OK |  | representative verification address |  |
+| TN | TN10 | word |  | OK | OK |  | representative verification address |  |
+| TS | TS10 | bit |  | OK | OK |  | representative verification address |  |
+| V | V100 | bit |  | OK | OK |  | representative verification address |  |
+| W | W100 | word |  | OK | OK |  | representative verification address |  |
+| X | X100 | bit |  | OK | OK |  | representative verification address |  |
+| Y | Y100 | bit |  | OK | OK |  | representative verification address |  |
+| Z | Z10 | word |  | OK | OK |  | representative verification address |  |
+| ZR | ZR1000 | word |  | OK | OK |  | representative verification address |  |
+| G | G0 | extension_cpu_buffer | YES | NG | SKIP |  | Blocked in typed APIs; Extended Specification read returned 0xC061 on the validated target |  |
+| HG | HG0 | extension_cpu_buffer | YES | NG | SKIP |  | Blocked in typed APIs; Extended Specification read returned 0xC061 on the validated target |  |
+

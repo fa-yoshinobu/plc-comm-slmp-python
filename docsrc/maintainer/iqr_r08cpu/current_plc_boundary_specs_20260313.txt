@@ -1,0 +1,45 @@
+# Current project PLC boundary probe input
+# Date: 2026-03-13
+# Format: LABEL,LAST_DEVICE,UNIT[,SPAN_POINTS]
+# Use actual access device names, not only the GX Works setting-family name.
+# Examples:
+# - Timer family T is probed as TS / TC / TN
+# - Long timer family LT is probed as LTS / LTC / LTN
+# - Retentive timer family ST is probed as STS / STC / STN
+# - Long retentive timer family LST is probed as LSTS / LSTC / LSTN
+# - Counter family C is probed as CS / CC / CN
+# - Long counter family LC is probed as LCS / LCC / LCN
+# - ZR uses decimal device numbering in this client
+# - Use SPAN_POINTS when one logical boundary item requires more than one word on the wire
+
+X,X2FFF,bit
+Y,Y2FFF,bit
+M,M12287,bit
+B,B1FFF,bit
+SB,SB7FF,bit
+F,F2047,bit
+V,V2047,bit
+S,S1023,bit
+TS,TS1023,bit
+TC,TC1023,bit
+TN,TN1023,word
+LTS,LTS1023,bit
+LTC,LTC1023,bit
+LTN,LTN1023,word,4
+STS,STS1023,bit
+STC,STC1023,bit
+STN,STN1023,word
+LSTS,LSTS1023,bit
+LSTC,LSTC1023,bit
+LSTN,LSTN1023,word,4
+CS,CS511,bit
+CC,CC511,bit
+CN,CN511,word
+LCS,LCS511,bit
+LCC,LCC511,bit
+LCN,LCN511,word,2
+D,D10239,word
+W,W1FFF,word
+SW,SW7FF,word
+L,L8191,bit
+ZR,ZR163839,word

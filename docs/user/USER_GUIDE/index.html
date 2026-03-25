@@ -1,0 +1,2142 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://fa-yoshinobu.github.io/plc-comm-slmp-python/user/USER_GUIDE/">
+      
+      
+        <link rel="prev" href="../..">
+      
+      
+        <link rel="next" href="../SAMPLES/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>User Guide - SLMP Connect Python (slmp) API Reference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#slmp-connect-python-user-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-header__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SLMP Connect Python (slmp) API Reference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              User Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="SLMP Connect Python (slmp) API Reference" class="md-nav__button md-logo" aria-label="SLMP Connect Python (slmp) API Reference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    SLMP Connect Python (slmp) API Reference
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/fa-yoshinobu/plc-comm-slmp-python" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-auto-detection-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile Auto-Detection (sync)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-auto-detection-connect-async" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile Auto-Detection + Connect (async)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Concepts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#device-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Address Strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-vs-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word vs Bit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Specification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#typed-read-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Typed Read / Write
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Typed Read / Write">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read_typed-read_typed_sync-read-one-device-with-type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_typed / read_typed_sync — Read one device with type conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_typed-write_typed_sync-write-one-device-with-type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_typed / write_typed_sync — Write one device with type conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_named-read_named_sync-batch-read-using-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_named / read_named_sync — Batch read using address strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_named-write_named_sync-batch-write-using-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_named / write_named_sync — Batch write using address strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random-block-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random / Block Read
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Random / Block Read">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#random-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random Read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#block-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Block Read
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#polling-poll-poll_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling (poll / poll_sync)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-advantages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async Advantages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exception-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exception Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-raw-response-without-raising-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get raw response without raising exceptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-connection-failures-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Connection Failures and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-with-gx-simulator-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification with GX Simulator 3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Tips
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Samples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ERROR_CODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BIT_DEVICE_ACCESS_TABLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device Table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QA Reports
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    QA Reports
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reports Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/PLC_COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation/reports/STABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Maintainer Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintainer Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/open_items/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open Items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/PROTOCOL_SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/TESTING_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/SCRIPT_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Script Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../maintainer/RELEASE_PROCESS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change Log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-auto-detection-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile Auto-Detection (sync)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-auto-detection-connect-async" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile Auto-Detection + Connect (async)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Concepts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#device-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Address Strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-vs-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word vs Bit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Specification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#typed-read-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Typed Read / Write
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Typed Read / Write">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read_typed-read_typed_sync-read-one-device-with-type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_typed / read_typed_sync — Read one device with type conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_typed-write_typed_sync-write-one-device-with-type-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_typed / write_typed_sync — Write one device with type conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_named-read_named_sync-batch-read-using-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_named / read_named_sync — Batch read using address strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_named-write_named_sync-batch-write-using-address-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_named / write_named_sync — Batch write using address strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#random-block-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random / Block Read
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Random / Block Read">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#random-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random Read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#block-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Block Read
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#polling-poll-poll_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling (poll / poll_sync)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-advantages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async Advantages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exception-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exception Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-raw-response-without-raising-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get raw response without raising exceptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-connection-failures-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Connection Failures and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-with-gx-simulator-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification with GX Simulator 3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Tips
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="slmp-connect-python-user-guide">SLMP Connect Python User Guide</h1>
+<p>Efficient SLMP (MC Protocol) communication library for Mitsubishi PLCs.</p>
+<h2 id="installation">Installation</h2>
+<pre><code class="language-bash">pip install slmp-connect
+</code></pre>
+<h2 id="quick-start">Quick Start</h2>
+<pre><code class="language-python">from slmp import SlmpClient
+from slmp.constants import FrameType, PLCSeries
+
+# iQ-R series (R04/R08/R16…) → FRAME_4E + IQR
+# Q/L series                  → FRAME_3E + QL
+client = SlmpClient(
+    host=&quot;192.168.1.10&quot;,
+    port=1025,
+    frame_type=FrameType.FRAME_4E,
+    plc_series=PLCSeries.IQR,
+)
+
+with client:
+    # Read 1 word from D100
+    data = client.read_devices(&quot;D100&quot;, 1)
+    print(f&quot;D100: {data[0]}&quot;)
+
+    # Read 4 bits from M0
+    bits = client.read_devices(&quot;M0&quot;, 4, bit_unit=True)
+    print(f&quot;M0..M3: {bits}&quot;)
+
+    # Write a value to D200
+    client.write_devices(&quot;D200&quot;, [42])
+</code></pre>
+<p>!!! note "How to choose frame_type / plc_series"
+    | PLC Family | frame_type | plc_series |
+    |---|---|---|
+    | iQ-R (e.g. R04CPU) | <code>FRAME_4E</code> | <code>PLCSeries.IQR</code> |
+    | Q / L Series | <code>FRAME_3E</code> | <code>PLCSeries.QL</code> |
+    | If unknown | — | — |</p>
+<pre><code>If unknown, you can auto-detect using `resolve_profile()` below.
+</code></pre>
+<h3 id="profile-auto-detection-sync">Profile Auto-Detection (sync)</h3>
+<pre><code class="language-python">from slmp import SlmpClient
+
+client = SlmpClient(host=&quot;192.168.1.10&quot;, port=1025)
+rec = client.resolve_profile()
+print(f&quot;detected: frame={rec.frame_type}, series={rec.plc_series}, confident={rec.is_confident}&quot;)
+
+with client:
+    data = client.read_devices(&quot;D100&quot;, 1)
+    print(f&quot;D100: {data[0]}&quot;)
+</code></pre>
+<h3 id="profile-auto-detection-connect-async">Profile Auto-Detection + Connect (async)</h3>
+<pre><code class="language-python">import asyncio
+from slmp import open_and_connect
+
+async def main():
+    # Auto-detect frame_type / plc_series and connect
+    async with await open_and_connect(&quot;192.168.1.10&quot;, port=1025) as client:
+        data = await client.read_devices(&quot;D100&quot;, 1)
+        print(f&quot;D100: {data[0]}&quot;)
+
+asyncio.run(main())
+</code></pre>
+<hr />
+<h2 id="core-concepts">Core Concepts</h2>
+<h3 id="device-address-strings">Device Address Strings</h3>
+<p>Devices are specified using strings.</p>
+<pre><code class="language-python">client.read_devices(&quot;D100&quot;, 10)              # Read 10 words from D100
+client.read_devices(&quot;M0&quot;, 8, bit_unit=True)  # Read 8 bits from M0
+client.write_devices(&quot;D200&quot;, [0, 1, 2])      # Write to D200..D202
+</code></pre>
+<p>Example supported devices: <code>D</code>, <code>W</code>, <code>R</code>, <code>ZR</code>, <code>M</code>, <code>L</code>, <code>B</code>, <code>X</code>, <code>Y</code>, <code>SM</code>, <code>SD</code>, etc.
+See <code>slmp.core.DEVICE_CODES</code> for a full list of devices.</p>
+<h3 id="word-vs-bit">Word vs Bit</h3>
+<ul>
+<li><code>bit_unit=False</code> (default): Read/write in word units. Returns <code>list[int]</code>.</li>
+<li><code>bit_unit=True</code>: Read/write bit devices (M, X, Y, etc.) in bit units. Returns <code>list[int]</code> (0 or 1).</li>
+</ul>
+<h3 id="target-specification">Target Specification</h3>
+<p>You can target specific CPUs, such as in multiple CPU configurations.</p>
+<pre><code class="language-python">from slmp import SlmpTarget
+
+target = SlmpTarget(module_io=&quot;MULTIPLE_CPU_1&quot;)
+data = client.read_devices(&quot;D100&quot;, 1, target=target)
+</code></pre>
+<hr />
+<h2 id="typed-read-write">Typed Read / Write</h2>
+<p><code>read_devices</code> returns raw 16-bit words. Use utility functions for float32 or signed integers. Both sync and async clients are supported.</p>
+<table>
+<thead>
+<tr>
+<th>dtype</th>
+<th>Type</th>
+<th>Words</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"U"</code></td>
+<td>unsigned 16-bit int</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>"S"</code></td>
+<td>signed 16-bit int</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>"D"</code></td>
+<td>unsigned 32-bit int</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>"L"</code></td>
+<td>signed 32-bit int</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>"F"</code></td>
+<td>float32</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<h3 id="read_typed-read_typed_sync-read-one-device-with-type-conversion">read_typed / read_typed_sync — Read one device with type conversion</h3>
+<pre><code class="language-python"># async
+from slmp.utils import read_typed
+f = await read_typed(client, &quot;D100&quot;, &quot;F&quot;)   # float32
+
+# sync
+from slmp.utils import read_typed_sync
+f = read_typed_sync(client, &quot;D100&quot;, &quot;F&quot;)
+</code></pre>
+<h3 id="write_typed-write_typed_sync-write-one-device-with-type-conversion">write_typed / write_typed_sync — Write one device with type conversion</h3>
+<pre><code class="language-python">from slmp.utils import write_typed_sync
+write_typed_sync(client, &quot;D100&quot;, &quot;F&quot;, 3.14)
+write_typed_sync(client, &quot;D102&quot;, &quot;L&quot;, -50000)
+</code></pre>
+<h3 id="read_named-read_named_sync-batch-read-using-address-strings">read_named / read_named_sync — Batch read using address strings</h3>
+<p>Read multiple devices at once using type codes embedded in addresses.</p>
+<pre><code class="language-python"># async
+from slmp.utils import read_named
+result = await read_named(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;D102:S&quot;, &quot;D0.3&quot;])
+
+# sync
+from slmp.utils import read_named_sync
+result = read_named_sync(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;D102:S&quot;, &quot;D0.3&quot;])
+# result = {&quot;D100&quot;: 42, &quot;D101:F&quot;: 3.14, &quot;D102:S&quot;: -1, &quot;D0.3&quot;: True}
+</code></pre>
+<h3 id="write_named-write_named_sync-batch-write-using-address-strings">write_named / write_named_sync — Batch write using address strings</h3>
+<p>Write multiple devices at once using the same notation as <code>read_named</code>.</p>
+<pre><code class="language-python"># async
+from slmp.utils import write_named
+await write_named(client, {
+    &quot;D100&quot;: 42,
+    &quot;D101:F&quot;: 3.14,
+    &quot;D0.3&quot;: True,
+})
+
+# sync
+from slmp.utils import write_named_sync
+write_named_sync(client, {
+    &quot;D100&quot;: 42,
+    &quot;D101:F&quot;: 3.14,
+    &quot;D0.3&quot;: True,
+})
+</code></pre>
+<hr />
+<h2 id="random-block-read">Random / Block Read</h2>
+<p>Read non-contiguous devices in a single command. More efficient than repeating <code>read_devices</code>.</p>
+<h3 id="random-read">Random Read</h3>
+<pre><code class="language-python">from slmp import DeviceRef
+
+result = client.read_random(
+    word_devices=[&quot;D100&quot;, &quot;D200&quot;, &quot;W10&quot;],
+    dword_devices=[&quot;D300&quot;],  # Read as 2-word value
+)
+# result.word  = {&quot;D100&quot;: 1, &quot;D200&quot;: 2, &quot;W10&quot;: 3}
+# result.dword = {&quot;D300&quot;: 100000}
+</code></pre>
+<h3 id="block-read">Block Read</h3>
+<p>Read multiple contiguous blocks in a single command.</p>
+<pre><code class="language-python">result = client.read_block(
+    word_blocks=[(&quot;D100&quot;, 10), (&quot;W0&quot;, 5)],
+    bit_blocks=[(&quot;M0&quot;, 16)],
+)
+# result.word_blocks[0].device = &quot;D100&quot;, .values = [...]
+# result.bit_blocks[0].device  = &quot;M0&quot;,  .values = [...]
+</code></pre>
+<hr />
+<h2 id="polling-poll-poll_sync">Polling (poll / poll_sync)</h2>
+<p>Continuously read devices at a fixed interval. Supports the same address notation as <code>read_named</code>.</p>
+<pre><code class="language-python"># async
+import asyncio
+from slmp.utils import poll
+
+async def main():
+    async with await open_and_connect(&quot;192.168.1.10&quot;) as client:
+        async for snapshot in poll(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;M0.0&quot;], interval=1.0):
+            print(snapshot)
+
+asyncio.run(main())
+
+# sync
+from slmp.utils import poll_sync
+from slmp import SlmpClient
+
+with SlmpClient(&quot;192.168.1.10&quot;, 1025) as client:
+    for snapshot in poll_sync(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;M0.0&quot;], interval=1.0):
+        print(snapshot)
+        # {&quot;D100&quot;: 42, &quot;D101:F&quot;: 3.14, &quot;M0.0&quot;: True}
+</code></pre>
+<p>Outputs snapshots every second until stopped with Ctrl+C.</p>
+<hr />
+<h2 id="sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient">Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)</h2>
+<p>If multiple coroutines (e.g., background poller and foreground writer) need to use the same connection, wrap it in <code>QueuedAsyncSlmpClient</code>. Communication is serialized via an internal lock.</p>
+<pre><code class="language-python">import asyncio
+from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
+
+async def poller(client, stop_event):
+    while not stop_event.is_set():
+        data = await client.read_devices(&quot;D100&quot;, 1)
+        print(f&quot;[poll] D100={data[0]}&quot;)
+        await asyncio.sleep(1.0)
+
+async def main():
+    inner = AsyncSlmpClient(&quot;192.168.1.10&quot;, 1025)
+    client = QueuedAsyncSlmpClient(inner)
+    stop = asyncio.Event()
+
+    async with client:
+        poll_task = asyncio.create_task(poller(client, stop))
+        await asyncio.sleep(5)
+        stop.set()
+        await poll_task
+
+asyncio.run(main())
+</code></pre>
+<hr />
+<h2 id="async-advantages">async Advantages</h2>
+<p><code>AsyncSlmpClient</code> is asyncio-based and does not block the event loop while waiting for PLC responses. While multiple requests to the same connection are serialized, <strong>simultaneous connections to multiple PLCs</strong> overlap in time, significantly reducing total processing time.</p>
+<pre><code class="language-python"># Read from multiple PLCs simultaneously
+results = await asyncio.gather(
+    read_one_plc(&quot;192.168.1.10&quot;, 1025),
+    read_one_plc(&quot;192.168.1.11&quot;, 1025),
+)
+</code></pre>
+<hr />
+<h2 id="error-handling">Error Handling</h2>
+<h3 id="exception-types">Exception Types</h3>
+<table>
+<thead>
+<tr>
+<th>Exception</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SlmpError</code></td>
+<td>PLC returned <code>end_code != 0</code></td>
+</tr>
+<tr>
+<td><code>ValueError</code></td>
+<td>Invalid device name or argument format</td>
+</tr>
+<tr>
+<td><code>TimeoutError</code></td>
+<td>Response timeout</td>
+</tr>
+<tr>
+<td><code>ConnectionRefusedError</code></td>
+<td>Connection refused (wrong port or IP)</td>
+</tr>
+<tr>
+<td><code>OSError</code></td>
+<td>Other network failures</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">from slmp import SlmpClient
+from slmp.errors import SlmpError
+
+with SlmpClient(&quot;192.168.1.10&quot;, 1025) as client:
+    try:
+        data = client.read_devices(&quot;D100&quot;, 1)
+    except SlmpError as e:
+        print(f&quot;PLC error: end_code=0x{e.end_code:04X}&quot;)
+    except TimeoutError:
+        print(&quot;Connection timeout — Check IP address and port number&quot;)
+    except ConnectionRefusedError:
+        print(&quot;Connection refused — Check port number and SLMP settings on the PLC&quot;)
+</code></pre>
+<h3 id="get-raw-response-without-raising-exceptions">Get raw response without raising exceptions</h3>
+<p>Passing <code>raise_on_error=False</code> returns an <code>SlmpResponse</code> instead of raising an <code>SlmpError</code>.</p>
+<pre><code class="language-python">resp = client.raw_command(0x0401, subcommand=0x0002, payload=b&quot;...&quot;, raise_on_error=False)
+print(f&quot;end_code: 0x{resp.end_code:04X}&quot;)
+</code></pre>
+<p>See the <a href="../ERROR_CODES/">Error Codes Guide</a> for common end codes.</p>
+<h3 id="common-connection-failures-and-solutions">Common Connection Failures and Solutions</h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Possible Cause</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ConnectionRefusedError</code></td>
+<td>Wrong port number</td>
+<td>Check port in "SLMP Communication Setting" of GX Works3</td>
+</tr>
+<tr>
+<td><code>TimeoutError</code></td>
+<td>Wrong IP or unreachable route</td>
+<td>Verify connectivity with <code>ping</code></td>
+</tr>
+<tr>
+<td><code>SlmpError</code> end_code=<code>0xC059</code></td>
+<td><code>frame_type</code> / <code>plc_series</code> mismatch</td>
+<td>Auto-detect using <code>resolve_profile()</code> or change the series</td>
+</tr>
+<tr>
+<td>Data is clearly incorrect</td>
+<td>Wrong <code>plc_series</code> (IQR vs QL)</td>
+<td>Device encoding varies by series; please verify</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="verification-with-gx-simulator-3">Verification with GX Simulator 3</h2>
+<p>If you don't have a physical PLC, you can test on your local PC using GX Simulator 3 (included with GX Works3).</p>
+<p><strong>Connection Settings</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>host</td>
+<td><code>127.0.0.1</code></td>
+</tr>
+<tr>
+<td>port</td>
+<td><code>5010</code> (GX Simulator 3 default)</td>
+</tr>
+<tr>
+<td>frame_type</td>
+<td><code>FRAME_3E</code></td>
+</tr>
+<tr>
+<td>plc_series</td>
+<td><code>PLCSeries.QL</code></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">client = SlmpClient(
+    host=&quot;127.0.0.1&quot;,
+    port=5010,
+    frame_type=FrameType.FRAME_3E,
+    plc_series=PLCSeries.QL,
+)
+</code></pre>
+<p>!!! note
+    GX Simulator 3 may respond with 3E frames even in iQ-R simulation. If you cannot connect, use <code>resolve_profile()</code> to auto-detect the profile.</p>
+<hr />
+<h2 id="performance-tips">Performance Tips</h2>
+<p>!!! tip "Reuse connections"
+    Reuse <code>SlmpClient</code> instances across multiple requests. Establishing a new TCP connection every time is very slow.</p>
+<p>!!! tip "Use read_words for large reads"
+    Continuous reads exceeding 960 words are automatically split by <code>read_words(allow_split=True)</code>.</p>
+<pre><code>```python
+# async
+from slmp.utils import read_words
+values = await read_words(client, "D0", 2000, allow_split=True)
+
+# sync
+from slmp.utils import read_words_sync
+values = read_words_sync(client, "D0", 2000, allow_split=True)
+```
+</code></pre>
+<hr />
+<h2 id="api-overview">API Overview</h2>
+<p>See the <a href="../../api/client/">API Reference</a> for details.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

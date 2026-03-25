@@ -1,0 +1,49 @@
+# Compatibility Probe Report
+
+- Date: 2026-03-19 15:17:18
+- PLC Label: RJ71EN71
+- Host: 192.168.250.101
+- Port: 1025
+- Transport: tcp
+- Requested series: auto
+- Requested frame: auto
+- Target: network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
+- Risk groups: safe
+- Commands: 0101, 0401, 0403, 0801, 0802, 0406, 0619, 0613
+- Summary: OK=32, PARTIAL=0, NG=0, SKIP=0
+- JSON: internal_docs\compatibility_rj71en71\compatibility_probe_latest.json
+
+| Item | Status | Detail |
+|---|---|---|
+| 3e/ql 0101 Read Type Name | OK | type_name=OK (model=R08CPU, model_code=0x4801 (18433)) |
+| 3e/ql 0401 Batch Read | OK | word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False]) |
+| 3e/ql 0403 Random Read | OK | random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}) |
+| 3e/ql 0801 Monitor Entry | OK | monitor_entry=OK (word_device=D130) |
+| 3e/ql 0802 Monitor Execute | OK | monitor_execute=OK (word_device=D130, values=[0]) |
+| 3e/ql 0406 Block Read | OK | block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])) |
+| 3e/ql 0619 Self Test | OK | self_test=OK (end_code=0x0000, data_len=6) |
+| 3e/ql 0613 Buffer Read | OK | memory_read=OK (head=0x00000000, values=[0]) |
+| 3e/iqr 0101 Read Type Name | OK | type_name=OK (model=R08CPU, model_code=0x4801 (18433)) |
+| 3e/iqr 0401 Batch Read | OK | word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False]) |
+| 3e/iqr 0403 Random Read | OK | random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}) |
+| 3e/iqr 0801 Monitor Entry | OK | monitor_entry=OK (word_device=D130) |
+| 3e/iqr 0802 Monitor Execute | OK | monitor_execute=OK (word_device=D130, values=[0]) |
+| 3e/iqr 0406 Block Read | OK | block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])) |
+| 3e/iqr 0619 Self Test | OK | self_test=OK (end_code=0x0000, data_len=6) |
+| 3e/iqr 0613 Buffer Read | OK | memory_read=OK (head=0x00000000, values=[0]) |
+| 4e/ql 0101 Read Type Name | OK | type_name=OK (model=R08CPU, model_code=0x4801 (18433)) |
+| 4e/ql 0401 Batch Read | OK | word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False]) |
+| 4e/ql 0403 Random Read | OK | random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}) |
+| 4e/ql 0801 Monitor Entry | OK | monitor_entry=OK (word_device=D130) |
+| 4e/ql 0802 Monitor Execute | OK | monitor_execute=OK (word_device=D130, values=[0]) |
+| 4e/ql 0406 Block Read | OK | block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])) |
+| 4e/ql 0619 Self Test | OK | self_test=OK (end_code=0x0000, data_len=6) |
+| 4e/ql 0613 Buffer Read | OK | memory_read=OK (head=0x00000000, values=[0]) |
+| 4e/iqr 0101 Read Type Name | OK | type_name=OK (model=R08CPU, model_code=0x4801 (18433)) |
+| 4e/iqr 0401 Batch Read | OK | word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False]) |
+| 4e/iqr 0403 Random Read | OK | random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}) |
+| 4e/iqr 0801 Monitor Entry | OK | monitor_entry=OK (word_device=D130) |
+| 4e/iqr 0802 Monitor Execute | OK | monitor_execute=OK (word_device=D130, values=[0]) |
+| 4e/iqr 0406 Block Read | OK | block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])) |
+| 4e/iqr 0619 Self Test | OK | self_test=OK (end_code=0x0000, data_len=6) |
+| 4e/iqr 0613 Buffer Read | OK | memory_read=OK (head=0x00000000, values=[0]) |

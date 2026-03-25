@@ -1,0 +1,604 @@
+{
+  "generated_at": "2026-03-19 15:33:55",
+  "host": "192.168.250.101",
+  "plc_label": "FX5UC",
+  "port": 1025,
+  "requested_frame_type": "auto",
+  "requested_series": "auto",
+  "results": [
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=FX5UC-32MT/D, model_code=0x4A91 (19089))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=FX5UC-32MT/D, model_code=0x4A91 (19089)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0000)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0000",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0000)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0000",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=OK (device=D140, result=[DeviceBlockResult(device='D140', values=[0])]); block_read_bit_only=OK (device=M140, result=[DeviceBlockResult(device='M140', values=[0])]); block_read_mixed=OK (word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])]))",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D140, result=[DeviceBlockResult(device='D140', values=[0])]",
+              "name": "block_read_word_only",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M140, result=[DeviceBlockResult(device='M140', values=[0])]",
+              "name": "block_read_bit_only",
+              "status": "OK"
+            },
+            {
+              "detail": "word_device=D140, bit_device=M140, result=BlockReadResult(word_blocks=[DeviceBlockResult(device='D140', values=[0])], bit_blocks=[DeviceBlockResult(device='M140', values=[0])])",
+              "name": "block_read_mixed",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "detected_model": "FX5UC-32MT/D",
+      "detected_series": "ql",
+      "frame_type": "3e",
+      "model_code": "0x4A91 (19089)"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=FX5UC-32MT/D, model_code=0x4A91 (19089))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=FX5UC-32MT/D, model_code=0x4A91 (19089)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002); bit_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_bit_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_mixed=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "detected_model": "FX5UC-32MT/D",
+      "detected_series": "ql",
+      "frame_type": "3e",
+      "model_code": "0x4A91 (19089)"
+    },
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=NG (connection closed while receiving data)",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "type_name",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (connection closed while receiving data); bit_read=NG (connection closed while receiving data)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "connection closed while receiving data",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (connection closed while receiving data)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (connection closed while receiving data)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (connection closed while receiving data)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (connection closed while receiving data); block_read_bit_only=NG (connection closed while receiving data); block_read_mixed=NG (connection closed while receiving data)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "connection closed while receiving data",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "connection closed while receiving data",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=NG (connection closed while receiving data)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "self_test",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (connection closed while receiving data)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "connection closed while receiving data",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "frame_type": "4e"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=OK (model=FX5UC-32MT/D, model_code=0x4A91 (19089))",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "model=FX5UC-32MT/D, model_code=0x4A91 (19089)",
+              "name": "type_name",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002); bit_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_bit_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_mixed=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=OK (end_code=0x0000, data_len=6)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "end_code=0x0000, data_len=6",
+              "name": "self_test",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "detected_model": "FX5UC-32MT/D",
+      "detected_series": "ql",
+      "frame_type": "4e",
+      "model_code": "0x4A91 (19089)"
+    }
+  ],
+  "risk_groups": [
+    "safe"
+  ],
+  "schema_version": 1,
+  "selected_commands": [
+    "0101",
+    "0401",
+    "0403",
+    "0801",
+    "0802",
+    "0406",
+    "0619",
+    "0613"
+  ],
+  "target": {
+    "module_io": 1023,
+    "multidrop": 0,
+    "network": 0,
+    "station": 255
+  },
+  "transport": "tcp"
+}

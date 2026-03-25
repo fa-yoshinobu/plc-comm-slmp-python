@@ -1,0 +1,595 @@
+{
+  "generated_at": "2026-03-19 15:21:14",
+  "host": "192.168.250.101",
+  "plc_label": "Q26UDEHCPU_SN20081",
+  "port": 1025,
+  "requested_frame_type": "auto",
+  "requested_series": "auto",
+  "results": [
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=NG (SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000)",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000",
+              "name": "type_name",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=OK (device=D130, values=[0]); bit_read=OK (device=M120, values=[False])",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "device=D130, values=[0]",
+              "name": "word_read",
+              "status": "OK"
+            },
+            {
+              "detail": "device=M120, values=[False]",
+              "name": "bit_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=OK (devices=['D130', 'D131'], values={'D130': 0, 'D131': 0})",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "devices=['D130', 'D131'], values={'D130': 0, 'D131': 0}",
+              "name": "random_read",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=OK (word_device=D130)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130",
+              "name": "monitor_entry",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=OK (word_device=D130, values=[0])",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "OK",
+          "subresults": [
+            {
+              "detail": "word_device=D130, values=[0]",
+              "name": "monitor_execute",
+              "status": "OK"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000); block_read_bit_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000); block_read_mixed=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0000",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=NG (end_code=0xC059, data_len=9)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "end_code=0xC059, data_len=9",
+              "name": "self_test",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "frame_type": "3e"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=NG (SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000)",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0101 subcommand=0x0000",
+              "name": "type_name",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002); bit_read=NG (SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0002",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0401 subcommand=0x0003",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0403 subcommand=0x0002",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0801 subcommand=0x0002",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_bit_only=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002); block_read_mixed=NG (SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0406 subcommand=0x0002",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=NG (end_code=0xC059, data_len=9)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "end_code=0xC059, data_len=9",
+              "name": "self_test",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "SLMP error end_code=0xC059 command=0x0613 subcommand=0x0000",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "frame_type": "3e"
+    },
+    {
+      "access_profile": "ql",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=NG (timed out)",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "type_name",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (timed out); bit_read=NG (timed out)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (timed out)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (timed out)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (timed out)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (timed out); block_read_bit_only=NG (timed out); block_read_mixed=NG (timed out)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=NG (timed out)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "self_test",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (timed out)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "frame_type": "4e"
+    },
+    {
+      "access_profile": "iqr",
+      "commands": [
+        {
+          "category": "System",
+          "code": "0101",
+          "detail": "type_name=NG (timed out)",
+          "name": "Read Type Name",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "type_name",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0401",
+          "detail": "word_read=NG (timed out); bit_read=NG (timed out)",
+          "name": "Batch Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "word_read",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "bit_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0403",
+          "detail": "random_read=NG (timed out)",
+          "name": "Random Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "random_read",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0801",
+          "detail": "monitor_entry=NG (timed out)",
+          "name": "Monitor Entry",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "monitor_entry",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Monitor",
+          "code": "0802",
+          "detail": "monitor_execute=NG (timed out)",
+          "name": "Monitor Execute",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "monitor_execute",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Device",
+          "code": "0406",
+          "detail": "block_read_word_only=NG (timed out); block_read_bit_only=NG (timed out); block_read_mixed=NG (timed out)",
+          "name": "Block Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "block_read_word_only",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "block_read_bit_only",
+              "status": "NG"
+            },
+            {
+              "detail": "timed out",
+              "name": "block_read_mixed",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Diag",
+          "code": "0619",
+          "detail": "self_test=NG (timed out)",
+          "name": "Self Test",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "self_test",
+              "status": "NG"
+            }
+          ]
+        },
+        {
+          "category": "Memory",
+          "code": "0613",
+          "detail": "memory_read=NG (timed out)",
+          "name": "Buffer Read",
+          "risk_group": "safe",
+          "status": "NG",
+          "subresults": [
+            {
+              "detail": "timed out",
+              "name": "memory_read",
+              "status": "NG"
+            }
+          ]
+        }
+      ],
+      "frame_type": "4e"
+    }
+  ],
+  "risk_groups": [
+    "safe"
+  ],
+  "schema_version": 1,
+  "selected_commands": [
+    "0101",
+    "0401",
+    "0403",
+    "0801",
+    "0802",
+    "0406",
+    "0619",
+    "0613"
+  ],
+  "target": {
+    "module_io": 1023,
+    "multidrop": 0,
+    "network": 0,
+    "station": 255
+  },
+  "transport": "tcp"
+}

@@ -1,0 +1,6 @@
+# label,edge_device,unit,edge_points,next_points
+Z,Z19,word,1/2,1
+LZ,LZ1,word,1/2,1/2
+R,R32767,word,1/2/16/64,1/2/16
+ZR,ZR163839,word,1/2/3/16/64,1/2
+RD,RD524286,word,1/2,1/2

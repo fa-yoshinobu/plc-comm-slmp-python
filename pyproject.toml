@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slmp-connect-python"
+version = "0.1.3"
+description = "SLMP Connect Python: client library for Mitsubishi SLMP binary communication"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+authors = [{ name = "fa-yoshinobu" }]
+
+license-files = ["LICENSE"]
+keywords = ["slmp", "melsec", "mitsubishi", "plc", "3e", "4e", "binary"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage = "https://github.com/fa-yoshinobu/plc-comm-slmp-python"
+Repository = "https://github.com/fa-yoshinobu/plc-comm-slmp-python"
+Issues = "https://github.com/fa-yoshinobu/plc-comm-slmp-python/issues"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "twine>=5.1",
+]
+
+[project.scripts]
+slmp-connection-check = "slmp.cli:connection_check_main"
+slmp-compatibility-probe = "slmp.cli:compatibility_probe_main"
+slmp-compatibility-matrix-render = "slmp.cli:compatibility_matrix_render_main"
+slmp-device-range-probe = "slmp.cli:device_range_probe_main"
+slmp-register-boundary-probe = "slmp.cli:register_boundary_probe_main"
+slmp-other-station-check = "slmp.cli:other_station_check_main"
+slmp-open-items-recheck = "slmp.cli:open_items_recheck_main"
+slmp-g-hg-extended-device-recheck = "slmp.cli:g_hg_extended_device_recheck_main"
+slmp-g-hg-extended-device-coverage = "slmp.cli:g_hg_extended_device_coverage_main"
+slmp-extended-device-recheck = "slmp.cli:extended_device_recheck_main"
+slmp-pending-live-verification = "slmp.cli:pending_live_verification_main"
+slmp-init-model-docs = "slmp.cli:init_model_docs_main"
+slmp-device-access-matrix-sync = "slmp.cli:device_access_matrix_sync_main"
+slmp-manual-write-verification = "slmp.cli:manual_write_verification_main"
+slmp-manual-label-verification = "slmp.cli:manual_label_verification_main"
+slmp-read-soak = "slmp.cli:read_soak_main"
+slmp-mixed-read-load = "slmp.cli:mixed_read_load_main"
+slmp-tcp-concurrency = "slmp.cli:tcp_concurrency_main"
+slmp-regression-suite = "slmp.cli:regression_suite_main"
+
+[tool.setuptools.packages.find]
+include = ["slmp*"]
+exclude = ["tests*", "scripts*", "docsrc/maintainer*", "docsrc/validation*"]
+
+[tool.setuptools]
+include-package-data = true
+exclude-package-data = { "*" = ["TODO.md", ".pre-commit-config.yaml"] }
+
+[tool.setuptools.package-data]
+slmp = ["py.typed"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["slmp"]
+
+[tool.mypy]
+files = ["slmp"]
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+
+[tool.coverage.run]
+source = ["slmp"]
+branch = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.report]
+show_missing = true
+
+
+
+
+
+
+
+

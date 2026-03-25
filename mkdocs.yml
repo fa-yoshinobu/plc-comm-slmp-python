@@ -1,0 +1,60 @@
+site_dir: docs
+docs_dir: docsrc
+site_name: SLMP Connect Python (slmp) API Reference
+site_url: https://fa-yoshinobu.github.io/plc-comm-slmp-python/
+repo_url: https://github.com/fa-yoshinobu/plc-comm-slmp-python
+repo_name: GitHub
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: blue
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+
+validation:
+  nav:
+    omitted_files: ignore
+
+nav:
+  - Overview: index.md
+  - User Docs:
+      - User Guide: user/USER_GUIDE.md
+      - Samples: user/SAMPLES.md
+      - Error Codes: user/ERROR_CODES.md
+      - Device Table: user/BIT_DEVICE_ACCESS_TABLE.md
+  - API Reference:
+      - Client: api/client.md
+      - Core: api/core.md
+      - Constants: api/constants.md
+  - QA Reports:
+      - Reports Overview: validation/reports/index.md
+      - Compatibility Matrix: validation/reports/PLC_COMPATIBILITY.md
+      - Stability: validation/reports/STABILITY.md
+  - Maintainer Docs:
+      - Maintainer Home: maintainer/README.md
+      - Open Items: maintainer/open_items.md
+      - Protocol Spec: maintainer/PROTOCOL_SPEC.md
+      - Testing Guide: maintainer/TESTING_GUIDE.md
+      - Script Reference: maintainer/SCRIPT_REFERENCE.md
+      - Release Guide: maintainer/RELEASE_PROCESS.md
+  - Change Log: CHANGELOG.md
+
+
+
+
+
