@@ -1477,22 +1477,22 @@ for r in results:
 </tr>
 <tr>
 <td><code>read_ltc_states(head_no, points)</code></td>
-<td>LTN ↁELTC coil</td>
+<td>LTN -&gt; LTC coil</td>
 <td><code>list[bool]</code></td>
 </tr>
 <tr>
 <td><code>read_lts_states(head_no, points)</code></td>
-<td>LTN ↁELTS contact</td>
+<td>LTN -&gt; LTS contact</td>
 <td><code>list[bool]</code></td>
 </tr>
 <tr>
 <td><code>read_lstc_states(head_no, points)</code></td>
-<td>LSTN ↁELSTC coil</td>
+<td>LSTN -&gt; LSTC coil</td>
 <td><code>list[bool]</code></td>
 </tr>
 <tr>
 <td><code>read_lsts_states(head_no, points)</code></td>
-<td>LSTN ↁELSTS contact</td>
+<td>LSTN -&gt; LSTS contact</td>
 <td><code>list[bool]</code></td>
 </tr>
 </tbody>
@@ -1591,7 +1591,7 @@ client.write_devices_ext(&quot;J1\\X11&quot;, [True], extension=ExtensionSpec(),
 <p>By default, requests target the directly connected PLC (own station). To route to another station, specify <code>network</code> and <code>station</code> numbers via <code>SlmpTarget</code>.</p>
 <pre><code class="language-python">from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
-# Constructor default  Eall requests go to Network 1, Station 1
+# Constructor default: all requests go to Network 1, Station 1
 client = SlmpClient(&quot;192.168.250.100&quot;, default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
@@ -1630,7 +1630,7 @@ values = client.read_words(&quot;D100&quot;, 10, target=target)
 </tr>
 </tbody>
 </table>
-<p><code>ModuleIONo</code> enum  Eshortcuts for <code>module_io</code>:</p>
+<p><code>ModuleIONo</code> enum shortcuts for <code>module_io</code>:</p>
 <table>
 <thead>
 <tr>

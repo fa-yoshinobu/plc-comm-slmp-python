@@ -909,7 +909,7 @@ with SlmpClient(&quot;192.168.250.100&quot;, port=1025, transport=&quot;tcp&quot
     print(hex(response.end_code))
 </code></pre>
 <p>High-level APIs raise <code>SlmpError</code> by default. Use <code>raise_on_error=False</code> when you need the raw response.</p>
-<p>For error handling implementation examples, see the <a href="../USER_GUIDE/">User Guide  EError Handling</a>.</p>
+<p>For error handling implementation examples, see the <a href="../USER_GUIDE/">User Guide error handling section</a>.</p>
 <h2 id="4-reading-the-result-correctly">4. Reading the Result Correctly</h2>
 <ul>
 <li><code>0x0000</code> means the PLC accepted the request, not that the operator-visible effect was what you expected</li>
