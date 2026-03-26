@@ -118,7 +118,7 @@ TCP:
 python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
-For Q-series internal ports such as `Q26UDEHCPU`, add `--frame-type auto` or `--frame-type 3e`. Auto selects `3e` for `ql` and `4e` for `iqr`. You can also use `--series auto`; the connection check probes `SM400` to resolve the family, and `0101 type name` is attempted automatically only on `4E`. Use `model_code` first, and fall back to the returned `model` text when the local code table does not have a match.
+For Q-series internal ports such as `Q26UDEHCPU`, use explicit stable settings such as `--series ql --frame-type 3e`. For iQ-R paths, use `--series iqr --frame-type 4e`. Use `model_code` first, and fall back to the returned `model` text when the local code table does not have a match.
 
 TCP with a harmless device read:
 
@@ -169,7 +169,7 @@ Report:
 Use this when you want to rebuild `PLC_COMPATIBILITY.md` from structured probe output rather than hand-maintained notes:
 
 ```powershell
-python scripts/slmp_compatibility_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --plc-label R08CPU_Main
+python scripts/slmp_compatibility_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series ql --frame-type 3e --plc-label R08CPU_Main
 ```
 
 Default behavior is read-only. The probe emits:
@@ -206,16 +206,16 @@ Interpretation rules:
 
 `slmp_connection_check.py` and `slmp_other_station_check.py` both load `compatibility_policy.json` automatically when it exists. `--compatibility-policy <path>` overrides the default file for ad-hoc policy testing.
 
-Use this to validate explicit target headers. `--series auto` now probes the route with `0401` only and falls back across `ql/iqr` until one read succeeds. `--frame-type auto` tries `3e` and `4e` as needed. The reported `access_profile` is only the route-probe encoding that worked first. Once a route probe succeeds, the tool also attempts `read_type_name()` on that same path for reporting, but a `0101` failure stays non-fatal:
+Use this to validate explicit target headers with a fixed series/frame pair. Choose `ql + 3e` for Q-compatible paths and `iqr + 4e` for iQ-R paths. The reported `access_profile` is the explicitly requested encoding. Once a route probe succeeds, the tool also attempts `read_type_name()` on that same path for reporting, but a `0101` failure stays non-fatal:
 
 ```powershell
-python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target NW1-ST1
+python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --frame-type 4e --target NW1-ST1
 ```
 
 Own-station multiple-CPU shorthand is also supported at the parser level:
 
 ```powershell
-python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series auto --frame-type auto --target SELF-CPU1
+python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --frame-type 4e --target SELF-CPU1
 ```
 
 Report:

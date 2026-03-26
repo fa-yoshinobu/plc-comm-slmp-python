@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#slmp-connect-python-user-guide" class="md-skip">
+        <a href="#slmp-python-user-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -373,33 +373,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#recommended-entry-points" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Installation
+        Recommended Entry Points
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
+    <nav class="md-nav" aria-label="Recommended Entry Points">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#profile-auto-detection-sync" class="md-nav__link">
+  <a href="#async-connection-with-automatic-profile-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Profile Auto-Detection (sync)
+        Async connection with automatic profile detection
       
     </span>
   </a>
@@ -407,10 +396,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#profile-auto-detection-connect-async" class="md-nav__link">
+  <a href="#async-shared-connection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Profile Auto-Detection + Connect (async)
+        Async shared connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sync-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sync application code
       
     </span>
   </a>
@@ -423,22 +423,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
+  <a href="#high-level-helper-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core Concepts
+        High-Level Helper Set
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Core Concepts">
+    <nav class="md-nav" aria-label="High-Level Helper Set">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#device-address-strings" class="md-nav__link">
+  <a href="#read_typed-read_typed_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Device Address Strings
+        read_typed / read_typed_sync
       
     </span>
   </a>
@@ -446,10 +446,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#word-vs-bit" class="md-nav__link">
+  <a href="#write_typed-write_typed_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Word vs Bit
+        write_typed / write_typed_sync
       
     </span>
   </a>
@@ -457,10 +457,65 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#target-specification" class="md-nav__link">
+  <a href="#write_bit_in_word-write_bit_in_word_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Target Specification
+        write_bit_in_word / write_bit_in_word_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_named-read_named_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_named / read_named_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_named-write_named_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_named / write_named_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_words-read_words_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_words / read_words_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords-read_dwords_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords / read_dwords_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-poll_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poll / poll_sync
       
     </span>
   </a>
@@ -473,22 +528,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typed-read-write" class="md-nav__link">
+  <a href="#practical-example-sets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typed Read / Write
+        Practical Example Sets
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Typed Read / Write">
+    <nav class="md-nav" aria-label="Practical Example Sets">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#read_typed-read_typed_sync-eread-one-device-with-type-conversion" class="md-nav__link">
+  <a href="#example-1-process-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_typed / read_typed_sync ERead one device with type conversion
+        Example 1: process values
       
     </span>
   </a>
@@ -496,10 +551,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#write_typed-write_typed_sync-ewrite-one-device-with-type-conversion" class="md-nav__link">
+  <a href="#example-2-recipe-download" class="md-nav__link">
     <span class="md-ellipsis">
       
-        write_typed / write_typed_sync EWrite one device with type conversion
+        Example 2: recipe download
       
     </span>
   </a>
@@ -507,10 +562,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_named-read_named_sync-ebatch-read-using-address-strings" class="md-nav__link">
+  <a href="#example-3-large-historian-read" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_named / read_named_sync EBatch read using address strings
+        Example 3: large historian read
       
     </span>
   </a>
@@ -518,10 +573,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#write_named-write_named_sync-ebatch-write-using-address-strings" class="md-nav__link">
+  <a href="#example-4-one-shared-async-connection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        write_named / write_named_sync EBatch write using address strings
+        Example 4: one shared async connection
       
     </span>
   </a>
@@ -534,154 +589,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#random-block-read" class="md-nav__link">
+  <a href="#sample-programs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Random / Block Read
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Random / Block Read">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#random-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Random Read
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#block-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Block Read
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#polling-poll-poll_sync" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Polling (poll / poll_sync)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#async-advantages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        async Advantages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#error-handling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error Handling
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Error Handling">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#exception-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exception Types
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-raw-response-without-raising-exceptions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Get raw response without raising exceptions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#common-connection-failures-and-solutions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Connection Failures and Solutions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verification-with-gx-simulator-3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification with GX Simulator 3
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Tips
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Overview
+        Sample Programs
       
     </span>
   </a>
@@ -987,33 +898,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#recommended-entry-points" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Installation
+        Recommended Entry Points
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
+    <nav class="md-nav" aria-label="Recommended Entry Points">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#profile-auto-detection-sync" class="md-nav__link">
+  <a href="#async-connection-with-automatic-profile-detection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Profile Auto-Detection (sync)
+        Async connection with automatic profile detection
       
     </span>
   </a>
@@ -1021,10 +921,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#profile-auto-detection-connect-async" class="md-nav__link">
+  <a href="#async-shared-connection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Profile Auto-Detection + Connect (async)
+        Async shared connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sync-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sync application code
       
     </span>
   </a>
@@ -1037,22 +948,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
+  <a href="#high-level-helper-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core Concepts
+        High-Level Helper Set
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Core Concepts">
+    <nav class="md-nav" aria-label="High-Level Helper Set">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#device-address-strings" class="md-nav__link">
+  <a href="#read_typed-read_typed_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Device Address Strings
+        read_typed / read_typed_sync
       
     </span>
   </a>
@@ -1060,10 +971,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#word-vs-bit" class="md-nav__link">
+  <a href="#write_typed-write_typed_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Word vs Bit
+        write_typed / write_typed_sync
       
     </span>
   </a>
@@ -1071,10 +982,65 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#target-specification" class="md-nav__link">
+  <a href="#write_bit_in_word-write_bit_in_word_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Target Specification
+        write_bit_in_word / write_bit_in_word_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_named-read_named_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_named / read_named_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_named-write_named_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_named / write_named_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_words-read_words_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_words / read_words_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords-read_dwords_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords / read_dwords_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-poll_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        poll / poll_sync
       
     </span>
   </a>
@@ -1087,22 +1053,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typed-read-write" class="md-nav__link">
+  <a href="#practical-example-sets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typed Read / Write
+        Practical Example Sets
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Typed Read / Write">
+    <nav class="md-nav" aria-label="Practical Example Sets">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#read_typed-read_typed_sync-eread-one-device-with-type-conversion" class="md-nav__link">
+  <a href="#example-1-process-values" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_typed / read_typed_sync ERead one device with type conversion
+        Example 1: process values
       
     </span>
   </a>
@@ -1110,10 +1076,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#write_typed-write_typed_sync-ewrite-one-device-with-type-conversion" class="md-nav__link">
+  <a href="#example-2-recipe-download" class="md-nav__link">
     <span class="md-ellipsis">
       
-        write_typed / write_typed_sync EWrite one device with type conversion
+        Example 2: recipe download
       
     </span>
   </a>
@@ -1121,10 +1087,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_named-read_named_sync-ebatch-read-using-address-strings" class="md-nav__link">
+  <a href="#example-3-large-historian-read" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_named / read_named_sync EBatch read using address strings
+        Example 3: large historian read
       
     </span>
   </a>
@@ -1132,10 +1098,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#write_named-write_named_sync-ebatch-write-using-address-strings" class="md-nav__link">
+  <a href="#example-4-one-shared-async-connection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        write_named / write_named_sync EBatch write using address strings
+        Example 4: one shared async connection
       
     </span>
   </a>
@@ -1148,154 +1114,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#random-block-read" class="md-nav__link">
+  <a href="#sample-programs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Random / Block Read
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Random / Block Read">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#random-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Random Read
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#block-read" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Block Read
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#polling-poll-poll_sync" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Polling (poll / poll_sync)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#async-advantages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        async Advantages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#error-handling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error Handling
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Error Handling">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#exception-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exception Types
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-raw-response-without-raising-exceptions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Get raw response without raising exceptions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#common-connection-failures-and-solutions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Connection Failures and Solutions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verification-with-gx-simulator-3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification with GX Simulator 3
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Tips
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API Overview
+        Sample Programs
       
     </span>
   </a>
@@ -1322,400 +1144,251 @@
   
 
 
-<h1 id="slmp-connect-python-user-guide">SLMP Connect Python User Guide</h1>
-<p>Efficient SLMP (MC Protocol) communication library for Mitsubishi PLCs.</p>
-<h2 id="installation">Installation</h2>
-<pre><code class="language-bash">pip install slmp-connect
-</code></pre>
-<h2 id="quick-start">Quick Start</h2>
-<pre><code class="language-python">from slmp import SlmpClient
-from slmp.constants import FrameType, PLCSeries
-
-# iQ-R series (R04/R08/R16…) ↁEFRAME_4E + IQR
-# Q/L series                  ↁEFRAME_3E + QL
-client = SlmpClient(
-    host=&quot;192.168.250.100&quot;,
-    port=1025,
-    frame_type=FrameType.FRAME_4E,
-    plc_series=PLCSeries.IQR,
-)
-
-with client:
-    # Read 1 word from D100
-    data = client.read_devices(&quot;D100&quot;, 1)
-    print(f&quot;D100: {data[0]}&quot;)
-
-    # Read 4 bits from M0
-    bits = client.read_devices(&quot;M0&quot;, 4, bit_unit=True)
-    print(f&quot;M0..M3: {bits}&quot;)
-
-    # Write a value to D200
-    client.write_devices(&quot;D200&quot;, [42])
-</code></pre>
-<p>!!! note "How to choose frame_type / plc_series"
-    | PLC Family | frame_type | plc_series |
-    |---|---|---|
-    | iQ-R (e.g. R04CPU) | <code>FRAME_4E</code> | <code>PLCSeries.IQR</code> |
-    | Q / L Series | <code>FRAME_3E</code> | <code>PLCSeries.QL</code> |
-    | If unknown |  E|  E|</p>
-<pre><code>If unknown, you can auto-detect using `resolve_profile()` below.
-</code></pre>
-<h3 id="profile-auto-detection-sync">Profile Auto-Detection (sync)</h3>
-<pre><code class="language-python">from slmp import SlmpClient
-
-client = SlmpClient(host=&quot;192.168.250.100&quot;, port=1025)
-rec = client.resolve_profile()
-print(f&quot;detected: frame={rec.frame_type}, series={rec.plc_series}, confident={rec.is_confident}&quot;)
-
-with client:
-    data = client.read_devices(&quot;D100&quot;, 1)
-    print(f&quot;D100: {data[0]}&quot;)
-</code></pre>
-<h3 id="profile-auto-detection-connect-async">Profile Auto-Detection + Connect (async)</h3>
+<h1 id="slmp-python-user-guide">SLMP Python User Guide</h1>
+<p>This guide documents the recommended high-level helper APIs.</p>
+<p>For normal application code, start here instead of the low-level protocol methods.</p>
+<h2 id="recommended-entry-points">Recommended Entry Points</h2>
+<h3 id="async-connection-with-automatic-profile-detection">Async connection with automatic profile detection</h3>
 <pre><code class="language-python">import asyncio
-from slmp import open_and_connect
 
-async def main():
-    # Auto-detect frame_type / plc_series and connect
+from slmp import open_and_connect, read_named
+
+
+async def main() -&gt; None:
     async with await open_and_connect(&quot;192.168.250.100&quot;, port=1025) as client:
-        data = await client.read_devices(&quot;D100&quot;, 1)
-        print(f&quot;D100: {data[0]}&quot;)
+        snapshot = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;])
+        print(snapshot)
+
 
 asyncio.run(main())
 </code></pre>
-<hr />
-<h2 id="core-concepts">Core Concepts</h2>
-<h3 id="device-address-strings">Device Address Strings</h3>
-<p>Devices are specified using strings.</p>
-<pre><code class="language-python">client.read_devices(&quot;D100&quot;, 10)              # Read 10 words from D100
-client.read_devices(&quot;M0&quot;, 8, bit_unit=True)  # Read 8 bits from M0
-client.write_devices(&quot;D200&quot;, [0, 1, 2])      # Write to D200..D202
-</code></pre>
-<p>Example supported devices: <code>D</code>, <code>W</code>, <code>R</code>, <code>ZR</code>, <code>M</code>, <code>L</code>, <code>B</code>, <code>X</code>, <code>Y</code>, <code>SM</code>, <code>SD</code>, etc.
-See <code>slmp.core.DEVICE_CODES</code> for a full list of devices.</p>
-<h3 id="word-vs-bit">Word vs Bit</h3>
+<p>Use this when:</p>
 <ul>
-<li><code>bit_unit=False</code> (default): Read/write in word units. Returns <code>list[int]</code>.</li>
-<li><code>bit_unit=True</code>: Read/write bit devices (M, X, Y, etc.) in bit units. Returns <code>list[int]</code> (0 or 1).</li>
+<li>you are writing an async application</li>
+<li>you want the library to choose the correct frame/profile pair</li>
+<li>you want the shortest path to <code>read_named</code>, <code>write_typed</code>, and <code>poll</code></li>
 </ul>
-<h3 id="target-specification">Target Specification</h3>
-<p>You can target specific CPUs, such as in multiple CPU configurations.</p>
-<pre><code class="language-python">from slmp import SlmpTarget
+<h3 id="async-shared-connection">Async shared connection</h3>
+<pre><code class="language-python">import asyncio
 
-target = SlmpTarget(module_io=&quot;MULTIPLE_CPU_1&quot;)
-data = client.read_devices(&quot;D100&quot;, 1, target=target)
+from slmp import open_and_connect_queued, read_named
+
+
+async def main() -&gt; None:
+    async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
+        first = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
+        second = await read_named(client, [&quot;D300&quot;, &quot;D50.3&quot;])
+        print(first)
+        print(second)
+
+
+asyncio.run(main())
 </code></pre>
-<hr />
-<h2 id="typed-read-write">Typed Read / Write</h2>
-<p><code>read_devices</code> returns raw 16-bit words. Use utility functions for float32 or signed integers. Both sync and async clients are supported.</p>
+<p>Use this when multiple coroutines share one PLC connection.</p>
+<h3 id="sync-application-code">Sync application code</h3>
+<pre><code class="language-python">from slmp import SlmpClient, read_named_sync, write_typed_sync
+
+with SlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_series=&quot;iqr&quot;) as client:
+    print(read_named_sync(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;]))
+    write_typed_sync(client, &quot;D100&quot;, &quot;U&quot;, 42)
+</code></pre>
+<p>For sync code, the recommended pattern is:</p>
+<ol>
+<li>open a <code>SlmpClient</code></li>
+<li>use the <code>*_sync</code> helper functions</li>
+</ol>
+<h2 id="high-level-helper-set">High-Level Helper Set</h2>
+<h3 id="read_typed-read_typed_sync"><code>read_typed</code> / <code>read_typed_sync</code></h3>
+<p>Read one logical value with type conversion.</p>
+<p>Supported dtype values:</p>
 <table>
 <thead>
 <tr>
 <th>dtype</th>
-<th>Type</th>
+<th>Meaning</th>
 <th>Words</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>"U"</code></td>
-<td>unsigned 16-bit int</td>
+<td><code>U</code></td>
+<td>unsigned 16-bit</td>
 <td>1</td>
 </tr>
 <tr>
-<td><code>"S"</code></td>
-<td>signed 16-bit int</td>
+<td><code>S</code></td>
+<td>signed 16-bit</td>
 <td>1</td>
 </tr>
 <tr>
-<td><code>"D"</code></td>
-<td>unsigned 32-bit int</td>
+<td><code>D</code></td>
+<td>unsigned 32-bit</td>
 <td>2</td>
 </tr>
 <tr>
-<td><code>"L"</code></td>
-<td>signed 32-bit int</td>
+<td><code>L</code></td>
+<td>signed 32-bit</td>
 <td>2</td>
 </tr>
 <tr>
-<td><code>"F"</code></td>
+<td><code>F</code></td>
 <td>float32</td>
 <td>2</td>
 </tr>
 </tbody>
 </table>
-<h3 id="read_typed-read_typed_sync-eread-one-device-with-type-conversion">read_typed / read_typed_sync  ERead one device with type conversion</h3>
-<pre><code class="language-python"># async
-from slmp.utils import read_typed
-f = await read_typed(client, &quot;D100&quot;, &quot;F&quot;)   # float32
-
-# sync
-from slmp.utils import read_typed_sync
-f = read_typed_sync(client, &quot;D100&quot;, &quot;F&quot;)
+<pre><code class="language-python">value_u = await read_typed(client, &quot;D100&quot;, &quot;U&quot;)
+value_f = await read_typed(client, &quot;D200&quot;, &quot;F&quot;)
+value_l = await read_typed(client, &quot;D300&quot;, &quot;L&quot;)
 </code></pre>
-<h3 id="write_typed-write_typed_sync-ewrite-one-device-with-type-conversion">write_typed / write_typed_sync  EWrite one device with type conversion</h3>
-<pre><code class="language-python">from slmp.utils import write_typed_sync
-write_typed_sync(client, &quot;D100&quot;, &quot;F&quot;, 3.14)
-write_typed_sync(client, &quot;D102&quot;, &quot;L&quot;, -50000)
+<h3 id="write_typed-write_typed_sync"><code>write_typed</code> / <code>write_typed_sync</code></h3>
+<p>Write one logical value with type conversion.</p>
+<pre><code class="language-python">await write_typed(client, &quot;D100&quot;, &quot;U&quot;, 1234)
+await write_typed(client, &quot;D200&quot;, &quot;F&quot;, 3.14)
+await write_typed(client, &quot;D300&quot;, &quot;L&quot;, -1000)
 </code></pre>
-<h3 id="read_named-read_named_sync-ebatch-read-using-address-strings">read_named / read_named_sync  EBatch read using address strings</h3>
-<p>Read multiple devices at once using type codes embedded in addresses.</p>
-<pre><code class="language-python"># async
-from slmp.utils import read_named
-result = await read_named(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;D102:S&quot;, &quot;D0.3&quot;])
-
-# sync
-from slmp.utils import read_named_sync
-result = read_named_sync(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;D102:S&quot;, &quot;D0.3&quot;])
-# result = {&quot;D100&quot;: 42, &quot;D101:F&quot;: 3.14, &quot;D102:S&quot;: -1, &quot;D0.3&quot;: True}
+<h3 id="write_bit_in_word-write_bit_in_word_sync"><code>write_bit_in_word</code> / <code>write_bit_in_word_sync</code></h3>
+<p>Set or clear one bit inside a word device.</p>
+<pre><code class="language-python">await write_bit_in_word(client, &quot;D50&quot;, bit_index=3, value=True)
+await write_bit_in_word(client, &quot;D50&quot;, bit_index=3, value=False)
 </code></pre>
-<h3 id="write_named-write_named_sync-ebatch-write-using-address-strings">write_named / write_named_sync  EBatch write using address strings</h3>
-<p>Write multiple devices at once using the same notation as <code>read_named</code>.</p>
-<pre><code class="language-python"># async
-from slmp.utils import write_named
-await write_named(client, {
-    &quot;D100&quot;: 42,
-    &quot;D101:F&quot;: 3.14,
-    &quot;D0.3&quot;: True,
-})
-
-# sync
-from slmp.utils import write_named_sync
-write_named_sync(client, {
-    &quot;D100&quot;: 42,
-    &quot;D101:F&quot;: 3.14,
-    &quot;D0.3&quot;: True,
-})
-</code></pre>
-<hr />
-<h2 id="random-block-read">Random / Block Read</h2>
-<p>Read non-contiguous devices in a single command. More efficient than repeating <code>read_devices</code>.</p>
-<h3 id="random-read">Random Read</h3>
-<pre><code class="language-python">from slmp import DeviceRef
-
-result = client.read_random(
-    word_devices=[&quot;D100&quot;, &quot;D200&quot;, &quot;W10&quot;],
-    dword_devices=[&quot;D300&quot;],  # Read as 2-word value
-)
-# result.word  = {&quot;D100&quot;: 1, &quot;D200&quot;: 2, &quot;W10&quot;: 3}
-# result.dword = {&quot;D300&quot;: 100000}
-</code></pre>
-<h3 id="block-read">Block Read</h3>
-<p>Read multiple contiguous blocks in a single command.</p>
-<pre><code class="language-python">result = client.read_block(
-    word_blocks=[(&quot;D100&quot;, 10), (&quot;W0&quot;, 5)],
-    bit_blocks=[(&quot;M0&quot;, 16)],
-)
-# result.word_blocks[0].device = &quot;D100&quot;, .values = [...]
-# result.bit_blocks[0].device  = &quot;M0&quot;,  .values = [...]
-</code></pre>
-<hr />
-<h2 id="polling-poll-poll_sync">Polling (poll / poll_sync)</h2>
-<p>Continuously read devices at a fixed interval. Supports the same address notation as <code>read_named</code>.</p>
-<pre><code class="language-python"># async
-import asyncio
-from slmp.utils import poll
-
-async def main():
-    async with await open_and_connect(&quot;192.168.250.100&quot;) as client:
-        async for snapshot in poll(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;M0.0&quot;], interval=1.0):
-            print(snapshot)
-
-asyncio.run(main())
-
-# sync
-from slmp.utils import poll_sync
-from slmp import SlmpClient
-
-with SlmpClient(&quot;192.168.250.100&quot;, 1025) as client:
-    for snapshot in poll_sync(client, [&quot;D100&quot;, &quot;D101:F&quot;, &quot;M0.0&quot;], interval=1.0):
-        print(snapshot)
-        # {&quot;D100&quot;: 42, &quot;D101:F&quot;: 3.14, &quot;M0.0&quot;: True}
-</code></pre>
-<p>Outputs snapshots every second until stopped with Ctrl+C.</p>
-<hr />
-<h2 id="sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient">Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)</h2>
-<p>If multiple coroutines (e.g., background poller and foreground writer) need to use the same connection, wrap it in <code>QueuedAsyncSlmpClient</code>. Communication is serialized via an internal lock.</p>
-<p>If you want the queued wrapper from the start, use <code>open_and_connect_queued(...)</code>.</p>
-<pre><code class="language-python">import asyncio
-from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
-
-async def poller(client, stop_event):
-    while not stop_event.is_set():
-        data = await client.read_devices(&quot;D100&quot;, 1)
-        print(f&quot;[poll] D100={data[0]}&quot;)
-        await asyncio.sleep(1.0)
-
-async def main():
-    inner = AsyncSlmpClient(&quot;192.168.250.100&quot;, 1025)
-    client = QueuedAsyncSlmpClient(inner)
-    stop = asyncio.Event()
-
-    async with client:
-        poll_task = asyncio.create_task(poller(client, stop))
-        await asyncio.sleep(5)
-        stop.set()
-        await poll_task
-
-asyncio.run(main())
-</code></pre>
-<p>Shortcut:</p>
-<pre><code class="language-python">from slmp import open_and_connect_queued
-
-async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
-    value = await client.read_devices(&quot;D100&quot;, 1, bit_unit=False)
-</code></pre>
-<hr />
-<h2 id="async-advantages">async Advantages</h2>
-<p><code>AsyncSlmpClient</code> is asyncio-based and does not block the event loop while waiting for PLC responses. While multiple requests to the same connection are serialized, <strong>simultaneous connections to multiple PLCs</strong> overlap in time, significantly reducing total processing time.</p>
-<pre><code class="language-python"># Read from multiple PLCs simultaneously
-results = await asyncio.gather(
-    read_one_plc(&quot;192.168.250.100&quot;, 1025),
-    read_one_plc(&quot;192.168.1.11&quot;, 1025),
-)
-</code></pre>
-<hr />
-<h2 id="error-handling">Error Handling</h2>
-<h3 id="exception-types">Exception Types</h3>
+<p>Use this when a PLC stores flags inside a control word and you need to toggle only one bit.</p>
+<h3 id="read_named-read_named_sync"><code>read_named</code> / <code>read_named_sync</code></h3>
+<p>Read multiple values with one high-level call.</p>
+<p>Address notation:</p>
 <table>
 <thead>
 <tr>
-<th>Exception</th>
-<th>Condition</th>
+<th>Form</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>SlmpError</code></td>
-<td>PLC returned <code>end_code != 0</code></td>
+<td><code>D100</code></td>
+<td>one unsigned 16-bit word</td>
 </tr>
 <tr>
-<td><code>ValueError</code></td>
-<td>Invalid device name or argument format</td>
+<td><code>D200:S</code></td>
+<td>signed 16-bit</td>
 </tr>
 <tr>
-<td><code>TimeoutError</code></td>
-<td>Response timeout</td>
+<td><code>D300:D</code></td>
+<td>unsigned 32-bit</td>
 </tr>
 <tr>
-<td><code>ConnectionRefusedError</code></td>
-<td>Connection refused (wrong port or IP)</td>
+<td><code>D400:L</code></td>
+<td>signed 32-bit</td>
 </tr>
 <tr>
-<td><code>OSError</code></td>
-<td>Other network failures</td>
+<td><code>D500:F</code></td>
+<td>float32</td>
+</tr>
+<tr>
+<td><code>D50.3</code></td>
+<td>bit 3 inside D50</td>
 </tr>
 </tbody>
 </table>
-<pre><code class="language-python">from slmp import SlmpClient
-from slmp.errors import SlmpError
-
-with SlmpClient(&quot;192.168.250.100&quot;, 1025) as client:
-    try:
-        data = client.read_devices(&quot;D100&quot;, 1)
-    except SlmpError as e:
-        print(f&quot;PLC error: end_code=0x{e.end_code:04X}&quot;)
-    except TimeoutError:
-        print(&quot;Connection timeout  ECheck IP address and port number&quot;)
-    except ConnectionRefusedError:
-        print(&quot;Connection refused  ECheck port number and SLMP settings on the PLC&quot;)
-</code></pre>
-<h3 id="get-raw-response-without-raising-exceptions">Get raw response without raising exceptions</h3>
-<p>Passing <code>raise_on_error=False</code> returns an <code>SlmpResponse</code> instead of raising an <code>SlmpError</code>.</p>
-<pre><code class="language-python">resp = client.raw_command(0x0401, subcommand=0x0002, payload=b&quot;...&quot;, raise_on_error=False)
-print(f&quot;end_code: 0x{resp.end_code:04X}&quot;)
-</code></pre>
-<p>See the <a href="../ERROR_CODES/">Error Codes Guide</a> for common end codes.</p>
-<h3 id="common-connection-failures-and-solutions">Common Connection Failures and Solutions</h3>
-<table>
-<thead>
-<tr>
-<th>Symptom</th>
-<th>Possible Cause</th>
-<th>Solution</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ConnectionRefusedError</code></td>
-<td>Wrong port number</td>
-<td>Check port in "SLMP Communication Setting" of GX Works3</td>
-</tr>
-<tr>
-<td><code>TimeoutError</code></td>
-<td>Wrong IP or unreachable route</td>
-<td>Verify connectivity with <code>ping</code></td>
-</tr>
-<tr>
-<td><code>SlmpError</code> end_code=<code>0xC059</code></td>
-<td><code>frame_type</code> / <code>plc_series</code> mismatch</td>
-<td>Auto-detect using <code>resolve_profile()</code> or change the series</td>
-</tr>
-<tr>
-<td>Data is clearly incorrect</td>
-<td>Wrong <code>plc_series</code> (IQR vs QL)</td>
-<td>Device encoding varies by series; please verify</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="verification-with-gx-simulator-3">Verification with GX Simulator 3</h2>
-<p>If you don't have a physical PLC, you can test on your local PC using GX Simulator 3 (included with GX Works3).</p>
-<p><strong>Connection Settings</strong></p>
-<table>
-<thead>
-<tr>
-<th>Item</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>host</td>
-<td><code>127.0.0.1</code></td>
-</tr>
-<tr>
-<td>port</td>
-<td><code>5010</code> (GX Simulator 3 default)</td>
-</tr>
-<tr>
-<td>frame_type</td>
-<td><code>FRAME_3E</code></td>
-</tr>
-<tr>
-<td>plc_series</td>
-<td><code>PLCSeries.QL</code></td>
-</tr>
-</tbody>
-</table>
-<pre><code class="language-python">client = SlmpClient(
-    host=&quot;127.0.0.1&quot;,
-    port=5010,
-    frame_type=FrameType.FRAME_3E,
-    plc_series=PLCSeries.QL,
+<pre><code class="language-python">snapshot = await read_named(
+    client,
+    [
+        &quot;D100&quot;,
+        &quot;D200:S&quot;,
+        &quot;D300:D&quot;,
+        &quot;D400:L&quot;,
+        &quot;D500:F&quot;,
+        &quot;D50.3&quot;,
+    ],
 )
 </code></pre>
-<p>!!! note
-    GX Simulator 3 may respond with 3E frames even in iQ-R simulation. If you cannot connect, use <code>resolve_profile()</code> to auto-detect the profile.</p>
-<hr />
-<h2 id="performance-tips">Performance Tips</h2>
-<p>!!! tip "Reuse connections"
-    Reuse <code>SlmpClient</code> instances across multiple requests. Establishing a new TCP connection every time is very slow.</p>
-<p>!!! tip "Use read_words for large reads"
-    Continuous reads exceeding 960 words are automatically split by <code>read_words(allow_split=True)</code>.</p>
-<pre><code>```python
-# async
-from slmp.utils import read_words
-values = await read_words(client, "D0", 2000, allow_split=True)
-
-# sync
-from slmp.utils import read_words_sync
-values = read_words_sync(client, "D0", 2000, allow_split=True)
-```
+<p>Use <code>.bit</code> notation only with word devices such as <code>D50.3</code>.
+Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X20</code>, or <code>Y20</code>.</p>
+<p>This is the most useful helper for dashboards, logging, and application polling.</p>
+<h3 id="write_named-write_named_sync"><code>write_named</code> / <code>write_named_sync</code></h3>
+<p>Write multiple logical values using the same address notation.</p>
+<pre><code class="language-python">await write_named(
+    client,
+    {
+        &quot;D100&quot;: 42,
+        &quot;D200:S&quot;: -1,
+        &quot;D300:D&quot;: 123456,
+        &quot;D400:L&quot;: -5000,
+        &quot;D500:F&quot;: 1.25,
+        &quot;D50.3&quot;: True,
+    },
+)
 </code></pre>
-<hr />
-<h2 id="api-overview">API Overview</h2>
-<p>See the <a href="../../api/client/">API Reference</a> for details.</p>
+<h3 id="read_words-read_words_sync"><code>read_words</code> / <code>read_words_sync</code></h3>
+<p>Read a contiguous word range.</p>
+<pre><code class="language-python">words = await read_words(client, &quot;D0&quot;, 10)
+large_words = await read_words(client, &quot;D0&quot;, 1000, allow_split=True)
+</code></pre>
+<p>Use <code>allow_split=True</code> when the requested length exceeds one SLMP request.</p>
+<h3 id="read_dwords-read_dwords_sync"><code>read_dwords</code> / <code>read_dwords_sync</code></h3>
+<p>Read contiguous 32-bit values.</p>
+<pre><code class="language-python">dwords = await read_dwords(client, &quot;D200&quot;, 8)
+large_dwords = await read_dwords(client, &quot;D200&quot;, 200, allow_split=True)
+</code></pre>
+<h3 id="poll-poll_sync"><code>poll</code> / <code>poll_sync</code></h3>
+<p>Yield repeated snapshots at a fixed interval.</p>
+<pre><code class="language-python">async for snapshot in poll(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;], interval=1.0):
+    print(snapshot)
+</code></pre>
+<p>Sync variant:</p>
+<pre><code class="language-python">for snapshot in poll_sync(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;], interval=1.0):
+    print(snapshot)
+</code></pre>
+<h2 id="practical-example-sets">Practical Example Sets</h2>
+<h3 id="example-1-process-values">Example 1: process values</h3>
+<pre><code class="language-python">snapshot = await read_named(
+    client,
+    [
+        &quot;D100:F&quot;,   # temperature
+        &quot;D102:F&quot;,   # pressure
+        &quot;D200&quot;,     # recipe number
+        &quot;D50.0&quot;,    # run flag
+        &quot;D50.1&quot;,    # alarm flag
+    ],
+)
+</code></pre>
+<h3 id="example-2-recipe-download">Example 2: recipe download</h3>
+<pre><code class="language-python">await write_named(
+    client,
+    {
+        &quot;D100&quot;: 10,
+        &quot;D101&quot;: 20,
+        &quot;D102&quot;: 30,
+        &quot;D200:F&quot;: 12.5,
+        &quot;D202:F&quot;: 6.75,
+    },
+)
+</code></pre>
+<h3 id="example-3-large-historian-read">Example 3: large historian read</h3>
+<pre><code class="language-python">history_words = await read_words(client, &quot;D1000&quot;, 1200, allow_split=True)
+history_dwords = await read_dwords(client, &quot;D2000&quot;, 240, allow_split=True)
+</code></pre>
+<h3 id="example-4-one-shared-async-connection">Example 4: one shared async connection</h3>
+<pre><code class="language-python">async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
+    a = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
+    b = await read_named(client, [&quot;D300&quot;, &quot;D50.3&quot;])
+</code></pre>
+<h2 id="sample-programs">Sample Programs</h2>
+<p>The most complete examples are:</p>
+<ul>
+<li><code>samples/high_level_sync.py</code></li>
+<li><code>samples/high_level_async.py</code></li>
+</ul>
+<p>They are designed to be directly runnable and syntax-check clean.</p>
+<p>Run them from the repository root:</p>
+<pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
+python samples/high_level_async.py --host 192.168.250.100 --port 1025
+</code></pre>
+<p>See also:</p>
+<ul>
+<li><a href="../SAMPLES/">Samples</a></li>
+<li><a href="../ERROR_CODES/">Error Codes</a></li>
+</ul>
 
 
 

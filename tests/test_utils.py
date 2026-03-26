@@ -1,4 +1,4 @@
-"""Unit tests for slmp.utils — sync and async utility functions."""
+﻿"""Unit tests for slmp.utils sync and async utility functions."""
 
 import struct
 import unittest
@@ -11,11 +11,13 @@ from slmp.utils import (
     _parse_address,
     open_and_connect_queued,
     poll_sync,
+    read_bits_sync,
     read_dwords_sync,
     read_named_sync,
     read_typed_sync,
     read_words_sync,
     write_bit_in_word_sync,
+    write_bits_sync,
     write_named,
     write_named_sync,
     write_typed_sync,
@@ -117,6 +119,12 @@ class TestReadTypedSync(unittest.TestCase):
         client = _make_sync_client([lo, hi])
         self.assertEqual(read_typed_sync(client, "D100", "L"), -50000)
 
+    def test_bit_device(self):
+        client = MagicMock()
+        client.read_devices.return_value = [True]
+        self.assertTrue(read_typed_sync(client, "M100", "BIT"))
+        client.read_devices.assert_called_once_with("M100", 1, bit_unit=True)
+
 
 # ---------------------------------------------------------------------------
 # write_typed_sync
@@ -142,6 +150,11 @@ class TestWriteTypedSync(unittest.TestCase):
         raw = struct.pack("<i", -1)
         expected = list(struct.unpack("<HH", raw))
         client.write_devices.assert_called_once_with("D100", expected, bit_unit=False)
+
+    def test_write_bit(self):
+        client = MagicMock()
+        write_typed_sync(client, "M100", "BIT", True)
+        client.write_devices.assert_called_once_with("M100", [True], bit_unit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +210,16 @@ class TestReadNamedSync(unittest.TestCase):
 
     def test_bit_device_falls_back_to_single_read(self):
         client = MagicMock()
-        client.read_devices.return_value = [1]
+        client.read_devices.return_value = [True]
         result = read_named_sync(client, ["M100"])
-        self.assertEqual(result["M100"], 1)
+        self.assertTrue(result["M100"])
         client.read_random.assert_not_called()
-        client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=False)
+        client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=True)
+
+    def test_bit_device_bit_suffix_raises(self):
+        client = MagicMock()
+        with self.assertRaisesRegex(ValueError, "only valid for word devices"):
+            read_named_sync(client, ["M100.0"])
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +244,16 @@ class TestWriteNamedSync(unittest.TestCase):
         client = _make_sync_client([0x0000])
         write_named_sync(client, {"D0.2": True})
         client.write_devices.assert_called_once_with("D0", [0x0004], bit_unit=False)
+
+    def test_write_direct_bit_device(self):
+        client = MagicMock()
+        write_named_sync(client, {"M100": True})
+        client.write_devices.assert_called_once_with("M100", [True], bit_unit=True)
+
+    def test_write_bit_device_bit_suffix_raises(self):
+        client = MagicMock()
+        with self.assertRaisesRegex(ValueError, "only valid for word devices"):
+            write_named_sync(client, {"M100.0": True})
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +286,19 @@ class TestReadWordsSyncChunking(unittest.TestCase):
         client = _make_sync_client([lo, hi])
         result = read_dwords_sync(client, "D0", 1)
         self.assertEqual(result, [100000])
+
+
+class TestBitBlockHelpers(unittest.TestCase):
+    def test_read_bits_sync(self):
+        client = MagicMock()
+        client.read_devices.return_value = [True, False, True]
+        self.assertEqual(read_bits_sync(client, "M100", 3), [True, False, True])
+        client.read_devices.assert_called_once_with("M100", 3, bit_unit=True)
+
+    def test_write_bits_sync(self):
+        client = MagicMock()
+        write_bits_sync(client, "M100", [True, False, True])
+        client.write_devices.assert_called_once_with("M100", [True, False, True], bit_unit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -319,3 +360,4 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

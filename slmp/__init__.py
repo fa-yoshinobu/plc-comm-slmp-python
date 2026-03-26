@@ -1,4 +1,14 @@
-"""SLMP binary client library."""
+"""SLMP client library with high-level helpers as the recommended user surface.
+
+The primary user-facing entry points are:
+
+- ``open_and_connect`` / ``open_and_connect_queued``
+- ``read_typed`` / ``write_typed``
+- ``read_words`` / ``read_dwords``
+- ``write_bit_in_word``
+- ``read_named`` / ``write_named``
+- ``poll``
+"""
 
 __version__ = "0.1.2"
 
@@ -40,6 +50,8 @@ from .utils import (
     open_and_connect_queued,
     poll,
     poll_sync,
+    read_bits,
+    read_bits_sync,
     read_dwords,
     read_dwords_sync,
     read_named,
@@ -50,6 +62,8 @@ from .utils import (
     read_words_sync,
     write_bit_in_word,
     write_bit_in_word_sync,
+    write_bits,
+    write_bits_sync,
     write_named,
     write_named_sync,
     write_typed,
@@ -94,6 +108,8 @@ __all__ = [
     "parse_device",
     "poll",
     "poll_sync",
+    "read_bits",
+    "read_bits_sync",
     "read_dwords",
     "read_dwords_sync",
     "read_named",
@@ -104,6 +120,8 @@ __all__ = [
     "read_words_sync",
     "write_bit_in_word",
     "write_bit_in_word_sync",
+    "write_bits",
+    "write_bits_sync",
     "write_named",
     "write_named_sync",
     "write_typed",

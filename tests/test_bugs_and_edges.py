@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 
 from slmp.constants import FrameType, PLCSeries, SlmpProfileClass
 from slmp.core import (
@@ -32,7 +32,7 @@ class TestBugsAndEdges(unittest.TestCase):
             SlmpTarget(module_io="INVALID_KEYWORD")
 
     def test_recommend_profile_model_code_iqr(self) -> None:
-        """Model code in 0x4800–0x4FFF range → iQ-R."""
+                """Model code in 0x4800-0x4FFF range -> iQ-R."""
         info = TypeNameInfo(raw=b"", model="R04CPU", model_code=0x4801)
         rec = recommend_profile(info)
         self.assertEqual(rec.frame_type, FrameType.FRAME_4E)
@@ -41,7 +41,7 @@ class TestBugsAndEdges(unittest.TestCase):
         self.assertTrue(rec.is_confident)
 
     def test_recommend_profile_model_code_legacy(self) -> None:
-        """Model code in legacy range → Q/L."""
+                """Model code in legacy range -> Q/L."""
         info = TypeNameInfo(raw=b"", model="Q06UDVCPU", model_code=0x0050)
         rec = recommend_profile(info)
         self.assertEqual(rec.frame_type, FrameType.FRAME_3E)
@@ -50,7 +50,7 @@ class TestBugsAndEdges(unittest.TestCase):
         self.assertTrue(rec.is_confident)
 
     def test_recommend_profile_model_name_r_prefix(self) -> None:
-        """R-prefix model name (no code) → iQ-R."""
+                """R-prefix model name (no code) -> iQ-R."""
         info = TypeNameInfo(raw=b"", model="R08CPU", model_code=None)
         rec = recommend_profile(info)
         self.assertEqual(rec.profile_class, SlmpProfileClass.MODERN_IQR)
@@ -59,23 +59,23 @@ class TestBugsAndEdges(unittest.TestCase):
         """RD prefix is excluded from the R-prefix iQ-R rule."""
         info = TypeNameInfo(raw=b"", model="RD75P4", model_code=None)
         rec = recommend_profile(info)
-        # RD does not match iQ-R prefix rule → falls through to unknown
+        # RD does not match the iQ-R prefix rule, so it falls through to unknown.
         self.assertEqual(rec.profile_class, SlmpProfileClass.UNKNOWN)
 
     def test_recommend_profile_model_name_q_prefix(self) -> None:
-        """Q-prefix model name → Q/L legacy."""
+                """Q-prefix model name -> Q/L legacy."""
         info = TypeNameInfo(raw=b"", model="Q06UDVCPU", model_code=None)
         rec = recommend_profile(info)
         self.assertEqual(rec.profile_class, SlmpProfileClass.LEGACY_QL)
 
     def test_recommend_profile_model_name_fx(self) -> None:
-        """FX-prefix model name → Q/L legacy."""
+                """FX-prefix model name -> Q/L legacy."""
         info = TypeNameInfo(raw=b"", model="FX5UCPU", model_code=None)
         rec = recommend_profile(info)
         self.assertEqual(rec.profile_class, SlmpProfileClass.LEGACY_QL)
 
     def test_recommend_profile_unknown(self) -> None:
-        """Unrecognised model → Unknown / not confident."""
+                """Unrecognised model -> Unknown / not confident."""
         info = TypeNameInfo(raw=b"", model="UNKNOWNCPU", model_code=None)
         rec = recommend_profile(info)
         self.assertEqual(rec.profile_class, SlmpProfileClass.UNKNOWN)
@@ -90,3 +90,10 @@ class TestBugsAndEdges(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+
+
+
+

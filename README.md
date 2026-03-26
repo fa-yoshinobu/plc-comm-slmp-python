@@ -8,105 +8,181 @@
 
 ![Illustration](docsrc/assets/melsec.png)
 
-A high-performance, strictly typed Python client library for Mitsubishi SLMP (Seamless Message Protocol). Supporting Binary 3E and 4E frames for iQ-R, iQ-F, and Q series PLCs.
+High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E frames.
 
-## Key Features
+This repository now treats the high-level helper layer as the recommended user surface:
 
-- **Strict Protocol Compliance**: Based on official Mitsubishi Electric English specifications.
-- **Binary Support**: Efficient Binary 3E/4E frame communication.
-- **Modern Python**: Fully type-hinted (Mypy-ready) and asynchronous-friendly.
-- **CI-Ready**: Built-in quality checks and single-file CLI tool distribution.
+- `open_and_connect`
+- `open_and_connect_queued`
+- `read_typed` / `write_typed`
+- `read_words` / `read_dwords`
+- `write_bit_in_word`
+- `read_named` / `write_named`
+- `poll`
 
-## Quick Start
+Low-level protocol methods still exist for maintainers and validation work, but they are not the primary user path.
 
-### Installation
+## Installation
+
 ```bash
 pip install slmp-connect-python
 ```
 
-### Quick Command (Copy/Paste)
+## Quick Start
 
-```bash
-python scripts/slmp_connection_check.py --host 192.168.250.100 --series auto --frame-type auto
-```
+Recommended async path:
 
-Optional UDP check (port 1027):
-
-```bash
-python scripts/slmp_connection_check.py --host 192.168.250.100 --port 1027 --transport udp --series auto --frame-type auto
-```
-
-### Basic Usage
 ```python
-from slmp.client import SlmpClient
+import asyncio
 
-# Connect to a MELSEC iQ-R PLC
-client = SlmpClient("192.168.250.100", 1025)
+from slmp import open_and_connect, read_named, write_typed
 
-# Read D100 - D104 (5 words)
-values = client.read_devices("D100", 5)
-print(f"Values: {values}")
 
-# Write to M0
-client.write_devices("M0", [True], bit_unit=True)
+async def main() -> None:
+    async with await open_and_connect("192.168.250.100", port=1025) as client:
+        before = await read_named(client, ["D100", "D200:F", "D50.3"])
+        print("before:", before)
+
+        await write_typed(client, "D100", "U", 42)
+
+        after = await read_named(client, ["D100", "D200:F", "D50.3"])
+        print("after:", after)
+
+
+asyncio.run(main())
 ```
 
-## Device Support (PLC Device Codes)
+Recommended sync path when you already know the profile:
 
-This list reflects device codes accepted by the parser and typed APIs. Actual availability depends on PLC model, firmware, and access settings.
+```python
+from slmp import SlmpClient, read_named_sync, write_typed_sync
 
-| Group | Codes | Status | Notes |
-| --- | --- | --- | --- |
-| Bit devices (direct) | SM, X, Y, M, L, F, V, B, TS, TC, STS, STC, CS, CC, SB, DX, DY | Supported | `X/Y/B/SB/DX/DY` use hexadecimal numbering. |
-| Word devices (direct) | SD, D, W, SW, TN, STN, CN, Z, LZ, R, ZR, RD | Supported | `W/SW` use hexadecimal numbering. |
-| Long timer / counter families | LTS, LTC, LTN, LSTS, LSTC, LSTN, LCS, LCC, LCN | Supported (direct) | Some PLCs reject direct access; prefer long-timer helpers when available. |
-| Extended Specification qualified devices | `Uxx\\Gyy`, `Uxx\\HGyy` | Supported via Extended Specification APIs | Direct `G/HG` access is not supported. |
-| Link direct devices | `Jx\\device` (e.g. `J2\\SW10`, `J1\\X10`) | Supported via Extended Specification APIs | CC-Link IE network device access. Use `read_devices_ext` / `write_devices_ext`. |
+with SlmpClient("192.168.250.100", port=1025, plc_series="iqr") as client:
+    print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
+    write_typed_sync(client, "D100", "U", 42)
+```
 
-## Verified Hardware
+## High-Level API Guide
 
-The following hardware models have been physically tested and verified for compatibility:
+### Single typed values
 
-- **MELSEC iQ-R Series**: R120PCPU, R08PCPU, R08CPU, R00CPU, RJ71EN71
-- **MELSEC iQ-L Series**: L16HCPU
-- **MELSEC iQ-F Series**: FX5U-32MR/DS, FX5UC-32MT/D
-- **MELSEC-Q Series**: 
-  - Q06UDVCPU (Serial No. prefix: 17062)
-  - Q26UDEHCPU (Serial No. prefix: 20081)
-  - QJ71E71-100 (Serial No. prefix: 24071)
-- **MELSEC-L Series**: L26CPU-BT (Serial No. prefix: 11112)
-- **Keyence KV Series** (MC Protocol): KV-7500, KV-XLE02
+```python
+from slmp import read_typed, write_typed
 
-## Use Cases
+temperature = await read_typed(client, "D200", "F")
+counter = await read_typed(client, "D300", "L")
+await write_typed(client, "D100", "U", 1234)
+```
 
-- Quick diagnostics scripts for field engineers (SM/D reads, profile auto-detect).
-- Data collection pipelines (periodic reads, export to CSV/DB).
-- Compatibility probing and reporting across mixed PLC fleets.
+### Mixed reads with one call
+
+```python
+from slmp import read_named
+
+snapshot = await read_named(
+    client,
+    [
+        "D100",
+        "D200:F",
+        "D300:L",
+        "D50.3",
+    ],
+)
+```
+
+Use `.bit` notation only with word devices such as `D50.3`.
+Address bit devices directly as `M1000`, `M1001`, ... rather than `M1000.0`.
+
+### Mixed writes with one call
+
+```python
+from slmp import write_named
+
+await write_named(
+    client,
+    {
+        "D100": 42,
+        "D200:F": 3.14,
+        "D300:L": -200,
+        "D50.3": True,
+    },
+)
+```
+
+### Chunked word and dword reads
+
+```python
+from slmp import read_words, read_dwords
+
+words = await read_words(client, "D0", 1000, allow_split=True)
+dwords = await read_dwords(client, "D200", 120, allow_split=True)
+```
+
+### Polling
+
+```python
+from slmp import poll
+
+async for snapshot in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
+    print(snapshot)
+```
+
+### Shared connection for multiple coroutines
+
+```python
+from slmp import open_and_connect_queued
+
+async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+    first = await read_named(client, ["D100", "D200:F"])
+    second = await read_named(client, ["D300", "D50.3"])
+```
+
+## Sample Programs
+
+The buildable sample files with the richest high-level examples are:
+
+- [`samples/high_level_sync.py`](samples/high_level_sync.py)
+  - typed reads and writes
+  - chunked word and dword reads
+  - bit-in-word writes
+  - mixed `read_named_sync` / `write_named_sync`
+  - polling
+- [`samples/high_level_async.py`](samples/high_level_async.py)
+  - `open_and_connect`
+  - typed reads and writes
+  - chunked reads
+  - `read_named` / `write_named`
+  - polling
+  - shared queued connection example
+
+Run them from the repository root:
+
+```bash
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
+python samples/high_level_async.py --host 192.168.250.100 --port 1025
+```
+
+More sample commands are listed in [docsrc/user/SAMPLES.md](docsrc/user/SAMPLES.md).
 
 ## Documentation
 
-The project follows a modern hierarchical documentation policy:
+User-facing documents:
 
-- [**User Guide**](docsrc/user/USER_GUIDE.md): Installation, connection setup, and API examples.
-- [**Device Reference**](docsrc/user/BIT_DEVICE_ACCESS_TABLE.md): Bit/Word device access tables.
-- [**QA Reports**](docsrc/validation/reports/): Formal evidence of communication with real PLC hardware.
-- [**PLC Compatibility Matrix**](docsrc/validation/reports/PLC_COMPATIBILITY.md): Verified SLMP command support across Mitsubishi PLC families.
-- [**Developer Docs**](docsrc/maintainer/PROTOCOL_SPEC.md): Internal architecture and protocol details.
+- [User Guide](docsrc/user/USER_GUIDE.md)
+- [Samples](docsrc/user/SAMPLES.md)
+- [Error Codes](docsrc/user/ERROR_CODES.md)
 
-## Development & CI
+Maintainer and validation material remains in `docsrc/maintainer/` and `docsrc/validation/`.
 
-This project enforces strict quality standards via `run_ci.bat`.
+## Development
 
-### Quality Checks
-- **Linting & Formatting**: [Ruff](https://ruff.rs/)
-- **Type Checking**: [Mypy](http://mypy-lang.org/)
-- **Unit Testing**: Python `unittest`
-
-### Local CI Run
 ```bash
 run_ci.bat
+build_docs.bat
+release_check.bat
 ```
-This script validates the code and builds a standalone CLI tool in the `publish/` directory.
+
+`run_ci.bat` validates the package and also builds the single-file CLI tool in `publish/`.
 
 ## License
 

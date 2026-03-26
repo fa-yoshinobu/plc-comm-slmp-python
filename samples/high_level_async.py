@@ -29,8 +29,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     AsyncSlmpClient,
-    QueuedAsyncSlmpClient,
     open_and_connect,
+    open_and_connect_queued,
     poll,
     read_dwords,
     read_named,
@@ -63,12 +63,6 @@ def parse_args() -> argparse.Namespace:
             "  5000  GX Works3/GX Works2 simulator\n"
             "  5007  Q/L series built-in Ethernet"
         ),
-    )
-    p.add_argument(
-        "--series",
-        choices=("iqr", "ql"),
-        default="iqr",
-        help="PLC device-encoding family (default: iqr)",
     )
     p.add_argument(
         "--timeout",
@@ -239,19 +233,16 @@ async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
 
 async def demo_queued_client(host: str, port: int) -> None:
     """
-    QueuedAsyncSlmpClient - thread-safe wrapper that serializes all async calls.
+    open_and_connect_queued - thread-safe wrapper for shared async use.
 
-    Wraps AsyncSlmpClient with an asyncio.Lock so that multiple coroutines
-    (e.g. a background poller + a foreground writer) can share one TCP
-    connection without interleaving their protocol frames.
+    Returns a queued client that serializes all helper calls so that multiple
+    coroutines (e.g. a background poller + a foreground writer) can share one
+    TCP connection without interleaving protocol frames.
 
     Use case: any asyncio application where more than one task needs to
               issue SLMP requests on the same connection simultaneously.
     """
-    inner = AsyncSlmpClient(host, port)
-    queued = QueuedAsyncSlmpClient(inner)
-
-    async with queued:
+    async with await open_and_connect_queued(host, port=port) as queued:
         # Launch two concurrent tasks that both use the shared connection.
         async def task_a() -> None:
             v = await read_typed(queued, "D100", "U")  # type: ignore[arg-type]
@@ -274,8 +265,7 @@ async def run(args: argparse.Namespace) -> None:
     await demo_open_and_connect(args.host, args.port, args.timeout)
 
     # 2-5. high-level helpers - connect once, run all demos
-    client = AsyncSlmpClient(args.host, args.port, timeout=args.timeout)
-    async with client:
+    async with await open_and_connect(args.host, port=args.port, timeout=args.timeout) as client:
         await demo_typed_rw(client)
         await demo_chunked_reads(client)
         await demo_bit_in_word(client)

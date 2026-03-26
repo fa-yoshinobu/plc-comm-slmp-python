@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
 - **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
+- **Unstable CLI auto profile flags**: Removed `--series auto` and `--frame-type auto` from the current CLI entry points, including `connection-check`, `other-station-check`, `compatibility-probe`, and `ExtendedDevice-device-recheck`.
 
 ### Added
 - **`open_and_connect_queued`**: Added a queued high-level connection helper for multi-coroutine shared use.
@@ -15,20 +16,26 @@ All notable changes to this project will be documented in this file.
 - **3E Frame Support**: Formally enabled and documented support for SLMP 3E frames (binary).
 - **Module I/O Keywords**: Added `ModuleIONo` enum and keyword support (e.g. `OWN_STATION`, `MULTIPLE_CPU_1`) in `SLMPTarget`.
 - **Comprehensive Device Coverage**: Ported all device-related APIs (random, block, monitor, memory, label, remote) to the async client.
-- **`node_search` (sync)**: Added `SlmpClient.node_search()`  EUDP broadcast node discovery, matching the existing async implementation.
-- **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()`  EUDP fire-and-forget IP address configuration (command 0x0E31).
-- **`resolve_profile` (sync + async)**: Added `SlmpClient.resolve_profile()` and `AsyncSlmpClient.resolve_profile()`  Eautomatically probes four frame/series combinations and returns an `SlmpProfileRecommendation`.
-- **`SlmpProfileClass` enum**: `MODERN_IQR`, `LEGACY_QL`, `UNKNOWN`  Eclassifies the detected PLC profile.
+- **`node_search` (sync)**: Added `SlmpClient.node_search()` for UDP broadcast node discovery, matching the existing async implementation.
+- **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` for UDP fire-and-forget IP address configuration (command 0x0E31).
+- **`resolve_profile` (sync + async)**: Added `SlmpClient.resolve_profile()` and `AsyncSlmpClient.resolve_profile()` that automatically probe four frame/series combinations and return an `SlmpProfileRecommendation`.
+- **`SlmpProfileClass` enum**: `MODERN_IQR`, `LEGACY_QL`, and `UNKNOWN` classify the detected PLC profile.
 - **`SlmpProfileRecommendation` dataclass**: Frozen dataclass returned by `resolve_profile()` and `recommend_profile()`, carrying `frame_type`, `plc_series`, `profile_class`, and `is_confident`.
 - **`recommend_profile(info)`**: Heuristic function that maps a `TypeNameInfo` (model code range or name prefix) to an `SlmpProfileRecommendation`.
 - **`open_and_connect` improvement**: Now delegates to `resolve_profile()` internally for automatic frame/series detection.
 
 ### Changed
+- **User-facing docs**: Reoriented the README, user guide, and sample guide around the high-level helper APIs only.
+- **High-level samples**: Expanded the recommended sample documentation and updated `high_level_async.py` to use `open_and_connect` / `open_and_connect_queued` in the main flow.
 - **High-level named reads**: `read_named` / `read_named_sync` now compile the address list once and batch word/DWord reads via `read_random` when possible.
 - **Polling**: `poll` / `poll_sync` now reuse the compiled named-read plan across iterations instead of reparsing and reissuing per-address reads.
 - **TCP receive path**: Reduced intermediate allocations in synchronous TCP frame reads by switching the hot path to `recv_into` and single-frame assembly.
+- **Docstrings**: Expanded high-level helper docstrings so generated API docs describe the recommended connection, typed reads/writes, named snapshots, polling, and queued usage paths more clearly.
 - **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
 - **Documentation**: Added GX Simulator 3 connection guide and updated User Guide for new features.
+
+### Added
+- **`release_check.bat`**: Added a release-preflight batch entry point that runs CI and docs generation together.
 
 ### Fixed
 - **Qualified device DM override**: Explicit `direct_memory_specification` in `ExtensionSpec` is now respected when passing qualified device strings such as `U3E0\G10`; previously the auto-detected DM for `G` (0xF8) or `HG` (0xFA) devices would unconditionally override the caller's value. Auto-detection now only applies when the caller leaves DM at the default (`DIRECT_MEMORY_NORMAL = 0x00`).
@@ -135,4 +142,8 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
+
+
+
+
 

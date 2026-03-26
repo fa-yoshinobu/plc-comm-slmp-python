@@ -861,74 +861,24 @@ class TestCli(unittest.TestCase):
             patch.object(cli, "SlmpClient", ConnectionCheckClient),
             patch.object(cli, "_load_compatibility_policy", return_value=None),
         ):
-            rc_auto = cli.connection_check_main(["--host", "192.168.250.100", "--series", "ql"])
+            rc_default = cli.connection_check_main(["--host", "192.168.250.100", "--series", "ql"])
             rc_explicit = cli.connection_check_main(
                 ["--host", "192.168.250.100", "--series", "ql", "--frame-type", "4e"]
             )
 
-        self.assertEqual(rc_auto, 0)
+        self.assertEqual(rc_default, 0)
         self.assertEqual(rc_explicit, 0)
         self.assertEqual(ConnectionCheckClient.init_calls, [("3e", "ql"), ("4e", "ql")])
         self.assertEqual(ConnectionCheckClient.read_calls, [("SM400", 1, True, "ql"), ("SM400", 1, True, "ql")])
         self.assertEqual(ConnectionCheckClient.type_name_calls, 1)
 
-    def test_connection_check_main_auto_series_uses_smoke_probe(self) -> None:
-        """Test test_connection_check_main_auto_series_uses_smoke_probe."""
+    def test_connection_check_main_rejects_auto_series(self) -> None:
+        """Test test_connection_check_main_rejects_auto_series."""
 
-        class AutoSeriesConnectionCheckClient(SlmpClient):
-            init_calls: list[tuple[str, str]] = []
-            read_calls: list[tuple[str, int, bool, str | None]] = []
+        with self.assertRaises(SystemExit) as cm:
+            cli.connection_check_main(["--host", "192.168.250.100", "--series", "auto"])
 
-            def __init__(
-                self,
-                host: str,
-                port: int = 5000,
-                *,
-                transport: str = "tcp",
-                timeout: float = 3.0,
-                plc_series: PLCSeries | str = PLCSeries.QL,
-                frame_type: cli.FrameType | str = cli.FrameType.FRAME_4E,
-                default_target: SlmpTarget | None = None,
-                monitoring_timer: int = 0x0010,
-                raise_on_error: bool = True,
-                trace_hook=None,
-            ) -> None:
-                super().__init__(
-                    host,
-                    port,
-                    transport=transport,
-                    timeout=timeout,
-                    plc_series=plc_series,
-                    frame_type=frame_type,
-                    default_target=default_target,
-                    monitoring_timer=monitoring_timer,
-                    raise_on_error=raise_on_error,
-                    trace_hook=trace_hook,
-                )
-                type(self).init_calls.append((self.frame_type.value, self.plc_series.value))
-
-            def connect(self) -> None:
-                return None
-
-            def close(self) -> None:
-                return None
-
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
-                return [True]
-
-        with (
-            patch.object(cli, "SlmpClient", AutoSeriesConnectionCheckClient),
-            patch.object(cli, "_load_compatibility_policy", return_value=None),
-        ):
-            rc = cli.connection_check_main(["--host", "192.168.250.100", "--series", "auto"])
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(AutoSeriesConnectionCheckClient.init_calls, [("3e", "ql")])
-        self.assertEqual(AutoSeriesConnectionCheckClient.read_calls, [("SM400", 1, True, "ql")])
+        self.assertEqual(cm.exception.code, 2)
 
     def test_connection_check_main_uses_compatibility_policy_order(self) -> None:
         """Test test_connection_check_main_uses_compatibility_policy_order."""
@@ -992,9 +942,9 @@ class TestCli(unittest.TestCase):
                         "--host",
                         "192.168.250.100",
                         "--series",
-                        "auto",
+                        "ql",
                         "--frame-type",
-                        "auto",
+                        "4e",
                         "--compatibility-policy",
                         str(policy_path),
                     ]
@@ -1004,106 +954,24 @@ class TestCli(unittest.TestCase):
         self.assertEqual(PolicyConnectionCheckClient.init_calls, [("4e", "ql")])
         self.assertEqual(PolicyConnectionCheckClient.read_calls, [("SM400", 1, True, "ql")])
 
-    def test_other_station_check_main_auto_series_and_frame_uses_route_probe(self) -> None:
-        """Test test_other_station_check_main_auto_series_and_frame_uses_route_probe."""
+    def test_other_station_check_main_rejects_auto_series_and_frame(self) -> None:
+        """Test test_other_station_check_main_rejects_auto_series_and_frame."""
 
-        class OtherStationAutoSeriesClient(SlmpClient):
-            init_calls: list[tuple[str, str]] = []
-            read_calls: list[tuple[str, int, bool, str | None]] = []
-            type_name_calls: list[tuple[str, str]] = []
+        with self.assertRaises(SystemExit) as cm:
+            cli.other_station_check_main(
+                [
+                    "--host",
+                    "192.168.250.100",
+                    "--series",
+                    "auto",
+                    "--frame-type",
+                    "auto",
+                    "--target",
+                    "remote1,0x00,0x01,0x03FF,0x00",
+                ]
+            )
 
-            def __init__(
-                self,
-                host: str,
-                port: int = 5000,
-                *,
-                transport: str = "tcp",
-                timeout: float = 3.0,
-                plc_series: PLCSeries | str = PLCSeries.QL,
-                frame_type: cli.FrameType | str = cli.FrameType.FRAME_4E,
-                default_target: SlmpTarget | None = None,
-                monitoring_timer: int = 0x0010,
-                raise_on_error: bool = True,
-                trace_hook=None,
-            ) -> None:
-                super().__init__(
-                    host,
-                    port,
-                    transport=transport,
-                    timeout=timeout,
-                    plc_series=plc_series,
-                    frame_type=frame_type,
-                    default_target=default_target,
-                    monitoring_timer=monitoring_timer,
-                    raise_on_error=raise_on_error,
-                    trace_hook=trace_hook,
-                )
-                type(self).init_calls.append((self.frame_type.value, self.plc_series.value))
-
-            def connect(self) -> None:
-                return None
-
-            def close(self) -> None:
-                return None
-
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
-                if self.frame_type.value != "4e" or resolved_series != "iqr":
-                    raise RuntimeError("ql route unavailable")
-                return [True]
-
-            def read_type_name(self) -> TypeNameInfo:
-                type(self).type_name_calls.append((self.frame_type.value, self.plc_series.value))
-                return TypeNameInfo(raw=b"\x00" * 18, model="R08CPU", model_code=0x4801)
-
-        with TemporaryDirectory() as tmp:
-            output = Path(tmp) / "other_station_check_latest.md"
-            with (
-                patch.object(cli, "SlmpClient", OtherStationAutoSeriesClient),
-                patch.object(cli, "_load_compatibility_policy", return_value=None),
-            ):
-                rc = cli.other_station_check_main(
-                    [
-                        "--host",
-                        "192.168.250.100",
-                        "--series",
-                        "auto",
-                        "--frame-type",
-                        "auto",
-                        "--target",
-                        "remote1,0x00,0x01,0x03FF,0x00",
-                        "--output",
-                        str(output),
-                    ]
-                )
-            report = output.read_text(encoding="utf-8")
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(
-            OtherStationAutoSeriesClient.init_calls,
-            [("3e", "ql"), ("4e", "ql"), ("3e", "iqr"), ("4e", "iqr"), ("4e", "iqr")],
-        )
-        self.assertEqual(
-            OtherStationAutoSeriesClient.read_calls,
-            [
-                ("D1000", 1, False, "ql"),
-                ("D1000", 1, False, "ql"),
-                ("D1000", 1, False, "iqr"),
-                ("D1000", 1, False, "iqr"),
-            ],
-        )
-        self.assertEqual(OtherStationAutoSeriesClient.type_name_calls, [("4e", "iqr")])
-        self.assertIn("access_profile=iqr", report)
-        self.assertIn("model=R08CPU", report)
-        self.assertIn("model_code=0x4801 (18433)", report)
-        self.assertIn("detected_family=iQ-R", report)
-        self.assertIn("Resolved frame: 4e", report)
-        self.assertIn("Resolved access profile: iqr", report)
-        self.assertIn("Detected family: iQ-R", report)
-        self.assertNotIn("type_name_error", report)
+        self.assertEqual(cm.exception.code, 2)
 
     def test_other_station_check_main_type_name_failure_is_nonfatal(self) -> None:
         """Test test_other_station_check_main_type_name_failure_is_nonfatal."""
@@ -1167,9 +1035,9 @@ class TestCli(unittest.TestCase):
                         "--host",
                         "192.168.250.100",
                         "--series",
-                        "auto",
+                        "ql",
                         "--frame-type",
-                        "auto",
+                        "3e",
                         "--target",
                         "SELF",
                         "--output",
@@ -1234,9 +1102,9 @@ class TestCli(unittest.TestCase):
                         "--host",
                         "192.168.250.100",
                         "--series",
-                        "auto",
+                        "ql",
                         "--frame-type",
-                        "auto",
+                        "3e",
                         "--target",
                         "NW1-ST1",
                         "--output",
@@ -1316,9 +1184,9 @@ class TestCli(unittest.TestCase):
                         "--host",
                         "192.168.250.100",
                         "--series",
-                        "auto",
+                        "ql",
                         "--frame-type",
-                        "auto",
+                        "4e",
                         "--compatibility-policy",
                         str(policy_path),
                         "--target",
@@ -1420,6 +1288,23 @@ class TestCli(unittest.TestCase):
         self.assertEqual(payload["results"][0]["detected_model"], "Q26UDHCPU, Q26UDEHCPU")
         self.assertIn("3e/ql 0101 Read Type Name", report)
         self.assertIn("3e/ql 0406 Block Read", report)
+
+    def test_compatibility_probe_main_rejects_auto_series_and_frame(self) -> None:
+        """Test test_compatibility_probe_main_rejects_auto_series_and_frame."""
+
+        with self.assertRaises(SystemExit) as cm:
+            cli.compatibility_probe_main(
+                [
+                    "--host",
+                    "192.168.250.100",
+                    "--series",
+                    "auto",
+                    "--frame-type",
+                    "auto",
+                ]
+            )
+
+        self.assertEqual(cm.exception.code, 2)
 
     def test_compatibility_matrix_render_main_renders_output(self) -> None:
         """Test test_compatibility_matrix_render_main_renders_output."""

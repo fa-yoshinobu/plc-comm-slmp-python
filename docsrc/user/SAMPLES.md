@@ -1,81 +1,67 @@
-# Samples
+# High-Level Samples
 
-This page summarizes the runnable examples that ship with the repository.
+The recommended sample entry points are the two buildable high-level examples in `samples/`.
 
-The canonical source files live under the repository `samples/` directory in a
-source checkout.
+## `samples/high_level_sync.py`
 
-## How To Run
-
-Run examples from the repository root:
+Run:
 
 ```powershell
-python samples/01_read_type_name.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
 ```
 
-## Safety
+What it demonstrates:
 
-- all examples in this set are read-only
-- label examples depend on PLC-side label configuration and `Access from External Device`
+- `read_typed_sync`
+- `write_typed_sync`
+- `read_words_sync`
+- `read_dwords_sync`
+- `write_bit_in_word_sync`
+- `read_named_sync`
+- `write_named_sync`
+- `poll_sync`
 
-## Example List
+Example scenarios inside the sample:
 
-### 01. Basic connection and type name
+- read one `ushort`, one `short`, one `float32`, and one signed 32-bit value
+- write a typed recipe value
+- read a large contiguous range with `allow_split=True`
+- set and clear one bit inside a control word
+- read a mixed snapshot such as `["D100", "D200:F", "D202:L", "D50.3"]`
+- poll the same snapshot repeatedly
+
+## `samples/high_level_async.py`
+
+Run:
 
 ```powershell
-python samples/01_read_type_name.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
+python samples/high_level_async.py --host 192.168.250.100 --port 1025
 ```
 
-### 02. Normal device reads
+What it demonstrates:
 
-```powershell
-python samples/02_device_reads.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --word-device D100 --word-points 2 --bit-device M100 --bit-points 5
-```
+- `open_and_connect`
+- `read_typed`
+- `write_typed`
+- `read_words`
+- `read_dwords`
+- `write_bit_in_word`
+- `read_named`
+- `write_named`
+- `poll`
+- queued shared connection usage
 
-### 03. Random and block reads
+Example scenarios inside the sample:
 
-```powershell
-python samples/03_random_and_block.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
-```
+- connect with automatic profile detection
+- read and write typed scalar values
+- read large arrays with request splitting
+- update one flag inside a word
+- read and write mixed logical values by address string
+- poll a snapshot every second
+- share one connection across multiple concurrent tasks
 
-### 05. Explicit target header
+## Notes
 
-```powershell
-python samples/05_target_header.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --network 0x00 --station 0xFF --module-io 0x03FF --multidrop 0x00
-```
-
-### 06. Label reads
-
-```powershell
-python samples/06_label_reads.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --label-random LabelW --label-random LabelB
-```
-
-Array-label example:
-
-```powershell
-python samples/06_label_reads.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --label-array "ArrayLabel[0]:1:4"
-```
-
-!!! note
-    Sample `04` is missing (it was not created).
-
-### 07. 3E / 4E Frame Switching and Trace Hook
-
-This demo shows how to switch frame types and inspect raw frames using a `trace_hook`. You can verify the content of transmitted frames even without a physical PLC.
-
-```powershell
-python samples/07_verify_3e_4e.py 192.168.250.100 1025
-```
-
-### 08. Asynchronous Simultaneous Reading from Multiple PLCs
-
-This demo uses `AsyncSlmpClient` and `asyncio.gather` to simultaneously retrieve data from multiple PLCs.
-
-```powershell
-python samples/08_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
-```
-
-If arguments are omitted, it connects to `127.0.0.1:5000` and `127.0.0.1:5001` (assuming local simulators).
-
-Maintainer-oriented verification wrappers are documented in the source checkout
-under `docsrc/maintainer/`.
+- These two samples are the recommended user path.
+- Older numbered samples remain in the repository for protocol-focused demonstrations, but the user manual now centers on the high-level helper layer.

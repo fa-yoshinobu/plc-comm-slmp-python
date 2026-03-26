@@ -3033,12 +3033,12 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=5000, help="SLMP port (default: 5000)")
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
     parser.add_argument("--timeout", type=float, default=3.0)
-    parser.add_argument("--series", choices=("auto", "ql", "iqr"), default="ql")
+    parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
     parser.add_argument(
         "--frame-type",
-        choices=("auto", "3e", "4e"),
-        default="auto",
-        help="frame type used for the connection check (default: auto; ql -> 3e, iqr -> 4e)",
+        choices=("3e", "4e"),
+        default="3e",
+        help="frame type used for the connection check (default: 3e)",
     )
     parser.add_argument(
         "--compatibility-policy",
@@ -3320,9 +3320,9 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
     parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
     parser.add_argument(
         "--frame-type",
-        choices=("auto", "3e", "4e"),
-        default="auto",
-        help="frame type used for the connection check (default: auto; ql -> 3e, iqr -> 4e)",
+        choices=("3e", "4e"),
+        default="3e",
+        help="frame type used for the connection check (default: 3e)",
     )
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -3762,8 +3762,8 @@ def other_station_check_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=1025, help="SLMP port")
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
     parser.add_argument("--timeout", type=float, default=3.0)
-    parser.add_argument("--series", choices=("auto", "ql", "iqr"), default="iqr")
-    parser.add_argument("--frame-type", choices=("auto", "3e", "4e"), default="auto")
+    parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
+    parser.add_argument("--frame-type", choices=("3e", "4e"), default="4e")
     parser.add_argument(
         "--compatibility-policy",
         help=(f"optional compatibility policy JSON; defaults to {_compatibility_default_policy_output()} when present"),
@@ -4955,8 +4955,8 @@ def compatibility_probe_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=1025)
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
     parser.add_argument("--timeout", type=float, default=3.0)
-    parser.add_argument("--series", choices=("auto", "ql", "iqr"), default="auto")
-    parser.add_argument("--frame-type", choices=("auto", "3e", "4e"), default="auto")
+    parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
+    parser.add_argument("--frame-type", choices=("3e", "4e"), default="3e")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
     parser.add_argument("--network", type=_int_auto, default=0x00)
     parser.add_argument("--station", type=_int_auto, default=0xFF)
@@ -5032,10 +5032,8 @@ def compatibility_probe_main(argv: Sequence[str] | None = None) -> int:
         filename="compatibility_probe_latest.json",
     )
 
-    frame_candidates = (
-        [FrameType(args.frame_type)] if args.frame_type != "auto" else [FrameType.FRAME_3E, FrameType.FRAME_4E]
-    )
-    series_candidates = [PLCSeries(args.series)] if args.series != "auto" else [PLCSeries.QL, PLCSeries.IQR]
+    frame_candidates = [FrameType(args.frame_type)]
+    series_candidates = [PLCSeries(args.series)]
 
     rows: list[tuple[str, str, str]] = []
     result_rows: list[dict[str, object]] = []

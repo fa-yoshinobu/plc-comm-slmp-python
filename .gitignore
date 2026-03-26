@@ -9,6 +9,10 @@ uv.lock
 build/
 dist/
 publish/
+.coverage
+.coverage.*
+htmlcov/
+site/
 internal_docs/*/archive/
 internal_docs/*/frame_dumps*/
 *.pcap

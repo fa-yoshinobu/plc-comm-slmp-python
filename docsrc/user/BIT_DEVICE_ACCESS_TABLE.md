@@ -1,4 +1,4 @@
-# Bit Device Access Table
+﻿# Bit Device Access Table
 
 This note explains how bit-device families such as `M`, `B`, `X`, and `Y` behave across the main read forms used in this project.
 
@@ -40,20 +40,16 @@ The same rule applies to `B`, `X`, and `Y`.
 
 ## Access Mapping
 
-| Family | Operation | Command | API Example | Point Meaning | Returned Value |
+| Family | Operation | Command | High-Level Example | Point Meaning | Returned Value |
 |---|---|---|---|---|---|
-| `M` | bit read | `0401` | `read_devices("M1000", 4, bit_unit=True)` | `4` bits | `[True, False, True, False]` |
-| `M` | word read | `0401` | `read_devices("M1000", 1, bit_unit=False)` | `1` packed 16-bit unit | `[0x0005]` |
-| `M` | block bit read | `0406` | `read_block(bit_blocks=[("M1000", 1)])` | `1` packed 16-bit unit | `[0x0005]` |
-| `B` | bit read | `0401` | `read_devices("B20", 4, bit_unit=True)` | `4` bits | `[True, False, True, False]` |
-| `B` | word read | `0401` | `read_devices("B20", 1, bit_unit=False)` | `1` packed 16-bit unit | `[0x0005]` |
-| `B` | block bit read | `0406` | `read_block(bit_blocks=[("B20", 1)])` | `1` packed 16-bit unit | `[0x0005]` |
-| `X` | bit read | `0401` | `read_devices("X20", 4, bit_unit=True)` | `4` bits | `[True, False, True, False]` |
-| `X` | word read | `0401` | `read_devices("X20", 1, bit_unit=False)` | `1` packed 16-bit unit | `[0x0005]` |
-| `X` | block bit read | `0406` | `read_block(bit_blocks=[("X20", 1)])` | `1` packed 16-bit unit | `[0x0005]` |
-| `Y` | bit read | `0401` | `read_devices("Y20", 4, bit_unit=True)` | `4` bits | `[True, False, True, False]` |
-| `Y` | word read | `0401` | `read_devices("Y20", 1, bit_unit=False)` | `1` packed 16-bit unit | `[0x0005]` |
-| `Y` | block bit read | `0406` | `read_block(bit_blocks=[("Y20", 1)])` | `1` packed 16-bit unit | `[0x0005]` |
+| `M` | bit read | `0401` | `read_named(client, ["M1000", "M1001", "M1002", "M1003"])` | `4` bit devices | `{"M1000": True, ...}` |
+| `M` | packed word read | `0401` | `read_typed(client, "M1000", "U")` | `1` packed 16-bit unit | `0x0005` |
+| `B` | bit read | `0401` | `read_named(client, ["B20", "B21", "B22", "B23"])` | `4` bit devices | `{"B20": True, ...}` |
+| `B` | packed word read | `0401` | `read_typed(client, "B20", "U")` | `1` packed 16-bit unit | `0x0005` |
+| `X` | bit read | `0401` | `read_named(client, ["X20", "X21", "X22", "X23"])` | `4` bit devices | `{"X20": True, ...}` |
+| `X` | packed word read | `0401` | `read_typed(client, "X20", "U")` | `1` packed 16-bit unit | `0x0005` |
+| `Y` | bit read | `0401` | `read_named(client, ["Y20", "Y21", "Y22", "Y23"])` | `4` bit devices | `{"Y20": True, ...}` |
+| `Y` | packed word read | `0401` | `read_typed(client, "Y20", "U")` | `1` packed 16-bit unit | `0x0005` |
 
 ## Practical Interpretation
 
@@ -67,13 +63,10 @@ Instead:
 
 ## Write-Side Reminder
 
-The same packed-unit rule applies to block write:
+The same packed-unit rule applies when you write one word value to a bit-device family:
 
 ```python
-with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_series="iqr") as cli:
-    cli.write_block(
-        bit_blocks=[("M1000", [0x0005])],
-    )
+await write_typed(client, "M1000", "U", 0x0005)
 ```
 
 This writes the packed pattern for `M1000..M1015`.
@@ -92,7 +85,7 @@ Comprehensive list of device codes accepted by the parser. Actual availability d
 
 ### Bit Devices
 
-Accessed via `read_bits()` / `write_bits()`.
+Commonly addressed through `read_named`, `write_named`, `read_typed`, and `write_typed`.
 
 | Symbol | Device Name | Address Base | Notes |
 |--------|-------------|-------------|-------|
@@ -160,10 +153,10 @@ for r in results:
 |--------|-------|---------|
 | `read_long_timer(head_no, points)` | LTN | `list[LongTimerResult]` with `.current_value`, `.set_value`, `.contact` (LTS), `.coil` (LTC) |
 | `read_long_retentive_timer(head_no, points)` | LSTN | `list[LongTimerResult]` for LST |
-| `read_ltc_states(head_no, points)` | LTN ↁELTC coil | `list[bool]` |
-| `read_lts_states(head_no, points)` | LTN ↁELTS contact | `list[bool]` |
-| `read_lstc_states(head_no, points)` | LSTN ↁELSTC coil | `list[bool]` |
-| `read_lsts_states(head_no, points)` | LSTN ↁELSTS contact | `list[bool]` |
+| `read_ltc_states(head_no, points)` | LTN -> LTC coil | `list[bool]` |
+| `read_lts_states(head_no, points)` | LTN -> LTS contact | `list[bool]` |
+| `read_lstc_states(head_no, points)` | LSTN -> LSTC coil | `list[bool]` |
+| `read_lsts_states(head_no, points)` | LSTN -> LSTS contact | `list[bool]` |
 
 > Long timer / retentive timer set values (LT, LST) are not direct device codes and can only be read via these helpers.
 
@@ -231,7 +224,7 @@ By default, requests target the directly connected PLC (own station). To route t
 ```python
 from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
-# Constructor default  Eall requests go to Network 1, Station 1
+# Constructor default: all requests go to Network 1, Station 1
 client = SlmpClient("192.168.250.100", default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
@@ -248,7 +241,7 @@ values = client.read_words("D100", 10, target=target)
 | `module_io` | `0x03FF` | Module I/O No. (`0x03FF` = own station / control CPU) |
 | `multidrop` | `0x00` | Multidrop station No. (`0x00` = no multidrop) |
 
-`ModuleIONo` enum  Eshortcuts for `module_io`:
+`ModuleIONo` enum shortcuts for `module_io`:
 
 | Name | Value | Description |
 |------|-------|-------------|
@@ -274,3 +267,9 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only protocol and testing notes are kept in the source checkout
   under `docsrc/maintainer/`.
+
+
+
+
+
+

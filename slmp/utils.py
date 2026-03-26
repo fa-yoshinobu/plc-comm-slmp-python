@@ -48,30 +48,24 @@ async def open_and_connect(
     port: int = 5000,
     timeout: float = 1.5,
 ) -> AsyncSlmpClient:
-    """Connect to a PLC with automatic frame-type and PLC-series detection.
+    """Open one connection and resolve a stable SLMP profile before use.
 
-    Internally calls :meth:`~slmp.async_client.AsyncSlmpClient.resolve_profile`
-    which tries four frame/series combinations in order:
-    (4E, iQ-R) ↁE(3E, Q/L) ↁE(3E, iQ-R) ↁE(4E, Q/L).
-
-    After a successful detection the client's :attr:`frame_type` and
-    :attr:`plc_series` are set to the detected values and the connection is
-    left open.
+    This helper probes supported frame/profile combinations, keeps the client
+    connected, and returns it ready for high-level calls such as
+    :func:`read_typed`, :func:`read_named`, and :func:`poll`.
 
     Args:
         host: PLC IP address or hostname.
-        port: SLMP port. Defaults to 5000 (GX Works3 / GX Works2 simulator default).
-            Common port values:
+        port: SLMP port number. Typical values are ``1025`` for iQ-R/iQ-F,
+            ``5007`` for Q/L, and ``5000`` for simulator setups.
+        timeout: Per-profile connect timeout in seconds.
 
-            - ``5000``  EGX Works3 / GX Works2 built-in simulator (default here)
-            - ``1025``  EiQ-R / iQ-F series built-in Ethernet SLMP port
-            - ``5007``  EQ/L series built-in Ethernet SLMP port
-
-            Check the PLC or simulator network settings when the default does not work.
-        timeout: Per-candidate connection timeout in seconds.
+    Returns:
+        A connected :class:`~slmp.async_client.AsyncSlmpClient` with
+        ``frame_type`` and ``plc_series`` already resolved.
 
     Raises:
-        ConnectionError: If no candidate could reach the PLC.
+        ConnectionError: If no supported profile can talk to the PLC.
     """
     from .async_client import AsyncSlmpClient
 
@@ -87,7 +81,11 @@ async def open_and_connect_queued(
     port: int = 5000,
     timeout: float = 1.5,
 ) -> QueuedAsyncSlmpClient:
-    """Connect to a PLC and return a queued wrapper for shared use."""
+    """Open one connection and wrap it in a queued high-level client.
+
+    This is the recommended entry point when multiple coroutines share one PLC
+    connection, for example a poller and one or more writers.
+    """
     return QueuedAsyncSlmpClient(await open_and_connect(host, port=port, timeout=timeout))
 
 
@@ -101,22 +99,22 @@ async def read_typed(
     device: str | DeviceRef,
     dtype: str,
 ) -> int | float:
-    """Read one device value and convert it to the specified Python type.
+    """Read one logical value and convert it to a Python scalar.
 
     Args:
-        client: Connected AsyncSlmpClient.
-        device: Device address string or DeviceRef.
-        dtype: Type code  E
-            "U" unsigned 16-bit int,
-            "S" signed 16-bit int,
-            "D" unsigned 32-bit int,
-            "L" signed 32-bit int,
-            "F" float32.
+        client: Connected high-level or raw async SLMP client.
+        device: Starting device address as a string such as ``"D100"`` or as
+            a parsed :class:`DeviceRef`.
+        dtype: Application type code. Supported values are ``"BIT"``,
+            ``"U"``, ``"S"``, ``"D"``, ``"L"``, and ``"F"``.
 
     Returns:
-        Converted value as int or float.
+        ``bool`` for ``BIT``, otherwise ``int`` or ``float``.
     """
     key = dtype.upper()
+    if key == "BIT":
+        values = await client.read_devices(device, 1, bit_unit=True)
+        return bool(values[0])
     if key in ("D", "L", "F"):
         words = await client.read_devices(device, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
@@ -139,15 +137,18 @@ async def write_typed(
     dtype: str,
     value: int | float,
 ) -> None:
-    """Write one device value using the specified type format.
+    """Write one logical value using the requested application type.
 
     Args:
-        client: Connected AsyncSlmpClient.
-        device: Device address string or DeviceRef.
-        dtype: Type code  Esame as :func:`read_typed`.
-        value: Value to write.
+        client: Connected high-level or raw async SLMP client.
+        device: Starting device address.
+        dtype: Type code accepted by :func:`read_typed`.
+        value: Application value to encode and write.
     """
     key = dtype.upper()
+    if key == "BIT":
+        await client.write_devices(device, [bool(value)], bit_unit=True)
+        return
     if key == "F":
         raw = struct.pack("<f", float(value))
     elif key == "L":
@@ -171,17 +172,11 @@ def read_typed_sync(
     device: str | DeviceRef,
     dtype: str,
 ) -> int | float:
-    """Synchronous version of :func:`read_typed`.
-
-    Args:
-        client: Connected SlmpClient.
-        device: Device address string or DeviceRef.
-        dtype: Type code  E"U", "S", "D", "L", "F".
-
-    Returns:
-        Converted value as int or float.
-    """
+    """Synchronously read one logical value as a Python scalar."""
     key = dtype.upper()
+    if key == "BIT":
+        values = client.read_devices(device, 1, bit_unit=True)
+        return bool(values[0])
     if key in ("D", "L", "F"):
         words = client.read_devices(device, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
@@ -204,15 +199,11 @@ def write_typed_sync(
     dtype: str,
     value: int | float,
 ) -> None:
-    """Synchronous version of :func:`write_typed`.
-
-    Args:
-        client: Connected SlmpClient.
-        device: Device address string or DeviceRef.
-        dtype: Type code  E"U", "S", "D", "L", "F".
-        value: Value to write.
-    """
+    """Synchronously write one logical value using the requested type."""
     key = dtype.upper()
+    if key == "BIT":
+        client.write_devices(device, [bool(value)], bit_unit=True)
+        return
     if key == "F":
         raw = struct.pack("<f", float(value))
     elif key == "L":
@@ -237,13 +228,11 @@ async def write_bit_in_word(
     bit_index: int,
     value: bool,
 ) -> None:
-    """Set or clear a single bit within a word device (read-modify-write).
+    """Set or clear one bit inside one word device.
 
-    Args:
-        client: Connected AsyncSlmpClient.
-        device: Word device address.
-        bit_index: Bit position within the word (0 E5).
-        value: New bit state.
+    This helper is only for word devices such as ``D50``. Direct bit devices
+    such as ``M1000`` should be written with :func:`write_typed` using
+    ``"BIT"``.
     """
     if not 0 <= bit_index <= 15:
         raise ValueError(f"bit_index must be 0-15, got {bit_index}")
@@ -262,14 +251,7 @@ def write_bit_in_word_sync(
     bit_index: int,
     value: bool,
 ) -> None:
-    """Synchronous version of :func:`write_bit_in_word`.
-
-    Args:
-        client: Connected SlmpClient.
-        device: Word device address.
-        bit_index: Bit position within the word (0 E5).
-        value: New bit state.
-    """
+    """Synchronously set or clear one bit inside one word device."""
     if not 0 <= bit_index <= 15:
         raise ValueError(f"bit_index must be 0-15, got {bit_index}")
     words = client.read_devices(device, 1, bit_unit=False)
@@ -281,6 +263,42 @@ def write_bit_in_word_sync(
     client.write_devices(device, [current & 0xFFFF], bit_unit=False)
 
 
+async def read_bits(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[bool]:
+    """Read a contiguous bit-device range as booleans."""
+    return [bool(v) for v in await client.read_devices(device, count, bit_unit=True)]
+
+
+def read_bits_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[bool]:
+    """Synchronously read a contiguous bit-device range as booleans."""
+    return [bool(v) for v in client.read_devices(device, count, bit_unit=True)]
+
+
+async def write_bits(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    values: list[bool],
+) -> None:
+    """Write a contiguous bit-device range from booleans."""
+    await client.write_devices(device, [bool(v) for v in values], bit_unit=True)
+
+
+def write_bits_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    values: list[bool],
+) -> None:
+    """Synchronously write a contiguous bit-device range from booleans."""
+    client.write_devices(device, [bool(v) for v in values], bit_unit=True)
+
+
 # ---------------------------------------------------------------------------
 # Named-device read  (async + sync)
 # ---------------------------------------------------------------------------
@@ -290,23 +308,19 @@ async def read_named(
     client: AsyncSlmpClient,
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
-    """Read multiple devices by address string and return results as a dict.
-
-    Address format examples:
-
-    - ``"D100"``  Eunsigned 16-bit int
-    - ``"D100:F"``  Efloat32
-    - ``"D100:S"``  Esigned 16-bit int
-    - ``"D100:D"``  Eunsigned 32-bit int
-    - ``"D100:L"``  Esigned 32-bit int
-    - ``"D100.3"``  Ebit 3 within word (bool)
+    """Read a mixed logical snapshot by address string.
 
     Args:
-        client: Connected AsyncSlmpClient.
-        addresses: List of address strings.
+        client: Connected async SLMP client.
+        addresses: Address list such as ``"D100"``, ``"D200:F"``,
+            ``"D300:L"``, ``"D50.3"``, or direct bit devices like ``"M1000"``.
 
     Returns:
-        Dictionary mapping each address string to its value.
+        A dictionary keyed by the original address strings.
+
+    Notes:
+        The address list is compiled once, then grouped into random reads where
+        possible. Use ``.bit`` notation only with word devices.
     """
     plan = _compile_read_plan(addresses)
     return await _read_named_with_plan(client, plan)
@@ -316,15 +330,7 @@ def read_named_sync(
     client: SlmpClient,
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
-    """Synchronous version of :func:`read_named`.
-
-    Args:
-        client: Connected SlmpClient.
-        addresses: List of address strings (same format as :func:`read_named`).
-
-    Returns:
-        Dictionary mapping each address string to its value.
-    """
+    """Synchronously read a mixed logical snapshot by address string."""
     plan = _compile_read_plan(addresses)
     return _read_named_with_plan_sync(client, plan)
 
@@ -338,55 +344,34 @@ async def write_named(
     client: AsyncSlmpClient,
     updates: dict[str, int | float | bool],
 ) -> None:
-    """Write multiple devices by address string.
+    """Write a mixed logical snapshot by address string.
 
-    Address format is the same as :func:`read_named`.  Values are written
-    one device at a time in iteration order.
-
-    Args:
-        client: Connected AsyncSlmpClient.
-        updates: Mapping of address string to value.
-
-    Example::
-
-        await write_named(client, {
-            "D100": 42,
-            "D101:F": 3.14,
-            "D0.3": True,
-        })
+    ``D50.3`` updates one bit inside one word. Direct bit devices such as
+    ``M1000`` are normalized to ``"BIT"`` writes.
     """
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
+            _validate_bit_in_word_target(address, parse_device(base))
             await write_bit_in_word(client, base, bit_idx or 0, bool(value))
         else:
-            await write_typed(client, base, dtype or "U", value)
+            device = parse_device(base)
+            await write_typed(client, base, _normalize_dtype_for_device(device, dtype or "U"), value)
 
 
 def write_named_sync(
     client: SlmpClient,
     updates: dict[str, int | float | bool],
 ) -> None:
-    """Synchronous version of :func:`write_named`.
-
-    Args:
-        client: Connected SlmpClient.
-        updates: Mapping of address string to value.
-
-    Example::
-
-        write_named_sync(client, {
-            "D100": 42,
-            "D101:F": 3.14,
-            "D0.3": True,
-        })
-    """
+    """Synchronously write a mixed logical snapshot by address string."""
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
+            _validate_bit_in_word_target(address, parse_device(base))
             write_bit_in_word_sync(client, base, bit_idx or 0, bool(value))
         else:
-            write_typed_sync(client, base, dtype or "U", value)
+            device = parse_device(base)
+            write_typed_sync(client, base, _normalize_dtype_for_device(device, dtype or "U"), value)
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +401,22 @@ def _is_batchable_word_device(device: DeviceRef) -> bool:
     return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
 
 
+def _normalize_dtype_for_device(device: DeviceRef, dtype: str) -> str:
+    code = DEVICE_CODES.get(device.code)
+    if code is not None and code.unit == DeviceUnit.BIT and dtype == "U":
+        return "BIT"
+    return dtype
+
+
+def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
+    code = DEVICE_CODES.get(device.code)
+    if code is None or code.unit != DeviceUnit.WORD:
+        raise ValueError(
+            f"Address '{address}' uses '.bit' notation, which is only valid for word devices. "
+            "Address bit devices directly, for example 'M1000' instead of 'M1000.0'."
+        )
+
+
 def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
@@ -426,9 +427,11 @@ def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
         device = parse_device(base)
+        dtype = _normalize_dtype_for_device(device, dtype)
         batch_kind: str | None = None
 
         if dtype == "BIT_IN_WORD":
+            _validate_bit_in_word_target(address, device)
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
                 if device not in seen_words:
@@ -581,17 +584,9 @@ async def poll(
     addresses: list[str],
     interval: float,
 ) -> AsyncIterator[dict[str, int | float | bool]]:
-    """Yield a snapshot of all devices every *interval* seconds.
+    """Continuously yield mixed snapshots at a fixed interval.
 
-    Args:
-        client: Connected AsyncSlmpClient.
-        addresses: Address strings (same format as :func:`read_named`).
-        interval: Poll interval in seconds.
-
-    Usage::
-
-        async for snapshot in poll(client, ["D100", "D200:F"], interval=1.0):
-            print(snapshot)
+    The address list is compiled once and reused for every cycle.
     """
     plan = _compile_read_plan(addresses)
     while True:
@@ -604,21 +599,7 @@ def poll_sync(
     addresses: list[str],
     interval: float,
 ) -> Iterator[dict[str, int | float | bool]]:
-    """Synchronous version of :func:`poll`.
-
-    Yields a snapshot every *interval* seconds.  Use ``break`` or
-    ``KeyboardInterrupt`` to stop the loop.
-
-    Args:
-        client: Connected SlmpClient.
-        addresses: Address strings (same format as :func:`read_named_sync`).
-        interval: Poll interval in seconds.
-
-    Usage::
-
-        for snapshot in poll_sync(client, ["D100", "D200:F"], interval=1.0):
-            print(snapshot)
-    """
+    """Synchronously yield mixed snapshots at a fixed interval."""
     plan = _compile_read_plan(addresses)
     while True:
         yield _read_named_with_plan_sync(client, plan)
@@ -638,27 +619,10 @@ async def read_words(
     *,
     allow_split: bool = False,
 ) -> list[int]:
-    """Read word devices in one or more SLMP requests.
+    """Read a contiguous word-device range with optional chunk splitting.
 
-    The SLMP protocol limit is 960 words per request.  Chunk boundaries are
-    always aligned to 2-word (DWord) boundaries to prevent Float32 / DWord
-    data tearing across requests.
-
-    Args:
-        client: Connected AsyncSlmpClient.
-        device: Starting device address.
-        count: Total number of words to read.
-        max_per_request: Maximum words per SLMP request (default 960).
-        allow_split: When ``False`` (default), the entire read must fit within
-            a single request; a :exc:`ValueError` is raised if ``count``
-            exceeds ``max_per_request``.  When ``True``, large reads are
-            automatically split across multiple requests.
-
-    Returns:
-        Flat list of word values.
-
-    Raises:
-        ValueError: If ``allow_split=False`` and ``count > max_per_request``.
+    Chunk boundaries stay aligned to 2-word boundaries so 32-bit values are
+    not torn across split requests.
     """
     from .core import DeviceRef, parse_device
 
@@ -698,22 +662,7 @@ async def read_dwords(
     *,
     allow_split: bool = False,
 ) -> list[int]:
-    """Read DWord (32-bit unsigned) values in one or more SLMP requests.
-
-    DWord boundaries are always aligned to prevent data tearing.
-
-    Args:
-        client: Connected AsyncSlmpClient.
-        device: Starting device address.
-        count: Number of DWords to read.
-        max_dwords_per_request: Maximum DWords per request (default 480 = 960 words / 2).
-        allow_split: When ``False`` (default), raises :exc:`ValueError` if
-            ``count`` exceeds ``max_dwords_per_request``.  When ``True``,
-            large reads are split across multiple requests.
-
-    Returns:
-        List of uint32 values (as Python int).
-    """
+    """Read a contiguous DWord range as unsigned 32-bit integers."""
     words = await read_words(
         client,
         device,
@@ -741,20 +690,7 @@ def read_words_sync(
     *,
     allow_split: bool = False,
 ) -> list[int]:
-    """Synchronous version of :func:`read_words`.
-
-    Args:
-        client: Connected SlmpClient.
-        device: Starting device address.
-        count: Total number of words to read.
-        max_per_request: Maximum words per SLMP request (default 960).
-        allow_split: When ``False`` (default), raises :exc:`ValueError` if
-            ``count`` exceeds ``max_per_request``.  When ``True``, large
-            reads are automatically split across multiple requests.
-
-    Returns:
-        Flat list of word values.
-    """
+    """Synchronously read a contiguous word-device range."""
     from .core import DeviceRef, parse_device
 
     effective_max = (max_per_request // 2) * 2
@@ -792,20 +728,7 @@ def read_dwords_sync(
     *,
     allow_split: bool = False,
 ) -> list[int]:
-    """Synchronous version of :func:`read_dwords`.
-
-    Args:
-        client: Connected SlmpClient.
-        device: Starting device address.
-        count: Number of DWords to read.
-        max_dwords_per_request: Maximum DWords per request (default 480).
-        allow_split: When ``False`` (default), raises :exc:`ValueError` if
-            ``count`` exceeds ``max_dwords_per_request``.  When ``True``,
-            large reads are split across multiple requests.
-
-    Returns:
-        List of uint32 values (as Python int).
-    """
+    """Synchronously read a contiguous DWord range."""
     words = read_words_sync(
         client,
         device,
@@ -826,17 +749,11 @@ def read_dwords_sync(
 
 
 class QueuedAsyncSlmpClient:
-    """Wraps :class:`AsyncSlmpClient` and serializes all async calls via a lock.
+    """Serialize all async calls on one shared SLMP connection.
 
-    Useful when multiple coroutines share one SLMP connection (e.g. a
-    background poller and a foreground writer).
-
-    Usage::
-
-        inner = AsyncSlmpClient("192.168.250.100")
-        client = QueuedAsyncSlmpClient(inner)
-        async with client:
-            value = await client.read_devices("D100", 1)
+    The wrapper exposes the same methods as :class:`AsyncSlmpClient`, but every
+    coroutine call is executed under one lock. Use it when one connection is
+    shared by polling, snapshot, and write tasks.
     """
 
     def __init__(self, inner: AsyncSlmpClient) -> None:

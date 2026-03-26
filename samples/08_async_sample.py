@@ -1,4 +1,4 @@
-"""Sample script to demonstrate asynchronous SLMP communication.
+﻿"""Sample script to demonstrate asynchronous SLMP communication.
 
 Key points:
 - AsyncSlmpClient uses asyncio and does not block the event loop while waiting
@@ -6,7 +6,7 @@ Key points:
 - Within a single connection, requests are serialized internally (the client
   holds an asyncio.Lock), so issuing multiple reads on the same client via
   asyncio.gather is safe but not faster per-connection.
-- The real concurrency benefit is reading from MULTIPLE PLCs simultaneously —
+- The real concurrency benefit is reading from MULTIPLE PLCs simultaneously:
   all network round-trips overlap in time.
 """
 
@@ -48,7 +48,7 @@ async def main() -> None:
 
     # --- Read all PLCs concurrently ------------------------------------------
     # Each read_one_plc() call opens its OWN connection.  asyncio.gather lets
-    # all network round-trips overlap in time — this is the async advantage.
+    # all network round-trips overlap in time; this is the async advantage.
     print(f"Reading {len(targets)} PLC(s) concurrently...")
     results = await asyncio.gather(
         *(read_one_plc(host, port) for host, port in targets),
@@ -64,3 +64,5 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+

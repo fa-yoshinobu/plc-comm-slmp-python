@@ -1,4 +1,4 @@
-# Error Codes Guide
+﻿# Error Codes Guide
 
 This file is the quick end-code table for users of the library.
 
@@ -56,7 +56,7 @@ with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_series="iqr")
 
 High-level APIs raise `SlmpError` by default. Use `raise_on_error=False` when you need the raw response.
 
-For error handling implementation examples, see the [User Guide  EError Handling](USER_GUIDE.md).
+For error handling implementation examples, see the [User Guide error handling section](USER_GUIDE.md).
 
 ## 4. Reading the Result Correctly
 
@@ -73,3 +73,4 @@ For error handling implementation examples, see the [User Guide  EError Handli
 Note for `0xC051`:
 
 - the current project treats it as manual-confirmed for word-count / unit violations
+

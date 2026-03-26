@@ -1096,7 +1096,7 @@
 <th>Family</th>
 <th>Operation</th>
 <th>Command</th>
-<th>API Example</th>
+<th>High-Level Example</th>
 <th>Point Meaning</th>
 <th>Returned Value</th>
 </tr>
@@ -1106,97 +1106,65 @@
 <td><code>M</code></td>
 <td>bit read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("M1000", 4, bit_unit=True)</code></td>
-<td><code>4</code> bits</td>
-<td><code>[True, False, True, False]</code></td>
+<td><code>read_named(client, ["M1000", "M1001", "M1002", "M1003"])</code></td>
+<td><code>4</code> bit devices</td>
+<td><code>{"M1000": True, ...}</code></td>
 </tr>
 <tr>
 <td><code>M</code></td>
-<td>word read</td>
+<td>packed word read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("M1000", 1, bit_unit=False)</code></td>
+<td><code>read_typed(client, "M1000", "U")</code></td>
 <td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
-</tr>
-<tr>
-<td><code>M</code></td>
-<td>block bit read</td>
-<td><code>0406</code></td>
-<td><code>read_block(bit_blocks=[("M1000", 1)])</code></td>
-<td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
+<td><code>0x0005</code></td>
 </tr>
 <tr>
 <td><code>B</code></td>
 <td>bit read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("B20", 4, bit_unit=True)</code></td>
-<td><code>4</code> bits</td>
-<td><code>[True, False, True, False]</code></td>
+<td><code>read_named(client, ["B20", "B21", "B22", "B23"])</code></td>
+<td><code>4</code> bit devices</td>
+<td><code>{"B20": True, ...}</code></td>
 </tr>
 <tr>
 <td><code>B</code></td>
-<td>word read</td>
+<td>packed word read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("B20", 1, bit_unit=False)</code></td>
+<td><code>read_typed(client, "B20", "U")</code></td>
 <td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
-</tr>
-<tr>
-<td><code>B</code></td>
-<td>block bit read</td>
-<td><code>0406</code></td>
-<td><code>read_block(bit_blocks=[("B20", 1)])</code></td>
-<td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
+<td><code>0x0005</code></td>
 </tr>
 <tr>
 <td><code>X</code></td>
 <td>bit read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("X20", 4, bit_unit=True)</code></td>
-<td><code>4</code> bits</td>
-<td><code>[True, False, True, False]</code></td>
+<td><code>read_named(client, ["X20", "X21", "X22", "X23"])</code></td>
+<td><code>4</code> bit devices</td>
+<td><code>{"X20": True, ...}</code></td>
 </tr>
 <tr>
 <td><code>X</code></td>
-<td>word read</td>
+<td>packed word read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("X20", 1, bit_unit=False)</code></td>
+<td><code>read_typed(client, "X20", "U")</code></td>
 <td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
-</tr>
-<tr>
-<td><code>X</code></td>
-<td>block bit read</td>
-<td><code>0406</code></td>
-<td><code>read_block(bit_blocks=[("X20", 1)])</code></td>
-<td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
+<td><code>0x0005</code></td>
 </tr>
 <tr>
 <td><code>Y</code></td>
 <td>bit read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("Y20", 4, bit_unit=True)</code></td>
-<td><code>4</code> bits</td>
-<td><code>[True, False, True, False]</code></td>
+<td><code>read_named(client, ["Y20", "Y21", "Y22", "Y23"])</code></td>
+<td><code>4</code> bit devices</td>
+<td><code>{"Y20": True, ...}</code></td>
 </tr>
 <tr>
 <td><code>Y</code></td>
-<td>word read</td>
+<td>packed word read</td>
 <td><code>0401</code></td>
-<td><code>read_devices("Y20", 1, bit_unit=False)</code></td>
+<td><code>read_typed(client, "Y20", "U")</code></td>
 <td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
-</tr>
-<tr>
-<td><code>Y</code></td>
-<td>block bit read</td>
-<td><code>0406</code></td>
-<td><code>read_block(bit_blocks=[("Y20", 1)])</code></td>
-<td><code>1</code> packed 16-bit unit</td>
-<td><code>[0x0005]</code></td>
+<td><code>0x0005</code></td>
 </tr>
 </tbody>
 </table>
@@ -1209,11 +1177,8 @@
 <li><code>bit_blocks=[("M1000", 705)]</code> means <code>705</code> packed 16-bit units, not <code>705</code> individual bits</li>
 </ul>
 <h2 id="write-side-reminder">Write-Side Reminder</h2>
-<p>The same packed-unit rule applies to block write:</p>
-<pre><code class="language-python">with SlmpClient(&quot;192.168.250.100&quot;, port=1025, transport=&quot;tcp&quot;, plc_series=&quot;iqr&quot;) as cli:
-    cli.write_block(
-        bit_blocks=[(&quot;M1000&quot;, [0x0005])],
-    )
+<p>The same packed-unit rule applies when you write one word value to a bit-device family:</p>
+<pre><code class="language-python">await write_typed(client, &quot;M1000&quot;, &quot;U&quot;, 0x0005)
 </code></pre>
 <p>This writes the packed pattern for <code>M1000..M1015</code>.</p>
 <h2 id="when-to-use-which-form">When To Use Which Form</h2>
@@ -1226,7 +1191,7 @@
 <h2 id="supported-device-code-reference">Supported Device Code Reference</h2>
 <p>Comprehensive list of device codes accepted by the parser. Actual availability depends on PLC model and firmware.</p>
 <h3 id="bit-devices">Bit Devices</h3>
-<p>Accessed via <code>read_bits()</code> / <code>write_bits()</code>.</p>
+<p>Commonly addressed through <code>read_named</code>, <code>write_named</code>, <code>read_typed</code>, and <code>write_typed</code>.</p>
 <table>
 <thead>
 <tr>

@@ -1,398 +1,265 @@
-# SLMP Connect Python User Guide
+# SLMP Python User Guide
 
-Efficient SLMP (MC Protocol) communication library for Mitsubishi PLCs.
+This guide documents the recommended high-level helper APIs.
 
-## Installation
+For normal application code, start here instead of the low-level protocol methods.
 
-```bash
-pip install slmp-connect
-```
+## Recommended Entry Points
 
-## Quick Start
-
-```python
-from slmp import SlmpClient
-from slmp.constants import FrameType, PLCSeries
-
-# iQ-R series (R04/R08/R16…) ↁEFRAME_4E + IQR
-# Q/L series                  ↁEFRAME_3E + QL
-client = SlmpClient(
-    host="192.168.250.100",
-    port=1025,
-    frame_type=FrameType.FRAME_4E,
-    plc_series=PLCSeries.IQR,
-)
-
-with client:
-    # Read 1 word from D100
-    data = client.read_devices("D100", 1)
-    print(f"D100: {data[0]}")
-
-    # Read 4 bits from M0
-    bits = client.read_devices("M0", 4, bit_unit=True)
-    print(f"M0..M3: {bits}")
-
-    # Write a value to D200
-    client.write_devices("D200", [42])
-```
-
-!!! note "How to choose frame_type / plc_series"
-    | PLC Family | frame_type | plc_series |
-    |---|---|---|
-    | iQ-R (e.g. R04CPU) | `FRAME_4E` | `PLCSeries.IQR` |
-    | Q / L Series | `FRAME_3E` | `PLCSeries.QL` |
-    | If unknown |  E|  E|
-
-    If unknown, you can auto-detect using `resolve_profile()` below.
-
-### Profile Auto-Detection (sync)
-
-```python
-from slmp import SlmpClient
-
-client = SlmpClient(host="192.168.250.100", port=1025)
-rec = client.resolve_profile()
-print(f"detected: frame={rec.frame_type}, series={rec.plc_series}, confident={rec.is_confident}")
-
-with client:
-    data = client.read_devices("D100", 1)
-    print(f"D100: {data[0]}")
-```
-
-### Profile Auto-Detection + Connect (async)
+### Async connection with automatic profile detection
 
 ```python
 import asyncio
-from slmp import open_and_connect
 
-async def main():
-    # Auto-detect frame_type / plc_series and connect
+from slmp import open_and_connect, read_named
+
+
+async def main() -> None:
     async with await open_and_connect("192.168.250.100", port=1025) as client:
-        data = await client.read_devices("D100", 1)
-        print(f"D100: {data[0]}")
-
-asyncio.run(main())
-```
-
----
-
-## Core Concepts
-
-### Device Address Strings
-
-Devices are specified using strings.
-
-```python
-client.read_devices("D100", 10)              # Read 10 words from D100
-client.read_devices("M0", 8, bit_unit=True)  # Read 8 bits from M0
-client.write_devices("D200", [0, 1, 2])      # Write to D200..D202
-```
-
-Example supported devices: `D`, `W`, `R`, `ZR`, `M`, `L`, `B`, `X`, `Y`, `SM`, `SD`, etc.
-See `slmp.core.DEVICE_CODES` for a full list of devices.
-
-### Word vs Bit
-
-- `bit_unit=False` (default): Read/write in word units. Returns `list[int]`.
-- `bit_unit=True`: Read/write bit devices (M, X, Y, etc.) in bit units. Returns `list[int]` (0 or 1).
-
-### Target Specification
-
-You can target specific CPUs, such as in multiple CPU configurations.
-
-```python
-from slmp import SlmpTarget
-
-target = SlmpTarget(module_io="MULTIPLE_CPU_1")
-data = client.read_devices("D100", 1, target=target)
-```
-
----
-
-## Typed Read / Write
-
-`read_devices` returns raw 16-bit words. Use utility functions for float32 or signed integers. Both sync and async clients are supported.
-
-| dtype | Type | Words |
-|---|---|---|
-| `"U"` | unsigned 16-bit int | 1 |
-| `"S"` | signed 16-bit int | 1 |
-| `"D"` | unsigned 32-bit int | 2 |
-| `"L"` | signed 32-bit int | 2 |
-| `"F"` | float32 | 2 |
-
-### read_typed / read_typed_sync  ERead one device with type conversion
-
-```python
-# async
-from slmp.utils import read_typed
-f = await read_typed(client, "D100", "F")   # float32
-
-# sync
-from slmp.utils import read_typed_sync
-f = read_typed_sync(client, "D100", "F")
-```
-
-### write_typed / write_typed_sync  EWrite one device with type conversion
-
-```python
-from slmp.utils import write_typed_sync
-write_typed_sync(client, "D100", "F", 3.14)
-write_typed_sync(client, "D102", "L", -50000)
-```
-
-### read_named / read_named_sync  EBatch read using address strings
-
-Read multiple devices at once using type codes embedded in addresses.
-
-```python
-# async
-from slmp.utils import read_named
-result = await read_named(client, ["D100", "D101:F", "D102:S", "D0.3"])
-
-# sync
-from slmp.utils import read_named_sync
-result = read_named_sync(client, ["D100", "D101:F", "D102:S", "D0.3"])
-# result = {"D100": 42, "D101:F": 3.14, "D102:S": -1, "D0.3": True}
-```
-
-### write_named / write_named_sync  EBatch write using address strings
-
-Write multiple devices at once using the same notation as `read_named`.
-
-```python
-# async
-from slmp.utils import write_named
-await write_named(client, {
-    "D100": 42,
-    "D101:F": 3.14,
-    "D0.3": True,
-})
-
-# sync
-from slmp.utils import write_named_sync
-write_named_sync(client, {
-    "D100": 42,
-    "D101:F": 3.14,
-    "D0.3": True,
-})
-```
-
----
-
-## Random / Block Read
-
-Read non-contiguous devices in a single command. More efficient than repeating `read_devices`.
-
-### Random Read
-
-```python
-from slmp import DeviceRef
-
-result = client.read_random(
-    word_devices=["D100", "D200", "W10"],
-    dword_devices=["D300"],  # Read as 2-word value
-)
-# result.word  = {"D100": 1, "D200": 2, "W10": 3}
-# result.dword = {"D300": 100000}
-```
-
-### Block Read
-
-Read multiple contiguous blocks in a single command.
-
-```python
-result = client.read_block(
-    word_blocks=[("D100", 10), ("W0", 5)],
-    bit_blocks=[("M0", 16)],
-)
-# result.word_blocks[0].device = "D100", .values = [...]
-# result.bit_blocks[0].device  = "M0",  .values = [...]
-```
-
----
-
-## Polling (poll / poll_sync)
-
-Continuously read devices at a fixed interval. Supports the same address notation as `read_named`.
-
-```python
-# async
-import asyncio
-from slmp.utils import poll
-
-async def main():
-    async with await open_and_connect("192.168.250.100") as client:
-        async for snapshot in poll(client, ["D100", "D101:F", "M0.0"], interval=1.0):
-            print(snapshot)
-
-asyncio.run(main())
-
-# sync
-from slmp.utils import poll_sync
-from slmp import SlmpClient
-
-with SlmpClient("192.168.250.100", 1025) as client:
-    for snapshot in poll_sync(client, ["D100", "D101:F", "M0.0"], interval=1.0):
+        snapshot = await read_named(client, ["D100", "D200:F", "D50.3"])
         print(snapshot)
-        # {"D100": 42, "D101:F": 3.14, "M0.0": True}
-```
 
-Outputs snapshots every second until stopped with Ctrl+C.
-
----
-
-## Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)
-
-If multiple coroutines (e.g., background poller and foreground writer) need to use the same connection, wrap it in `QueuedAsyncSlmpClient`. Communication is serialized via an internal lock.
-
-If you want the queued wrapper from the start, use `open_and_connect_queued(...)`.
-
-```python
-import asyncio
-from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
-
-async def poller(client, stop_event):
-    while not stop_event.is_set():
-        data = await client.read_devices("D100", 1)
-        print(f"[poll] D100={data[0]}")
-        await asyncio.sleep(1.0)
-
-async def main():
-    inner = AsyncSlmpClient("192.168.250.100", 1025)
-    client = QueuedAsyncSlmpClient(inner)
-    stop = asyncio.Event()
-
-    async with client:
-        poll_task = asyncio.create_task(poller(client, stop))
-        await asyncio.sleep(5)
-        stop.set()
-        await poll_task
 
 asyncio.run(main())
 ```
 
-Shortcut:
+Use this when:
+
+- you are writing an async application
+- you want the library to choose the correct frame/profile pair
+- you want the shortest path to `read_named`, `write_typed`, and `poll`
+
+### Async shared connection
 
 ```python
-from slmp import open_and_connect_queued
+import asyncio
 
+from slmp import open_and_connect_queued, read_named
+
+
+async def main() -> None:
+    async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+        first = await read_named(client, ["D100", "D200:F"])
+        second = await read_named(client, ["D300", "D50.3"])
+        print(first)
+        print(second)
+
+
+asyncio.run(main())
+```
+
+Use this when multiple coroutines share one PLC connection.
+
+### Sync application code
+
+```python
+from slmp import SlmpClient, read_named_sync, write_typed_sync
+
+with SlmpClient("192.168.250.100", port=1025, plc_series="iqr") as client:
+    print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
+    write_typed_sync(client, "D100", "U", 42)
+```
+
+For sync code, the recommended pattern is:
+
+1. open a `SlmpClient`
+2. use the `*_sync` helper functions
+
+## High-Level Helper Set
+
+### `read_typed` / `read_typed_sync`
+
+Read one logical value with type conversion.
+
+Supported dtype values:
+
+| dtype | Meaning | Words |
+| --- | --- | --- |
+| `U` | unsigned 16-bit | 1 |
+| `S` | signed 16-bit | 1 |
+| `D` | unsigned 32-bit | 2 |
+| `L` | signed 32-bit | 2 |
+| `F` | float32 | 2 |
+
+```python
+value_u = await read_typed(client, "D100", "U")
+value_f = await read_typed(client, "D200", "F")
+value_l = await read_typed(client, "D300", "L")
+```
+
+### `write_typed` / `write_typed_sync`
+
+Write one logical value with type conversion.
+
+```python
+await write_typed(client, "D100", "U", 1234)
+await write_typed(client, "D200", "F", 3.14)
+await write_typed(client, "D300", "L", -1000)
+```
+
+### `write_bit_in_word` / `write_bit_in_word_sync`
+
+Set or clear one bit inside a word device.
+
+```python
+await write_bit_in_word(client, "D50", bit_index=3, value=True)
+await write_bit_in_word(client, "D50", bit_index=3, value=False)
+```
+
+Use this when a PLC stores flags inside a control word and you need to toggle only one bit.
+
+### `read_named` / `read_named_sync`
+
+Read multiple values with one high-level call.
+
+Address notation:
+
+| Form | Meaning |
+| --- | --- |
+| `D100` | one unsigned 16-bit word |
+| `D200:S` | signed 16-bit |
+| `D300:D` | unsigned 32-bit |
+| `D400:L` | signed 32-bit |
+| `D500:F` | float32 |
+| `D50.3` | bit 3 inside D50 |
+
+```python
+snapshot = await read_named(
+    client,
+    [
+        "D100",
+        "D200:S",
+        "D300:D",
+        "D400:L",
+        "D500:F",
+        "D50.3",
+    ],
+)
+```
+
+Use `.bit` notation only with word devices such as `D50.3`.
+Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
+
+This is the most useful helper for dashboards, logging, and application polling.
+
+### `write_named` / `write_named_sync`
+
+Write multiple logical values using the same address notation.
+
+```python
+await write_named(
+    client,
+    {
+        "D100": 42,
+        "D200:S": -1,
+        "D300:D": 123456,
+        "D400:L": -5000,
+        "D500:F": 1.25,
+        "D50.3": True,
+    },
+)
+```
+
+### `read_words` / `read_words_sync`
+
+Read a contiguous word range.
+
+```python
+words = await read_words(client, "D0", 10)
+large_words = await read_words(client, "D0", 1000, allow_split=True)
+```
+
+Use `allow_split=True` when the requested length exceeds one SLMP request.
+
+### `read_dwords` / `read_dwords_sync`
+
+Read contiguous 32-bit values.
+
+```python
+dwords = await read_dwords(client, "D200", 8)
+large_dwords = await read_dwords(client, "D200", 200, allow_split=True)
+```
+
+### `poll` / `poll_sync`
+
+Yield repeated snapshots at a fixed interval.
+
+```python
+async for snapshot in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
+    print(snapshot)
+```
+
+Sync variant:
+
+```python
+for snapshot in poll_sync(client, ["D100", "D200:F", "D50.3"], interval=1.0):
+    print(snapshot)
+```
+
+## Practical Example Sets
+
+### Example 1: process values
+
+```python
+snapshot = await read_named(
+    client,
+    [
+        "D100:F",   # temperature
+        "D102:F",   # pressure
+        "D200",     # recipe number
+        "D50.0",    # run flag
+        "D50.1",    # alarm flag
+    ],
+)
+```
+
+### Example 2: recipe download
+
+```python
+await write_named(
+    client,
+    {
+        "D100": 10,
+        "D101": 20,
+        "D102": 30,
+        "D200:F": 12.5,
+        "D202:F": 6.75,
+    },
+)
+```
+
+### Example 3: large historian read
+
+```python
+history_words = await read_words(client, "D1000", 1200, allow_split=True)
+history_dwords = await read_dwords(client, "D2000", 240, allow_split=True)
+```
+
+### Example 4: one shared async connection
+
+```python
 async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
-    value = await client.read_devices("D100", 1, bit_unit=False)
+    a = await read_named(client, ["D100", "D200:F"])
+    b = await read_named(client, ["D300", "D50.3"])
 ```
 
----
+## Sample Programs
 
-## async Advantages
+The most complete examples are:
 
-`AsyncSlmpClient` is asyncio-based and does not block the event loop while waiting for PLC responses. While multiple requests to the same connection are serialized, **simultaneous connections to multiple PLCs** overlap in time, significantly reducing total processing time.
+- `samples/high_level_sync.py`
+- `samples/high_level_async.py`
 
-```python
-# Read from multiple PLCs simultaneously
-results = await asyncio.gather(
-    read_one_plc("192.168.250.100", 1025),
-    read_one_plc("192.168.1.11", 1025),
-)
+They are designed to be directly runnable and syntax-check clean.
+
+Run them from the repository root:
+
+```powershell
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
+python samples/high_level_async.py --host 192.168.250.100 --port 1025
 ```
 
----
+See also:
 
-## Error Handling
-
-### Exception Types
-
-| Exception | Condition |
-|---|---|
-| `SlmpError` | PLC returned `end_code != 0` |
-| `ValueError` | Invalid device name or argument format |
-| `TimeoutError` | Response timeout |
-| `ConnectionRefusedError` | Connection refused (wrong port or IP) |
-| `OSError` | Other network failures |
-
-```python
-from slmp import SlmpClient
-from slmp.errors import SlmpError
-
-with SlmpClient("192.168.250.100", 1025) as client:
-    try:
-        data = client.read_devices("D100", 1)
-    except SlmpError as e:
-        print(f"PLC error: end_code=0x{e.end_code:04X}")
-    except TimeoutError:
-        print("Connection timeout  ECheck IP address and port number")
-    except ConnectionRefusedError:
-        print("Connection refused  ECheck port number and SLMP settings on the PLC")
-```
-
-### Get raw response without raising exceptions
-
-Passing `raise_on_error=False` returns an `SlmpResponse` instead of raising an `SlmpError`.
-
-```python
-resp = client.raw_command(0x0401, subcommand=0x0002, payload=b"...", raise_on_error=False)
-print(f"end_code: 0x{resp.end_code:04X}")
-```
-
-See the [Error Codes Guide](ERROR_CODES.md) for common end codes.
-
-### Common Connection Failures and Solutions
-
-| Symptom | Possible Cause | Solution |
-|---|---|---|
-| `ConnectionRefusedError` | Wrong port number | Check port in "SLMP Communication Setting" of GX Works3 |
-| `TimeoutError` | Wrong IP or unreachable route | Verify connectivity with `ping` |
-| `SlmpError` end_code=`0xC059` | `frame_type` / `plc_series` mismatch | Auto-detect using `resolve_profile()` or change the series |
-| Data is clearly incorrect | Wrong `plc_series` (IQR vs QL) | Device encoding varies by series; please verify |
-
----
-
-## Verification with GX Simulator 3
-
-If you don't have a physical PLC, you can test on your local PC using GX Simulator 3 (included with GX Works3).
-
-**Connection Settings**
-
-| Item | Value |
-|---|---|
-| host | `127.0.0.1` |
-| port | `5010` (GX Simulator 3 default) |
-| frame_type | `FRAME_3E` |
-| plc_series | `PLCSeries.QL` |
-
-```python
-client = SlmpClient(
-    host="127.0.0.1",
-    port=5010,
-    frame_type=FrameType.FRAME_3E,
-    plc_series=PLCSeries.QL,
-)
-```
-
-!!! note
-    GX Simulator 3 may respond with 3E frames even in iQ-R simulation. If you cannot connect, use `resolve_profile()` to auto-detect the profile.
-
----
-
-## Performance Tips
-
-!!! tip "Reuse connections"
-    Reuse `SlmpClient` instances across multiple requests. Establishing a new TCP connection every time is very slow.
-
-!!! tip "Use read_words for large reads"
-    Continuous reads exceeding 960 words are automatically split by `read_words(allow_split=True)`.
-
-    ```python
-    # async
-    from slmp.utils import read_words
-    values = await read_words(client, "D0", 2000, allow_split=True)
-
-    # sync
-    from slmp.utils import read_words_sync
-    values = read_words_sync(client, "D0", 2000, allow_split=True)
-    ```
-
----
-
-## API Overview
-
-See the [API Reference](../api/client.md) for details.
+- [Samples](SAMPLES.md)
+- [Error Codes](ERROR_CODES.md)
