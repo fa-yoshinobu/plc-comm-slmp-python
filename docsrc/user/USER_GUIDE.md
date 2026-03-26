@@ -246,6 +246,8 @@ Outputs snapshots every second until stopped with Ctrl+C.
 
 If multiple coroutines (e.g., background poller and foreground writer) need to use the same connection, wrap it in `QueuedAsyncSlmpClient`. Communication is serialized via an internal lock.
 
+If you want the queued wrapper from the start, use `open_and_connect_queued(...)`.
+
 ```python
 import asyncio
 from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
@@ -268,6 +270,15 @@ async def main():
         await poll_task
 
 asyncio.run(main())
+```
+
+Shortcut:
+
+```python
+from slmp import open_and_connect_queued
+
+async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+    value = await client.read_devices("D100", 1, bit_unit=False)
 ```
 
 ---

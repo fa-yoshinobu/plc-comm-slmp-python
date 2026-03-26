@@ -72,15 +72,15 @@ Manual expectation:
 
 Current implementation:
 
-- typed device APIs intentionally reject `S`
+- `S` is removed from the repository device table and parser
 
 Reason:
 
-- live verification showed read OK but write `0x4030`
+- this repository no longer exposes `S` as a supported public device family
 
 Status:
 
-- intentionally unsupported in typed device APIs on this project
+- removed from current project scope
 
 ## 4. Mixed Block Fallback
 

@@ -2,10 +2,14 @@
 
 import struct
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from slmp.core import DeviceRef, RandomReadResult
 from slmp.utils import (
+    QueuedAsyncSlmpClient,
+    _compile_read_plan,
     _parse_address,
+    open_and_connect_queued,
     poll_sync,
     read_dwords_sync,
     read_named_sync,
@@ -170,17 +174,34 @@ class TestWriteBitInWordSync(unittest.TestCase):
 class TestReadNamedSync(unittest.TestCase):
     def test_mixed_dtypes(self):
         raw_f = struct.pack("<f", 2.5)
-        lo, hi = struct.unpack("<HH", raw_f)
-        client = _make_sync_client([10], [lo, hi], [0x00FF])
+        dword = struct.unpack("<I", raw_f)[0]
+        client = MagicMock()
+        client.read_random.return_value = RandomReadResult(
+            word={"D100": 10, "D0": 0x00FF},
+            dword={"D101": dword},
+        )
         result = read_named_sync(client, ["D100", "D101:F", "D0.3"])
         self.assertEqual(result["D100"], 10)
         self.assertAlmostEqual(result["D101:F"], 2.5, places=5)
         self.assertEqual(result["D0.3"], bool((0x00FF >> 3) & 1))
+        client.read_random.assert_called_once_with(
+            word_devices=[DeviceRef("D", 100), DeviceRef("D", 0)],
+            dword_devices=[DeviceRef("D", 101)],
+        )
 
     def test_bit_in_word_false(self):
-        client = _make_sync_client([0x0000])
+        client = MagicMock()
+        client.read_random.return_value = RandomReadResult(word={"D0": 0x0000}, dword={})
         result = read_named_sync(client, ["D0.0"])
         self.assertFalse(result["D0.0"])
+
+    def test_bit_device_falls_back_to_single_read(self):
+        client = MagicMock()
+        client.read_devices.return_value = [1]
+        result = read_named_sync(client, ["M100"])
+        self.assertEqual(result["M100"], 1)
+        client.read_random.assert_not_called()
+        client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +267,12 @@ class TestReadWordsSyncChunking(unittest.TestCase):
 
 class TestPollSync(unittest.TestCase):
     def test_yields_snapshots(self):
-        client = _make_sync_client([1], [2], [3])
+        client = MagicMock()
+        client.read_random.side_effect = [
+            RandomReadResult(word={"D0": 1}, dword={}),
+            RandomReadResult(word={"D0": 2}, dword={}),
+            RandomReadResult(word={"D0": 3}, dword={}),
+        ]
         gen = poll_sync(client, ["D0"], interval=0)
         snap1 = next(gen)
         snap2 = next(gen)
@@ -254,6 +280,24 @@ class TestPollSync(unittest.TestCase):
         self.assertEqual(snap1["D0"], 1)
         self.assertEqual(snap2["D0"], 2)
         self.assertEqual(snap3["D0"], 3)
+
+
+class TestReadPlan(unittest.TestCase):
+    def test_compile_read_plan_batches_word_and_dword_addresses(self):
+        plan = _compile_read_plan(["D100", "D100.3", "D101:F", "M10"])
+        self.assertEqual(plan.word_devices, (DeviceRef("D", 100),))
+        self.assertEqual(plan.dword_devices, (DeviceRef("D", 101),))
+        self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", None])
+
+
+class TestOpenAndConnectQueued(unittest.IsolatedAsyncioTestCase):
+    async def test_returns_queued_wrapper(self):
+        inner = MagicMock()
+        with patch("slmp.utils.open_and_connect", new=AsyncMock(return_value=inner)) as mocked:
+            queued = await open_and_connect_queued("192.168.0.10", port=1025, timeout=2.0)
+        self.assertIsInstance(queued, QueuedAsyncSlmpClient)
+        self.assertIs(queued._inner, inner)
+        mocked.assert_awaited_once_with("192.168.0.10", port=1025, timeout=2.0)
 
 
 # ---------------------------------------------------------------------------

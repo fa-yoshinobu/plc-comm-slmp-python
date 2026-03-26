@@ -77,5 +77,5 @@ python samples/08_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
 
 If arguments are omitted, it connects to `127.0.0.1:5000` and `127.0.0.1:5001` (assuming local simulators).
 
-For maintainer-oriented verification wrappers, use
-[Script Reference](../maintainer/SCRIPT_REFERENCE.md).
+Maintainer-oriented verification wrappers are documented in the source checkout
+under `docsrc/maintainer/`.

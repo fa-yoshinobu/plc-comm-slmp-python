@@ -2,7 +2,8 @@
 
 This file is the quick end-code table for users of the library.
 
-For the maintainer-facing version, see [Internal Error Code Reference](../maintainer/error_code_reference.md).
+The maintainer-facing error-code reference is kept in the source checkout under
+`docsrc/maintainer/`.
 
 ## 1. Where Errors Come From
 
@@ -29,12 +30,12 @@ There are three different failure layers:
 | `0x4043` | extend-unit argument invalid | `0601` with `module_no=0x0000` |
 | `0x4080` | target/module mismatch | `0601` with `module_no=0x03FF` |
 | `0x40C0` | label-side condition failure | label missing or external access disabled |
-| `0x413E` | file state/environment rejected the operation | `18xx` file commands on the current target |
+| `0x413E` | environment-specific operation rejection | target-dependent path rejected on the current endpoint |
 | `0xC051` | word-count or unit rule violation | `LZ1 x1` write, some long-counter writes |
 | `0xC059` | request family not accepted by the current endpoint | unsupported request family on the current target |
 | `0xC05B` | direct `G/HG` path rejected | normal `0401` read of `G0` / `HG0` |
-| `0xC061` | request content/path not accepted in the current environment | Extended Specification CPU buffer access, some file commands |
-| `0xC207` | file environment rejected the operation | some `18xx` file commands |
+| `0xC061` | request content/path not accepted in the current environment | Extended Specification CPU buffer access |
+| `0xC207` | environment-specific operation rejection | target-dependent path rejected on the current endpoint |
 
 ## 3. How to Inspect the Raw `end_code`
 
@@ -61,14 +62,13 @@ For error handling implementation examples, see the [User Guide  EError Handli
 
 - `0x0000` means the PLC accepted the request, not that the operator-visible effect was what you expected
 - the same end code can appear in more than one context
-- target-specific conditions matter, especially for labels, Extended Specification, file commands, and remote control
+- target-specific conditions matter, especially for labels, Extended Specification, and remote control
 
 ## 5. Related Documents
 
 - [User Guide](USER_GUIDE.md)
-- [Testing Guide](../maintainer/TESTING_GUIDE.md)
-- [Open Items](../maintainer/open_items.md)
-- [Internal Error Code Reference](../maintainer/error_code_reference.md)
+- Maintainer-only testing and internal error-reference notes are kept in the
+  source checkout under `docsrc/maintainer/`.
 
 Note for `0xC051`:
 

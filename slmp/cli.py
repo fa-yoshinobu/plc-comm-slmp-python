@@ -4677,12 +4677,6 @@ def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
             except Exception as exc:  # noqa: BLE001
                 record(f"{dev} read bit", "NG", str(exc))
 
-        record(
-            "S0 write bit",
-            "SKIP",
-            "project policy keeps direct S write unsupported; the validated target rejects this path",
-        )
-
         ext = cli.make_extension_spec(
             extension_specification=args.cpu_io,
             direct_memory_specification=DIRECT_MEMORY_CPU_BUFFER,

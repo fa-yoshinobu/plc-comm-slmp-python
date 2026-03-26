@@ -110,31 +110,15 @@ Remote password:
 1. `1631` Lock
 2. `1630` Unlock
 
-File control (major typed operations):
-1. `1810` Read Directory/File
-2. `1811` Search Directory/File
-3. `1820` New File
-4. `1822` Delete File
-5. `1825` Change File State
-6. `1826` Change File Date
-7. `1827` Open File
-8. `1828` Read File
-9. `1829` Write File
-10. `182A` Close File
-
 Other:
 1. `0619` Self Test
 2. `1617` Clear Error
-3. `2101` Ondemand receive
 
 ## 3.2 Full Raw Wrappers
 
-Raw wrappers are available for all command groups implemented in this repository, including label and other file/maintenance commands.
-- `1827` raw open returns raw response bytes (file pointer number payload)
-- `1829` raw write returns raw response bytes (written-byte-count payload)
+Raw wrappers are available for all command groups implemented in this repository.
 - `*_raw` wrappers are maintainer-only tools for library development and protocol investigation
 - typed helpers remain the canonical public API for normal users
-- `2101` is not sent as an external-device request; use `receive_ondemand(...)`
 
 ## 3.3 Typed Result Models
 
@@ -323,19 +307,8 @@ Practical conclusion for this repository:
 - TCP receives exactly one SLMP frame using `response_data_length`.
 - For remote reset (`1006`), the typed helper defaults to subcommand `0000` with no-response handling because normal completion may not return a response.
 - `receive_request(...)` decodes an incoming 4E request frame from the PLC.
-- `receive_ondemand(...)` / `ondemand()` wait for an incoming PLC-initiated `2101/0000` message and return its send data.
 
-## 7.1 File Command Compliance Notes
-
-- The file subcommand matrix is validated per command:
-  - `1810`, `1811`, `1820`, `1826`: `0000`, `0040`
-  - `1822`, `1824`, `1825`, `1827`: `0000`, `0004`, `0040`
-  - `1828`, `1829`, `182A`: `0000` only
-- For file password subcommand `0040`, the password length must be `0` or `6..32`.
-- `file_change_state_by_name(...)` encodes the file attribute as a 2-byte field.
-- `file_close_handle(...)` accepts close types `0`, `1`, and `2`.
-
-## 7.2 Verified Practical Access Path Notes
+## 7.1 Verified Practical Access Path Notes
 
 - In the current iQ-R environment, direct `G/HG` device access is not operational.
 - Earlier Extended Specification `G/HG` requests built by the generic layout were not operational in the same environment. The current iQ-R builder now uses the capture-aligned layout, and single-word `G10` / `HG20` smoke checks passed on the current R120PCPU target.

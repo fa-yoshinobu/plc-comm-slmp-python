@@ -21,13 +21,13 @@ This table records what the project actually observed on the validated target. I
 | `0x4043` | `0601` | extend-unit argument invalid | `module_no=0x0000` | use the verified `0x03E0` path |
 | `0x4080` | `0601` | target/module mismatch | `module_no=0x03FF` | do not use this module number on the validated target |
 | `0x40C0` | label family | label-side condition failure | missing label or external access disabled | check label definition before retrying |
-| `0x413E` | file family | file state/environment rejected the operation | some `18xx` file commands | keep as environment-dependent |
+| `0x413E` | environment-dependent path | file state/environment rejected the operation | target-specific operation rejection | keep as environment-dependent |
 | `0xC051` | long-counter and `LZ` writes | point-count or write-unit rule violation | `LZ1 x1`, some long-counter writes | treat as manual-confirmed |
 | `0xC059` | unsupported request family on the current endpoint | request family not accepted | unsupported command family on the current target | treat as out of supported scope |
 | `0xC05B` | direct `G0` / `HG0` read, first one-request mixed `1406` block write | direct path or combined request path rejected | trying to use `G/HG` as normal devices, or sending one mixed word+bit block write on the validated target | use CPU-buffer helpers for `G/HG`; use split mixed-block fallback for the mixed `1406` case |
-| `0xC061` | Extended Specification CPU-buffer path, some file commands | request content/path not accepted in the current environment | unresolved Extended Specification or file conditions | keep the practical alternative path |
+| `0xC061` | Extended Specification CPU-buffer path | request content/path not accepted in the current environment | unresolved Extended Specification condition | keep the practical alternative path |
 | `0xC075` | historical label payload attempt | payload formatting error | earlier incorrect label payload | resolved |
-| `0xC207` | file family | file environment rejected the operation | some `18xx` file commands | keep as environment-dependent |
+| `0xC207` | environment-dependent path | file environment rejected the operation | target-specific operation rejection | keep as environment-dependent |
 
 ## Notes
 

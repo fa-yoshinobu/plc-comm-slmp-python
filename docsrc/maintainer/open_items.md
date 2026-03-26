@@ -42,9 +42,6 @@ single-command orchestrator.
 
 - one-request mixed `1406` writes are not currently accepted on any live-verified path in this project
 - ASCII mode remains intentionally out of scope
-- file commands remain environment-dependent and low priority
-- PLC-initiated ondemand (`2101`) remains out of scope for roadmap work
-- direct typed `S` support is intentionally unsupported in this project
 
 Related maintainer pages:
 

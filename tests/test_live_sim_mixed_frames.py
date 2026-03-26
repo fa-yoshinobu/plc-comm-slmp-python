@@ -41,7 +41,7 @@ class TestLiveSimMixedFrames(unittest.TestCase):
 
         for code, spec in DEVICE_CODES.items():
             # Skip read-only, model-specific, or special-handling devices
-            if code in ["SM", "SD", "G", "HG", "S", "DX", "DY"]:
+            if code in ["SM", "SD", "G", "HG", "DX", "DY"]:
                 continue
             if code in ["LTS", "LTC", "LSTS", "LSTC", "TS", "TC", "CS", "CC", "LCS", "LCC"]:
                 continue

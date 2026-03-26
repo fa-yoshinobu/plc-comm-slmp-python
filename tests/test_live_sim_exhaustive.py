@@ -42,8 +42,8 @@ class TestLiveSimExhaustive(unittest.TestCase):
         results = []
         for code, spec in DEVICE_CODES.items():
             # Skip some codes that might be model-specific or need special handling
-            if code in ["G", "HG", "S"]:
-                continue  # S is intentionally unsupported and G/HG direct typed access is blocked in core
+            if code in ["G", "HG"]:
+                continue  # G/HG direct typed access is blocked in core
 
             try:
                 # Read 1 point

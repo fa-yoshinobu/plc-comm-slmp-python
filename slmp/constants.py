@@ -164,7 +164,6 @@ DEVICE_CODES: dict[str, DeviceCode] = {
     "SW": DeviceCode(0x00B5, 16, DeviceUnit.WORD),
     "DX": DeviceCode(0x00A2, 16, DeviceUnit.BIT),
     "DY": DeviceCode(0x00A3, 16, DeviceUnit.BIT),
-    "S": DeviceCode(0x0098, 10, DeviceUnit.BIT),
     "Z": DeviceCode(0x00CC, 10, DeviceUnit.WORD),
     "LZ": DeviceCode(0x0062, 10, DeviceUnit.WORD),
     "R": DeviceCode(0x00AF, 10, DeviceUnit.WORD),

@@ -902,11 +902,6 @@ def _check_temporarily_unsupported_device(ref: DeviceRef, *, access_kind: str = 
         raise ValueError(f"unsupported access_kind: {access_kind}")
     if ref.code not in _TEMPORARILY_UNSUPPORTED_TYPED_CODES:
         return
-    if ref.code == "S":
-        raise SlmpUnsupportedDeviceError(
-            "S is intentionally unsupported in typed device APIs on this project; "
-            "the validated target rejects direct bit write and the project keeps it disabled"
-        )
     if ref.code in _G_HG_CODES and access_kind == "extended_device":
         return
     if ref.code in _G_HG_CODES:
@@ -994,7 +989,7 @@ def _warn_boundary_behavior(
 
 _LT_LST_DIRECT_CODES = frozenset({"LTC", "LTS", "LSTC", "LSTS"})
 _G_HG_CODES = frozenset({"G", "HG"})
-_TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG", "S"})
+_TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})
 _MIXED_BLOCK_RETRY_END_CODES = frozenset({0xC056, 0xC05B, 0xC061})
 

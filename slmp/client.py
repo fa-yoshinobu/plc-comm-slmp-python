@@ -1972,17 +1972,37 @@ def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
     # 4E response header up to data length: Subheader(2) + Serial(2) + Reserved(2) + Target(5) + Len(2) = 13 bytes.
     # 3E response header up to data length: Subheader(2) + Target(5) + Len(2) = 9 bytes.
     head_size = 13 if frame_type == FrameType.FRAME_4E else 9
-    head = _recv_exact(sock, head_size)
+    head = bytearray(head_size)
+    _recv_exact_into(sock, memoryview(head))
     response_data_length = int.from_bytes(head[-2:], "little")
-    tail = _recv_exact(sock, response_data_length)
-    return head + tail
+    frame = bytearray(head_size + response_data_length)
+    frame[:head_size] = head
+    _recv_exact_into(sock, memoryview(frame)[head_size:])
+    return bytes(frame)
 
 
 def _recv_exact(sock: socket.socket, size: int) -> bytes:
-    buf = bytearray()
-    while len(buf) < size:
-        chunk = sock.recv(size - len(buf))
+    buf = bytearray(size)
+    _recv_exact_into(sock, memoryview(buf))
+    return bytes(buf)
+
+
+def _recv_exact_into(sock: socket.socket, view: memoryview) -> None:
+    recv_into = getattr(sock, "recv_into", None)
+    if callable(recv_into):
+        while len(view) > 0:
+            read = recv_into(view)
+            if read == 0:
+                raise SlmpError("connection closed while receiving data")
+            view = view[read:]
+        return
+
+    offset = 0
+    total = len(view)
+    while offset < total:
+        chunk = sock.recv(total - offset)
         if not chunk:
             raise SlmpError("connection closed while receiving data")
-        buf.extend(chunk)
-    return bytes(buf)
+        end = offset + len(chunk)
+        view[offset:end] = chunk
+        offset = end

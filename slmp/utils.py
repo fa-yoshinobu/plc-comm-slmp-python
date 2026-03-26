@@ -6,12 +6,36 @@ import asyncio
 import struct
 import time
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
+
+from .constants import DEVICE_CODES, DeviceUnit
+from .core import DeviceRef, parse_device
 
 if TYPE_CHECKING:
     from .async_client import AsyncSlmpClient
     from .client import SlmpClient
-    from .core import DeviceRef
+
+
+_WORD_DTYPES = frozenset({"U", "S"})
+_DWORD_DTYPES = frozenset({"D", "L", "F"})
+_UNBATCHED_DEVICE_CODES = frozenset({"G", "HG"})
+
+
+@dataclass(frozen=True)
+class _ReadPlanEntry:
+    address: str
+    device: DeviceRef
+    dtype: str
+    bit_index: int | None
+    batch_kind: str | None
+
+
+@dataclass(frozen=True)
+class _ReadPlan:
+    entries: tuple[_ReadPlanEntry, ...]
+    word_devices: tuple[DeviceRef, ...]
+    dword_devices: tuple[DeviceRef, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +80,15 @@ async def open_and_connect(
     if not rec.is_confident:
         raise ConnectionError(f"Could not detect PLC profile at {host}:{port}")
     return client
+
+
+async def open_and_connect_queued(
+    host: str,
+    port: int = 5000,
+    timeout: float = 1.5,
+) -> QueuedAsyncSlmpClient:
+    """Connect to a PLC and return a queued wrapper for shared use."""
+    return QueuedAsyncSlmpClient(await open_and_connect(host, port=port, timeout=timeout))
 
 
 # ---------------------------------------------------------------------------
@@ -275,15 +308,8 @@ async def read_named(
     Returns:
         Dictionary mapping each address string to its value.
     """
-    result: dict[str, int | float | bool] = {}
-    for address in addresses:
-        base, dtype, bit_idx = _parse_address(address)
-        if dtype == "BIT_IN_WORD":
-            words = await client.read_devices(base, 1, bit_unit=False)
-            result[address] = bool((words[0] >> (bit_idx or 0)) & 1)
-        else:
-            result[address] = await read_typed(client, base, dtype or "U")
-    return result
+    plan = _compile_read_plan(addresses)
+    return await _read_named_with_plan(client, plan)
 
 
 def read_named_sync(
@@ -299,15 +325,8 @@ def read_named_sync(
     Returns:
         Dictionary mapping each address string to its value.
     """
-    result: dict[str, int | float | bool] = {}
-    for address in addresses:
-        base, dtype, bit_idx = _parse_address(address)
-        if dtype == "BIT_IN_WORD":
-            words = client.read_devices(base, 1, bit_unit=False)
-            result[address] = bool((words[0] >> (bit_idx or 0)) & 1)
-        else:
-            result[address] = read_typed_sync(client, base, dtype or "U")
-    return result
+    plan = _compile_read_plan(addresses)
+    return _read_named_with_plan_sync(client, plan)
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +411,166 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
     return address.strip(), "U", None
 
 
+def _is_batchable_word_device(device: DeviceRef) -> bool:
+    code = DEVICE_CODES.get(device.code)
+    return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
+
+
+def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
+    entries: list[_ReadPlanEntry] = []
+    word_devices: list[DeviceRef] = []
+    dword_devices: list[DeviceRef] = []
+    seen_words: set[DeviceRef] = set()
+    seen_dwords: set[DeviceRef] = set()
+
+    for address in addresses:
+        base, dtype, bit_index = _parse_address(address)
+        device = parse_device(base)
+        batch_kind: str | None = None
+
+        if dtype == "BIT_IN_WORD":
+            if _is_batchable_word_device(device):
+                batch_kind = "WORD"
+                if device not in seen_words:
+                    word_devices.append(device)
+                    seen_words.add(device)
+        elif dtype in _WORD_DTYPES:
+            if _is_batchable_word_device(device):
+                batch_kind = "WORD"
+                if device not in seen_words:
+                    word_devices.append(device)
+                    seen_words.add(device)
+        elif dtype in _DWORD_DTYPES:
+            if _is_batchable_word_device(device):
+                batch_kind = "DWORD"
+                if device not in seen_dwords:
+                    dword_devices.append(device)
+                    seen_dwords.add(device)
+
+        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind))
+
+    return _ReadPlan(tuple(entries), tuple(word_devices), tuple(dword_devices))
+
+
+def _decode_word_value(value: int, dtype: str) -> int:
+    if dtype == "S":
+        return cast(int, struct.unpack("<h", struct.pack("<H", value & 0xFFFF))[0])
+    return int(value)
+
+
+def _decode_dword_value(value: int, dtype: str) -> int | float:
+    raw = struct.pack("<I", value & 0xFFFFFFFF)
+    if dtype == "F":
+        return cast(float, struct.unpack("<f", raw)[0])
+    if dtype == "L":
+        return cast(int, struct.unpack("<i", raw)[0])
+    return int(value)
+
+
+async def _read_random_maps(
+    client: AsyncSlmpClient,
+    plan: _ReadPlan,
+) -> tuple[dict[str, int], dict[str, int]]:
+    word_values: dict[str, int] = {}
+    dword_values: dict[str, int] = {}
+    word_devices = list(plan.word_devices)
+    dword_devices = list(plan.dword_devices)
+    word_index = 0
+    dword_index = 0
+
+    while word_index < len(word_devices) or dword_index < len(dword_devices):
+        word_chunk = word_devices[word_index : word_index + 0xFF]
+        dword_chunk = dword_devices[dword_index : dword_index + 0xFF]
+        word_index += len(word_chunk)
+        dword_index += len(dword_chunk)
+        if not word_chunk and not dword_chunk:
+            break
+        result = await client.read_random(word_devices=word_chunk, dword_devices=dword_chunk)
+        word_values.update(result.word)
+        dword_values.update(result.dword)
+
+    return word_values, dword_values
+
+
+def _read_random_maps_sync(
+    client: SlmpClient,
+    plan: _ReadPlan,
+) -> tuple[dict[str, int], dict[str, int]]:
+    word_values: dict[str, int] = {}
+    dword_values: dict[str, int] = {}
+    word_devices = list(plan.word_devices)
+    dword_devices = list(plan.dword_devices)
+    word_index = 0
+    dword_index = 0
+
+    while word_index < len(word_devices) or dword_index < len(dword_devices):
+        word_chunk = word_devices[word_index : word_index + 0xFF]
+        dword_chunk = dword_devices[dword_index : dword_index + 0xFF]
+        word_index += len(word_chunk)
+        dword_index += len(dword_chunk)
+        if not word_chunk and not dword_chunk:
+            break
+        result = client.read_random(word_devices=word_chunk, dword_devices=dword_chunk)
+        word_values.update(result.word)
+        dword_values.update(result.dword)
+
+    return word_values, dword_values
+
+
+async def _read_named_with_plan(
+    client: AsyncSlmpClient,
+    plan: _ReadPlan,
+) -> dict[str, int | float | bool]:
+    result: dict[str, int | float | bool] = {}
+    word_values, dword_values = await _read_random_maps(client, plan)
+
+    for entry in plan.entries:
+        if entry.batch_kind == "WORD":
+            word = word_values[str(entry.device)]
+            if entry.dtype == "BIT_IN_WORD":
+                result[entry.address] = bool((word >> (entry.bit_index or 0)) & 1)
+            else:
+                result[entry.address] = _decode_word_value(word, entry.dtype)
+            continue
+        if entry.batch_kind == "DWORD":
+            result[entry.address] = _decode_dword_value(dword_values[str(entry.device)], entry.dtype)
+            continue
+        if entry.dtype == "BIT_IN_WORD":
+            words = await client.read_devices(entry.device, 1, bit_unit=False)
+            result[entry.address] = bool((words[0] >> (entry.bit_index or 0)) & 1)
+        else:
+            result[entry.address] = await read_typed(client, entry.device, entry.dtype or "U")
+
+    return result
+
+
+def _read_named_with_plan_sync(
+    client: SlmpClient,
+    plan: _ReadPlan,
+) -> dict[str, int | float | bool]:
+    result: dict[str, int | float | bool] = {}
+    word_values, dword_values = _read_random_maps_sync(client, plan)
+
+    for entry in plan.entries:
+        if entry.batch_kind == "WORD":
+            word = word_values[str(entry.device)]
+            if entry.dtype == "BIT_IN_WORD":
+                result[entry.address] = bool((word >> (entry.bit_index or 0)) & 1)
+            else:
+                result[entry.address] = _decode_word_value(word, entry.dtype)
+            continue
+        if entry.batch_kind == "DWORD":
+            result[entry.address] = _decode_dword_value(dword_values[str(entry.device)], entry.dtype)
+            continue
+        if entry.dtype == "BIT_IN_WORD":
+            words = client.read_devices(entry.device, 1, bit_unit=False)
+            result[entry.address] = bool((words[0] >> (entry.bit_index or 0)) & 1)
+        else:
+            result[entry.address] = read_typed_sync(client, entry.device, entry.dtype or "U")
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Polling  (async + sync)
 # ---------------------------------------------------------------------------
@@ -414,8 +593,9 @@ async def poll(
         async for snapshot in poll(client, ["D100", "D200:F"], interval=1.0):
             print(snapshot)
     """
+    plan = _compile_read_plan(addresses)
     while True:
-        yield await read_named(client, addresses)
+        yield await _read_named_with_plan(client, plan)
         await asyncio.sleep(interval)
 
 
@@ -439,8 +619,9 @@ def poll_sync(
         for snapshot in poll_sync(client, ["D100", "D200:F"], interval=1.0):
             print(snapshot)
     """
+    plan = _compile_read_plan(addresses)
     while True:
-        yield read_named_sync(client, addresses)
+        yield _read_named_with_plan_sync(client, plan)
         time.sleep(interval)
 
 

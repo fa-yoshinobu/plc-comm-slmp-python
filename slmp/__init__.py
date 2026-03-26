@@ -37,6 +37,7 @@ from .errors import (
 from .utils import (
     QueuedAsyncSlmpClient,
     open_and_connect,
+    open_and_connect_queued,
     poll,
     poll_sync,
     read_dwords,
@@ -88,6 +89,7 @@ __all__ = [
     "TypeNameInfo",
     "recommend_profile",
     "open_and_connect",
+    "open_and_connect_queued",
     "parse_extended_device",
     "parse_device",
     "poll",

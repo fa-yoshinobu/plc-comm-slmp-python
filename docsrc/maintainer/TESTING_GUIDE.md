@@ -255,7 +255,6 @@ python scripts/slmp_pending_live_verification.py --host 192.168.250.100 --port 1
 Notes:
 
 - `1006 remote reset` is intentionally outside routine live verification
-- `2101` is PLC-initiated and remains out of scope for the normal pending workflow
 - `0x40C0` on labels usually means the label is missing or external access is not enabled
 
 Report:

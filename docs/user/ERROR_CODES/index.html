@@ -802,7 +802,8 @@
 
 <h1 id="error-codes-guide">Error Codes Guide</h1>
 <p>This file is the quick end-code table for users of the library.</p>
-<p>For the maintainer-facing version, see <a href="../../maintainer/error_code_reference/">Internal Error Code Reference</a>.</p>
+<p>The maintainer-facing error-code reference is kept in the source checkout under
+<code>docsrc/maintainer/</code>.</p>
 <h2 id="1-where-errors-come-from">1. Where Errors Come From</h2>
 <p>There are three different failure layers:</p>
 <ol>
@@ -863,8 +864,8 @@
 </tr>
 <tr>
 <td><code>0x413E</code></td>
-<td>file state/environment rejected the operation</td>
-<td><code>18xx</code> file commands on the current target</td>
+<td>environment-specific operation rejection</td>
+<td>target-dependent path rejected on the current endpoint</td>
 </tr>
 <tr>
 <td><code>0xC051</code></td>
@@ -884,12 +885,12 @@
 <tr>
 <td><code>0xC061</code></td>
 <td>request content/path not accepted in the current environment</td>
-<td>Extended Specification CPU buffer access, some file commands</td>
+<td>Extended Specification CPU buffer access</td>
 </tr>
 <tr>
 <td><code>0xC207</code></td>
-<td>file environment rejected the operation</td>
-<td>some <code>18xx</code> file commands</td>
+<td>environment-specific operation rejection</td>
+<td>target-dependent path rejected on the current endpoint</td>
 </tr>
 </tbody>
 </table>
@@ -913,14 +914,13 @@ with SlmpClient(&quot;192.168.250.100&quot;, port=1025, transport=&quot;tcp&quot
 <ul>
 <li><code>0x0000</code> means the PLC accepted the request, not that the operator-visible effect was what you expected</li>
 <li>the same end code can appear in more than one context</li>
-<li>target-specific conditions matter, especially for labels, Extended Specification, file commands, and remote control</li>
+<li>target-specific conditions matter, especially for labels, Extended Specification, and remote control</li>
 </ul>
 <h2 id="5-related-documents">5. Related Documents</h2>
 <ul>
 <li><a href="../USER_GUIDE/">User Guide</a></li>
-<li><a href="../../maintainer/TESTING_GUIDE/">Testing Guide</a></li>
-<li><a href="../../maintainer/open_items/">Open Items</a></li>
-<li><a href="../../maintainer/error_code_reference/">Internal Error Code Reference</a></li>
+<li>Maintainer-only testing and internal error-reference notes are kept in the
+  source checkout under <code>docsrc/maintainer/</code>.</li>
 </ul>
 <p>Note for <code>0xC051</code>:</p>
 <ul>

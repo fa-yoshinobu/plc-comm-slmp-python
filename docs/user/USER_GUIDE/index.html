@@ -1536,6 +1536,7 @@ with SlmpClient(&quot;192.168.250.100&quot;, 1025) as client:
 <hr />
 <h2 id="sharing-a-single-connection-across-multiple-coroutines-queuedasyncslmpclient">Sharing a single connection across multiple coroutines (QueuedAsyncSlmpClient)</h2>
 <p>If multiple coroutines (e.g., background poller and foreground writer) need to use the same connection, wrap it in <code>QueuedAsyncSlmpClient</code>. Communication is serialized via an internal lock.</p>
+<p>If you want the queued wrapper from the start, use <code>open_and_connect_queued(...)</code>.</p>
 <pre><code class="language-python">import asyncio
 from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
 
@@ -1557,6 +1558,12 @@ async def main():
         await poll_task
 
 asyncio.run(main())
+</code></pre>
+<p>Shortcut:</p>
+<pre><code class="language-python">from slmp import open_and_connect_queued
+
+async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
+    value = await client.read_devices(&quot;D100&quot;, 1, bit_unit=False)
 </code></pre>
 <hr />
 <h2 id="async-advantages">async Advantages</h2>

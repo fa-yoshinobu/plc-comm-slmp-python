@@ -100,15 +100,6 @@ After PLC-side setting updates:
   - `head=0x00000000`
 - this does not yet prove full `G/HG` equivalence
 
-### File family
-
-- current `18xx` result on the validated target:
-  - `1810`, `1811`, `1824` -> `0xC061`
-  - `1820`, `1827`, `1825`, `1822` -> `0x413E`
-  - `1826` -> `0xC207`
-- practical conclusion:
-  - file commands remain environment-dependent and unresolved
-
 ### `1617` clear error
 
 - request acceptance confirmed: `0x0000`

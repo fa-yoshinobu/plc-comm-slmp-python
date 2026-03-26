@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
+- **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
+
 ### Added
+- **`open_and_connect_queued`**: Added a queued high-level connection helper for multi-coroutine shared use.
 - **Asynchronous API**: New `AsyncSlmpClient` for high-concurrency non-blocking I/O via `asyncio`.
 - **UDP Support**: Full support for UDP transport in both synchronous and asynchronous clients.
 - **3E Frame Support**: Formally enabled and documented support for SLMP 3E frames (binary).
@@ -19,6 +24,9 @@ All notable changes to this project will be documented in this file.
 - **`open_and_connect` improvement**: Now delegates to `resolve_profile()` internally for automatic frame/series detection.
 
 ### Changed
+- **High-level named reads**: `read_named` / `read_named_sync` now compile the address list once and batch word/DWord reads via `read_random` when possible.
+- **Polling**: `poll` / `poll_sync` now reuse the compiled named-read plan across iterations instead of reparsing and reissuing per-address reads.
+- **TCP receive path**: Reduced intermediate allocations in synchronous TCP frame reads by switching the hot path to `recv_into` and single-frame assembly.
 - **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
 - **Documentation**: Added GX Simulator 3 connection guide and updated User Guide for new features.
 

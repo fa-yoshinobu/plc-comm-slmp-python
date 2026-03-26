@@ -23,8 +23,10 @@ from slmp.client import (
     RandomReadResult,
     SlmpClient,
     TypeNameInfo,
+    _recv_exact,
+    _recv_tcp_frame,
 )
-from slmp.constants import Command, PLCSeries
+from slmp.constants import Command, FrameType, PLCSeries
 from slmp.core import (
     ExtensionSpec,
     SlmpBoundaryBehaviorWarning,
@@ -118,6 +120,50 @@ class FakeClient(SlmpClient):
             "monitoring_timer": monitoring_timer,
         }
         self.last_no_response = (cmd, subcommand, data, kwargs)
+
+
+class _RecvIntoSocket:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks[:]
+
+    def recv_into(self, view: memoryview) -> int:
+        if not self._chunks:
+            return 0
+        chunk = self._chunks.pop(0)
+        size = min(len(view), len(chunk))
+        view[:size] = chunk[:size]
+        if size < len(chunk):
+            self._chunks.insert(0, chunk[size:])
+        return size
+
+
+class _RecvOnlySocket:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks[:]
+
+    def recv(self, size: int) -> bytes:
+        if not self._chunks:
+            return b""
+        chunk = self._chunks.pop(0)
+        data = chunk[:size]
+        if size < len(chunk):
+            self._chunks.insert(0, chunk[size:])
+        return data
+
+
+class TestReceiveHelpers(unittest.TestCase):
+    def test_recv_exact_prefers_recv_into(self) -> None:
+        sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
+        self.assertEqual(_recv_exact(sock, 3), b"\x01\x02\x03")
+
+    def test_recv_exact_falls_back_to_recv(self) -> None:
+        sock = _RecvOnlySocket([b"\x10\x20", b"\x30"])
+        self.assertEqual(_recv_exact(sock, 3), b"\x10\x20\x30")
+
+    def test_recv_tcp_frame_returns_complete_3e_response(self) -> None:
+        frame = bytes.fromhex("d00000ffff030002000000")
+        sock = _RecvIntoSocket([frame[:4], frame[4:7], frame[7:]])
+        self.assertEqual(_recv_tcp_frame(sock, frame_type=FrameType.FRAME_3E), frame)
 
 
 class TestTypedHelpers(unittest.TestCase):
@@ -668,7 +714,6 @@ class TestCodec(unittest.TestCase):
         """Test test_select_manual_write_rows_filters_unsupported_and_non_writable."""
         rows = [
             cli.DeviceMatrixRow("D", "D1000", "word", "", "OK", "OK", ""),
-            cli.DeviceMatrixRow("S", "S100", "bit", "", "OK", "NG", ""),
             cli.DeviceMatrixRow("G", "G0", "extension_cpu_buffer", "", "NG", "SKIP", ""),
             cli.DeviceMatrixRow("M", "M1000", "bit", "YES", "OK", "OK", ""),
             cli.DeviceMatrixRow("ZR", "ZR1000", "word", "", "TODO", "TODO", ""),
@@ -1856,14 +1901,16 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0080)
         self.assertEqual(payload, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8\x01\x00")
 
-    def test_unsupported_device_error_for_s(self) -> None:
-        """Test test_unsupported_device_error_for_s."""
+    def test_s_device_code_is_rejected(self) -> None:
+        """Test test_s_device_code_is_rejected."""
         client = FakeClient()
-        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "intentionally unsupported"):
+        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
+            parse_device("S0")
+        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
             client.read_devices("S0", 1, bit_unit=True, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "intentionally unsupported"):
+        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
             client.write_devices("S0", [True], bit_unit=True, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "intentionally unsupported"):
+        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
             client.read_block(word_blocks=(), bit_blocks=[("S0", 1)], series=PLCSeries.IQR)
 
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:

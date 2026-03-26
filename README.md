@@ -62,7 +62,6 @@ This list reflects device codes accepted by the parser and typed APIs. Actual av
 | Long timer / counter families | LTS, LTC, LTN, LSTS, LSTC, LSTN, LCS, LCC, LCN | Supported (direct) | Some PLCs reject direct access; prefer long-timer helpers when available. |
 | Extended Specification qualified devices | `Uxx\\Gyy`, `Uxx\\HGyy` | Supported via Extended Specification APIs | Direct `G/HG` access is not supported. |
 | Link direct devices | `Jx\\device` (e.g. `J2\\SW10`, `J1\\X10`) | Supported via Extended Specification APIs | CC-Link IE network device access. Use `read_devices_ext` / `write_devices_ext`. |
-| Not supported | S | Not supported | Step relay (`S`) is intentionally disabled. |
 
 ## Verified Hardware
 

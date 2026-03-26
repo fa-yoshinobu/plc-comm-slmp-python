@@ -65,7 +65,7 @@ If you need human confirmation, use:
   - Re-run the current unresolved item set.
 - `slmp_pending_live_verification.py`
   - Re-check maintained command families.
-  - Current workflow excludes `1006 remote reset` and treats `2101` as out of scope.
+  - Current workflow excludes `1006 remote reset`.
 - `slmp_special_device_probe.py`
   - Focused recheck for `G/HG` and `LT/LST` related paths.
 - `slmp_extended_device_device_recheck.py`
