@@ -3,11 +3,11 @@
 SLMP High-Level Asynchronous Utilities Sample
 ==============================================
 Demonstrates every high-level *async* helper shipped with the slmp package,
-including QueuedAsyncSlmpClient for concurrent-safe multi-task usage.
+including explicit profile selection and QueuedAsyncSlmpClient for concurrent-safe multi-task usage.
 
 Usage
 -----
-    python samples/high_level_async.py --host 192.168.250.100 --port 1025
+    python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
 
 Common port values
 ------------------
@@ -29,8 +29,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     AsyncSlmpClient,
-    open_and_connect,
-    open_and_connect_queued,
+    QueuedAsyncSlmpClient,
     poll,
     read_dwords,
     read_named,
@@ -71,6 +70,18 @@ def parse_args() -> argparse.Namespace:
         help="Socket timeout in seconds (default 3.0)",
     )
     p.add_argument(
+        "--series",
+        choices=("iqr", "ql"),
+        default="iqr",
+        help=("PLC device-encoding family\n  iqr  iQ-R / iQ-F series (default)\n  ql   Q / L series"),
+    )
+    p.add_argument(
+        "--frame-type",
+        choices=("3e", "4e"),
+        default="4e",
+        help="SLMP frame type to use for the entire session (default 4e)",
+    )
+    p.add_argument(
         "--poll-count",
         type=int,
         default=3,
@@ -84,28 +95,33 @@ def parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 
-async def demo_open_and_connect(host: str, port: int, timeout: float) -> None:
-    """
-    open_and_connect - auto-detect frame type and PLC series, then connect.
+def build_client(host: str, port: int, timeout: float, series: str, frame_type: str) -> AsyncSlmpClient:
+    return AsyncSlmpClient(
+        host,
+        port=port,
+        timeout=timeout,
+        plc_series=series,
+        frame_type=frame_type,
+    )
 
-    Tries four combinations in order:
-        (4E, iQ-R) -> (3E, Q/L) -> (3E, iQ-R) -> (4E, Q/L)
-    and settles on the first that elicits a valid response.
+
+async def demo_explicit_connect(host: str, port: int, timeout: float, series: str, frame_type: str) -> None:
+    """
+    Explicit connection settings for one SLMP session.
 
     Parameters:
         host    - PLC IP / hostname
-        port    - SLMP port (default 5000 inside open_and_connect;
-                  pass 1025 for iQ-R hardware or 5007 for Q/L hardware)
-        timeout - per-probe connection timeout in seconds
+        port    - SLMP port (for example 1025 for iQ-R hardware or 5007 for Q/L hardware)
+        timeout - connection timeout in seconds
+        series  - explicit PLC series profile ("iqr" or "ql")
+        frame_type - explicit SLMP frame type ("4e" or "3e")
 
-    Returns a ready-to-use AsyncSlmpClient.  Raises ConnectionError if no
-    candidate succeeded.
-
-    Use case: tooling where you don't know the PLC model in advance, or want
-              a single code path that works for both iQ-R and Q/L hardware.
+    Use case: application code and validation scripts where the PLC profile is
+              known and should remain stable for the full session.
     """
-    client = await open_and_connect(host, port=port, timeout=timeout)
-    print(f"[open_and_connect] frame={client.frame_type!s}  series={client.plc_series!s}")
+    client = build_client(host, port, timeout, series, frame_type)
+    await client.connect()
+    print(f"[connect] frame={client.frame_type!s}  series={client.plc_series!s}")
     await client.close()
 
 
@@ -231,9 +247,9 @@ async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
         pass
 
 
-async def demo_queued_client(host: str, port: int) -> None:
+async def demo_queued_client(host: str, port: int, timeout: float, series: str, frame_type: str) -> None:
     """
-    open_and_connect_queued - thread-safe wrapper for shared async use.
+    QueuedAsyncSlmpClient - thread-safe wrapper for shared async use.
 
     Returns a queued client that serializes all helper calls so that multiple
     coroutines (e.g. a background poller + a foreground writer) can share one
@@ -242,7 +258,7 @@ async def demo_queued_client(host: str, port: int) -> None:
     Use case: any asyncio application where more than one task needs to
               issue SLMP requests on the same connection simultaneously.
     """
-    async with await open_and_connect_queued(host, port=port) as queued:
+    async with QueuedAsyncSlmpClient(build_client(host, port, timeout, series, frame_type)) as queued:
         # Launch two concurrent tasks that both use the shared connection.
         async def task_a() -> None:
             v = await read_typed(queued, "D100", "U")  # type: ignore[arg-type]
@@ -261,11 +277,11 @@ async def demo_queued_client(host: str, port: int) -> None:
 
 
 async def run(args: argparse.Namespace) -> None:
-    # 1. open_and_connect (auto-detect)
-    await demo_open_and_connect(args.host, args.port, args.timeout)
+    # 1. Connect once with explicit stable settings
+    await demo_explicit_connect(args.host, args.port, args.timeout, args.series, args.frame_type)
 
     # 2-5. high-level helpers - connect once, run all demos
-    async with await open_and_connect(args.host, port=args.port, timeout=args.timeout) as client:
+    async with build_client(args.host, args.port, args.timeout, args.series, args.frame_type) as client:
         await demo_typed_rw(client)
         await demo_chunked_reads(client)
         await demo_bit_in_word(client)
@@ -273,7 +289,7 @@ async def run(args: argparse.Namespace) -> None:
         await demo_poll(client, args.poll_count)
 
     # 6. QueuedAsyncSlmpClient
-    await demo_queued_client(args.host, args.port)
+    await demo_queued_client(args.host, args.port, args.timeout, args.series, args.frame_type)
 
     print("Done.")
 

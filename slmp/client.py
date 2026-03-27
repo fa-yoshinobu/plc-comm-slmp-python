@@ -7,7 +7,7 @@ import struct
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 
-from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, FrameType, PLCSeries, SlmpProfileClass
+from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, FrameType, PLCSeries
 from .core import (
     _MIXED_BLOCK_RETRY_END_CODES,
     BlockReadResult,
@@ -22,7 +22,6 @@ from .core import (
     LongTimerResult,
     MonitorResult,
     RandomReadResult,
-    SlmpProfileRecommendation,
     SlmpResponse,
     SlmpTarget,
     SlmpTraceFrame,
@@ -52,7 +51,6 @@ from .core import (
     encode_request,
     pack_bit_values,
     parse_device,
-    recommend_profile,
     resolve_device_subcommand,
     resolve_extended_device_and_extension,
     unpack_bit_values,
@@ -1380,69 +1378,6 @@ class SlmpClient:
         s = PLCSeries(series) if series is not None else self.plc_series
         payload = _encode_remote_password_payload(password, series=s)
         self.request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, payload)
-
-    # --------------------
-    # Profile detection
-    # --------------------
-
-    def resolve_profile(self) -> SlmpProfileRecommendation:
-        """Auto-detect the optimal frame type and PLC series for this connection.
-
-        Tries the four most common frame/series combinations in order:
-
-        1. (4E, iQ-R)
-        2. (3E, Q/L)
-        3. (3E, iQ-R)
-        4. (4E, Q/L)
-
-        For each candidate the method:
-
-        * Sets :attr:`frame_type` and :attr:`plc_series` on ``self``.
-        * Attempts to connect and read ``SM400`` (one bit).
-        * If the PLC responds (even with an error code), tries
-          :meth:`read_type_name` and runs :func:`~slmp.core.recommend_profile`.
-
-        After the call returns, :attr:`frame_type` and :attr:`plc_series` are
-        updated to the detected values and the connection is open.
-
-        Returns:
-            :class:`~slmp.core.SlmpProfileRecommendation` with the detected
-            settings and confidence flag.
-        """
-        candidates = [
-            (FrameType.FRAME_4E, PLCSeries.IQR),
-            (FrameType.FRAME_3E, PLCSeries.QL),
-            (FrameType.FRAME_3E, PLCSeries.IQR),
-            (FrameType.FRAME_4E, PLCSeries.QL),
-        ]
-
-        for frame, series in candidates:
-            self.frame_type = frame
-            self.plc_series = series
-            self.close()
-
-            reachable = False
-            try:
-                self.connect()
-                self.read_devices("SM400", 1, bit_unit=True)
-                reachable = True
-            except SlmpError as exc:
-                if exc.end_code is not None:
-                    reachable = True
-            except Exception:
-                pass
-
-            if not reachable:
-                continue
-
-            try:
-                info = self.read_type_name()
-                rec = recommend_profile(info)
-                return SlmpProfileRecommendation(frame, series, rec.profile_class, rec.is_confident)
-            except Exception:
-                return SlmpProfileRecommendation(frame, series, SlmpProfileClass.UNKNOWN, True)
-
-        return SlmpProfileRecommendation(self.frame_type, self.plc_series, SlmpProfileClass.UNKNOWN, False)
 
     def self_test_loopback(self, data: bytes | str) -> bytes:
         """Self-test (loopback).

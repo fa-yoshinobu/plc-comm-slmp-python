@@ -12,8 +12,9 @@ High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E f
 
 This repository now treats the high-level helper layer as the recommended user surface:
 
-- `open_and_connect`
-- `open_and_connect_queued`
+- `AsyncSlmpClient`
+- `QueuedAsyncSlmpClient`
+- `SlmpClient`
 - `read_typed` / `write_typed`
 - `read_words` / `read_dwords`
 - `write_bit_in_word`
@@ -35,11 +36,16 @@ Recommended async path:
 ```python
 import asyncio
 
-from slmp import open_and_connect, read_named, write_typed
+from slmp import AsyncSlmpClient, read_named, write_typed
 
 
 async def main() -> None:
-    async with await open_and_connect("192.168.250.100", port=1025) as client:
+    async with AsyncSlmpClient(
+        "192.168.250.100",
+        port=1025,
+        plc_series="iqr",
+        frame_type="4e",
+    ) as client:
         before = await read_named(client, ["D100", "D200:F", "D50.3"])
         print("before:", before)
 
@@ -52,12 +58,22 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Recommended sync path when you already know the profile:
+Choose the connection profile explicitly:
+
+- `plc_series="iqr", frame_type="4e"` for iQ-R / iQ-F targets
+- `plc_series="ql", frame_type="3e"` for Q / L targets
+
+Recommended sync path:
 
 ```python
 from slmp import SlmpClient, read_named_sync, write_typed_sync
 
-with SlmpClient("192.168.250.100", port=1025, plc_series="iqr") as client:
+with SlmpClient(
+    "192.168.250.100",
+    port=1025,
+    plc_series="iqr",
+    frame_type="4e",
+) as client:
     print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
     write_typed_sync(client, "D100", "U", 42)
 ```
@@ -130,9 +146,10 @@ async for snapshot in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
 ### Shared connection for multiple coroutines
 
 ```python
-from slmp import open_and_connect_queued
+from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
 
-async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+inner = AsyncSlmpClient("192.168.250.100", port=1025, plc_series="iqr", frame_type="4e")
+async with QueuedAsyncSlmpClient(inner) as client:
     first = await read_named(client, ["D100", "D200:F"])
     second = await read_named(client, ["D300", "D50.3"])
 ```
@@ -148,7 +165,7 @@ The buildable sample files with the richest high-level examples are:
   - mixed `read_named_sync` / `write_named_sync`
   - polling
 - [`samples/high_level_async.py`](samples/high_level_async.py)
-  - `open_and_connect`
+  - explicit `AsyncSlmpClient`
   - typed reads and writes
   - chunked reads
   - `read_named` / `write_named`
@@ -159,7 +176,7 @@ Run them from the repository root:
 
 ```bash
 python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
 ```
 
 More sample commands are listed in [docsrc/user/SAMPLES.md](docsrc/user/SAMPLES.md).

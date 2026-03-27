@@ -2,7 +2,6 @@
 
 The primary user-facing entry points are:
 
-- ``open_and_connect`` / ``open_and_connect_queued``
 - ``read_typed`` / ``write_typed``
 - ``read_words`` / ``read_dwords``
 - ``write_bit_in_word``
@@ -14,7 +13,7 @@ __version__ = "0.1.2"
 
 from .async_client import AsyncSlmpClient
 from .client import SlmpClient
-from .constants import Command, FrameType, ModuleIONo, PLCSeries, SlmpProfileClass
+from .constants import Command, FrameType, ModuleIONo, PLCSeries
 from .core import (
     DEVICE_CODES,
     BlockReadResult,
@@ -29,14 +28,12 @@ from .core import (
     LongTimerResult,
     MonitorResult,
     RandomReadResult,
-    SlmpProfileRecommendation,
     SlmpResponse,
     SlmpTarget,
     SlmpTraceFrame,
     TypeNameInfo,
     parse_device,
     parse_extended_device,
-    recommend_profile,
 )
 from .errors import (
     SlmpBoundaryBehaviorWarning,
@@ -46,8 +43,6 @@ from .errors import (
 )
 from .utils import (
     QueuedAsyncSlmpClient,
-    open_and_connect,
-    open_and_connect_queued,
     poll,
     poll_sync,
     read_bits,
@@ -95,15 +90,10 @@ __all__ = [
     "SlmpError",
     "SlmpPracticalPathWarning",
     "SlmpUnsupportedDeviceError",
-    "SlmpProfileClass",
-    "SlmpProfileRecommendation",
     "SlmpResponse",
     "SlmpTarget",
     "SlmpTraceFrame",
     "TypeNameInfo",
-    "recommend_profile",
-    "open_and_connect",
-    "open_and_connect_queued",
     "parse_extended_device",
     "parse_device",
     "poll",

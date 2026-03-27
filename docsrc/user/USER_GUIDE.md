@@ -6,16 +6,21 @@ For normal application code, start here instead of the low-level protocol method
 
 ## Recommended Entry Points
 
-### Async connection with automatic profile detection
+### Async connection with explicit profile selection
 
 ```python
 import asyncio
 
-from slmp import open_and_connect, read_named
+from slmp import AsyncSlmpClient, read_named
 
 
 async def main() -> None:
-    async with await open_and_connect("192.168.250.100", port=1025) as client:
+    async with AsyncSlmpClient(
+        "192.168.250.100",
+        port=1025,
+        plc_series="iqr",
+        frame_type="4e",
+    ) as client:
         snapshot = await read_named(client, ["D100", "D200:F", "D50.3"])
         print(snapshot)
 
@@ -26,7 +31,7 @@ asyncio.run(main())
 Use this when:
 
 - you are writing an async application
-- you want the library to choose the correct frame/profile pair
+- you already know the target frame/profile pair
 - you want the shortest path to `read_named`, `write_typed`, and `poll`
 
 ### Async shared connection
@@ -34,11 +39,17 @@ Use this when:
 ```python
 import asyncio
 
-from slmp import open_and_connect_queued, read_named
+from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient, read_named
 
 
 async def main() -> None:
-    async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+    inner = AsyncSlmpClient(
+        "192.168.250.100",
+        port=1025,
+        plc_series="iqr",
+        frame_type="4e",
+    )
+    async with QueuedAsyncSlmpClient(inner) as client:
         first = await read_named(client, ["D100", "D200:F"])
         second = await read_named(client, ["D300", "D50.3"])
         print(first)
@@ -55,7 +66,12 @@ Use this when multiple coroutines share one PLC connection.
 ```python
 from slmp import SlmpClient, read_named_sync, write_typed_sync
 
-with SlmpClient("192.168.250.100", port=1025, plc_series="iqr") as client:
+with SlmpClient(
+    "192.168.250.100",
+    port=1025,
+    plc_series="iqr",
+    frame_type="4e",
+) as client:
     print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
     write_typed_sync(client, "D100", "U", 42)
 ```
@@ -238,7 +254,8 @@ history_dwords = await read_dwords(client, "D2000", 240, allow_split=True)
 ### Example 4: one shared async connection
 
 ```python
-async with await open_and_connect_queued("192.168.250.100", port=1025) as client:
+inner = AsyncSlmpClient("192.168.250.100", port=1025, plc_series="iqr", frame_type="4e")
+async with QueuedAsyncSlmpClient(inner) as client:
     a = await read_named(client, ["D100", "D200:F"])
     b = await read_named(client, ["D300", "D50.3"])
 ```
@@ -256,7 +273,7 @@ Run them from the repository root:
 
 ```powershell
 python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
 ```
 
 See also:

@@ -23,12 +23,12 @@ Included examples:
 ### `high_level_async.py`
 
 ```powershell
-python samples/high_level_async.py --host 192.168.250.100 --port 1025
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
 ```
 
 Included examples:
 
-- `open_and_connect`
+- explicit `AsyncSlmpClient`
 - typed scalar reads and writes
 - chunked reads with `allow_split=True`
 - bit-in-word updates
@@ -40,8 +40,8 @@ Included examples:
 
 They use the same helper set described in the user guide:
 
-- `open_and_connect`
-- `open_and_connect_queued`
+- `AsyncSlmpClient`
+- `QueuedAsyncSlmpClient`
 - `read_typed` / `write_typed`
 - `read_words` / `read_dwords`
 - `write_bit_in_word`

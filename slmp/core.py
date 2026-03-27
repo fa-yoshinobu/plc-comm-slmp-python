@@ -30,7 +30,6 @@ from .constants import (
     FrameType,
     ModuleIONo,
     PLCSeries,
-    SlmpProfileClass,
 )
 from .errors import (
     SlmpBoundaryBehaviorWarning,
@@ -212,59 +211,6 @@ class TypeNameInfo:
     raw: bytes
     model: str
     model_code: int | None
-
-
-@dataclass(frozen=True)
-class SlmpProfileRecommendation:
-    """Recommended protocol settings returned by :func:`recommend_profile`.
-
-    Attributes:
-        frame_type: Recommended SLMP frame type (3E or 4E).
-        plc_series: Recommended PLC series (QL or IQR).
-        profile_class: Identified PLC family.
-        is_confident: ``True`` when the recommendation is based on a
-            successful communication attempt or model-code match.
-    """
-
-    frame_type: FrameType
-    plc_series: PLCSeries
-    profile_class: SlmpProfileClass
-    is_confident: bool
-
-
-def recommend_profile(info: TypeNameInfo) -> SlmpProfileRecommendation:
-    """Recommend protocol settings from a :class:`TypeNameInfo` response.
-
-    Applies the same heuristics as the .NET ``SlmpProfileHeuristics.Recommend``:
-
-    1. Model-code range check (0x4800-0x4FFF -> iQ-R; 0x0000-0x00FF / 0x0200-0x03FF -> Q/L).
-    2. Model-name prefix check (``R*`` -> iQ-R; ``Q*`` / ``L*`` / ``FX*`` -> Q/L).
-    3. Falls back to iQ-R / Unknown when undetermined.
-
-    Args:
-        info: Result of a READ_TYPE_NAME (0x0101) command.
-
-    Returns:
-        :class:`SlmpProfileRecommendation` with the detected settings.
-    """
-    if info.model_code is not None:
-        if 0x4800 <= info.model_code < 0x5000:
-            return SlmpProfileRecommendation(FrameType.FRAME_4E, PLCSeries.IQR, SlmpProfileClass.MODERN_IQR, True)
-        if (0x0000 <= info.model_code < 0x0100) or (0x0200 <= info.model_code < 0x0400):
-            return SlmpProfileRecommendation(FrameType.FRAME_3E, PLCSeries.QL, SlmpProfileClass.LEGACY_QL, True)
-
-    model = info.model.upper()
-    if (  # noqa: E501
-        model.startswith("R")
-        and not model.startswith("RD")
-        and not model.startswith("RX")
-        and not model.startswith("RY")
-    ):
-        return SlmpProfileRecommendation(FrameType.FRAME_4E, PLCSeries.IQR, SlmpProfileClass.MODERN_IQR, True)
-    if model.startswith("Q") or model.startswith("L") or model.startswith("FX"):
-        return SlmpProfileRecommendation(FrameType.FRAME_3E, PLCSeries.QL, SlmpProfileClass.LEGACY_QL, True)
-
-    return SlmpProfileRecommendation(FrameType.FRAME_4E, PLCSeries.IQR, SlmpProfileClass.UNKNOWN, False)
 
 
 @dataclass(frozen=True)

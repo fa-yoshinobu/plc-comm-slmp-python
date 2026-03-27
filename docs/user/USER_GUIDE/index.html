@@ -385,10 +385,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#async-connection-with-automatic-profile-detection" class="md-nav__link">
+  <a href="#async-connection-with-explicit-profile-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async connection with automatic profile detection
+        Async connection with explicit profile selection
       
     </span>
   </a>
@@ -910,10 +910,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#async-connection-with-automatic-profile-detection" class="md-nav__link">
+  <a href="#async-connection-with-explicit-profile-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async connection with automatic profile detection
+        Async connection with explicit profile selection
       
     </span>
   </a>
@@ -1148,14 +1148,19 @@
 <p>This guide documents the recommended high-level helper APIs.</p>
 <p>For normal application code, start here instead of the low-level protocol methods.</p>
 <h2 id="recommended-entry-points">Recommended Entry Points</h2>
-<h3 id="async-connection-with-automatic-profile-detection">Async connection with automatic profile detection</h3>
+<h3 id="async-connection-with-explicit-profile-selection">Async connection with explicit profile selection</h3>
 <pre><code class="language-python">import asyncio
 
-from slmp import open_and_connect, read_named
+from slmp import AsyncSlmpClient, read_named
 
 
 async def main() -&gt; None:
-    async with await open_and_connect(&quot;192.168.250.100&quot;, port=1025) as client:
+    async with AsyncSlmpClient(
+        &quot;192.168.250.100&quot;,
+        port=1025,
+        plc_series=&quot;iqr&quot;,
+        frame_type=&quot;4e&quot;,
+    ) as client:
         snapshot = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;])
         print(snapshot)
 
@@ -1165,17 +1170,23 @@ asyncio.run(main())
 <p>Use this when:</p>
 <ul>
 <li>you are writing an async application</li>
-<li>you want the library to choose the correct frame/profile pair</li>
+<li>you already know the target frame/profile pair</li>
 <li>you want the shortest path to <code>read_named</code>, <code>write_typed</code>, and <code>poll</code></li>
 </ul>
 <h3 id="async-shared-connection">Async shared connection</h3>
 <pre><code class="language-python">import asyncio
 
-from slmp import open_and_connect_queued, read_named
+from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient, read_named
 
 
 async def main() -&gt; None:
-    async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
+    inner = AsyncSlmpClient(
+        &quot;192.168.250.100&quot;,
+        port=1025,
+        plc_series=&quot;iqr&quot;,
+        frame_type=&quot;4e&quot;,
+    )
+    async with QueuedAsyncSlmpClient(inner) as client:
         first = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
         second = await read_named(client, [&quot;D300&quot;, &quot;D50.3&quot;])
         print(first)
@@ -1188,7 +1199,12 @@ asyncio.run(main())
 <h3 id="sync-application-code">Sync application code</h3>
 <pre><code class="language-python">from slmp import SlmpClient, read_named_sync, write_typed_sync
 
-with SlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_series=&quot;iqr&quot;) as client:
+with SlmpClient(
+    &quot;192.168.250.100&quot;,
+    port=1025,
+    plc_series=&quot;iqr&quot;,
+    frame_type=&quot;4e&quot;,
+) as client:
     print(read_named_sync(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;]))
     write_typed_sync(client, &quot;D100&quot;, &quot;U&quot;, 42)
 </code></pre>
@@ -1369,7 +1385,8 @@ large_dwords = await read_dwords(client, &quot;D200&quot;, 200, allow_split=True
 history_dwords = await read_dwords(client, &quot;D2000&quot;, 240, allow_split=True)
 </code></pre>
 <h3 id="example-4-one-shared-async-connection">Example 4: one shared async connection</h3>
-<pre><code class="language-python">async with await open_and_connect_queued(&quot;192.168.250.100&quot;, port=1025) as client:
+<pre><code class="language-python">inner = AsyncSlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_series=&quot;iqr&quot;, frame_type=&quot;4e&quot;)
+async with QueuedAsyncSlmpClient(inner) as client:
     a = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
     b = await read_named(client, [&quot;D300&quot;, &quot;D50.3&quot;])
 </code></pre>
@@ -1382,7 +1399,7 @@ history_dwords = await read_dwords(client, &quot;D2000&quot;, 240, allow_split=T
 <p>They are designed to be directly runnable and syntax-check clean.</p>
 <p>Run them from the repository root:</p>
 <pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
 </code></pre>
 <p>See also:</p>
 <ul>

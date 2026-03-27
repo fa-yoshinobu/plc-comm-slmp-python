@@ -44,7 +44,7 @@ If you need human confirmation, use:
 - `slmp_compatibility_matrix_render.py`
   - Render `docsrc/validation/reports/PLC_COMPATIBILITY.md` from probe JSON files.
   - `--omit-pending-columns` is available when you want to hide command families that were not probed yet.
-  - The same run also emits `docsrc/validation/reports/compatibility_policy.json` for auto-detection.
+  - The same run also emits `docsrc/validation/reports/compatibility_policy.json` for explicit compatibility-policy defaults.
 - `slmp_init_model_docs.py`
   - Create `internal_docsrc/<series>_<model>/`.
 - `slmp_device_access_matrix_sync.py`

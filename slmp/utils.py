@@ -39,57 +39,6 @@ class _ReadPlan:
 
 
 # ---------------------------------------------------------------------------
-# Connection helper
-# ---------------------------------------------------------------------------
-
-
-async def open_and_connect(
-    host: str,
-    port: int = 5000,
-    timeout: float = 1.5,
-) -> AsyncSlmpClient:
-    """Open one connection and resolve a stable SLMP profile before use.
-
-    This helper probes supported frame/profile combinations, keeps the client
-    connected, and returns it ready for high-level calls such as
-    :func:`read_typed`, :func:`read_named`, and :func:`poll`.
-
-    Args:
-        host: PLC IP address or hostname.
-        port: SLMP port number. Typical values are ``1025`` for iQ-R/iQ-F,
-            ``5007`` for Q/L, and ``5000`` for simulator setups.
-        timeout: Per-profile connect timeout in seconds.
-
-    Returns:
-        A connected :class:`~slmp.async_client.AsyncSlmpClient` with
-        ``frame_type`` and ``plc_series`` already resolved.
-
-    Raises:
-        ConnectionError: If no supported profile can talk to the PLC.
-    """
-    from .async_client import AsyncSlmpClient
-
-    client = AsyncSlmpClient(host, port, timeout=timeout)
-    rec = await client.resolve_profile()
-    if not rec.is_confident:
-        raise ConnectionError(f"Could not detect PLC profile at {host}:{port}")
-    return client
-
-
-async def open_and_connect_queued(
-    host: str,
-    port: int = 5000,
-    timeout: float = 1.5,
-) -> QueuedAsyncSlmpClient:
-    """Open one connection and wrap it in a queued high-level client.
-
-    This is the recommended entry point when multiple coroutines share one PLC
-    connection, for example a poller and one or more writers.
-    """
-    return QueuedAsyncSlmpClient(await open_and_connect(host, port=port, timeout=timeout))
-
-
-# ---------------------------------------------------------------------------
 # Typed single-device read / write  (async)
 # ---------------------------------------------------------------------------
 

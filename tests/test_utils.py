@@ -1,15 +1,14 @@
-﻿"""Unit tests for slmp.utils sync and async utility functions."""
+"""Unit tests for slmp.utils sync and async utility functions."""
 
 import struct
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from slmp.core import DeviceRef, RandomReadResult
 from slmp.utils import (
     QueuedAsyncSlmpClient,
     _compile_read_plan,
     _parse_address,
-    open_and_connect_queued,
     poll_sync,
     read_bits_sync,
     read_dwords_sync,
@@ -331,14 +330,19 @@ class TestReadPlan(unittest.TestCase):
         self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", None])
 
 
-class TestOpenAndConnectQueued(unittest.IsolatedAsyncioTestCase):
-    async def test_returns_queued_wrapper(self):
+class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
+    async def test_context_manager_connects_and_closes_inner_client(self):
         inner = MagicMock()
-        with patch("slmp.utils.open_and_connect", new=AsyncMock(return_value=inner)) as mocked:
-            queued = await open_and_connect_queued("192.168.0.10", port=1025, timeout=2.0)
-        self.assertIsInstance(queued, QueuedAsyncSlmpClient)
-        self.assertIs(queued._inner, inner)
-        mocked.assert_awaited_once_with("192.168.0.10", port=1025, timeout=2.0)
+        inner.connect = AsyncMock()
+        inner.close = AsyncMock()
+        queued = QueuedAsyncSlmpClient(inner)
+
+        entered = await queued.__aenter__()
+        await queued.__aexit__(None, None, None)
+
+        self.assertIs(entered, queued)
+        inner.connect.assert_awaited_once()
+        inner.close.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -360,4 +364,3 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

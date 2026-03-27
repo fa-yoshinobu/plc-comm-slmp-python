@@ -40,7 +40,7 @@ python samples/high_level_async.py --host 192.168.250.100 --port 1025
 
 What it demonstrates:
 
-- `open_and_connect`
+- explicit `AsyncSlmpClient`
 - `read_typed`
 - `write_typed`
 - `read_words`
@@ -53,7 +53,7 @@ What it demonstrates:
 
 Example scenarios inside the sample:
 
-- connect with automatic profile detection
+- connect with an explicit frame/profile pair
 - read and write typed scalar values
 - read large arrays with request splitting
 - update one flag inside a word

@@ -25,14 +25,6 @@ class PLCSeries(str, Enum):
     IQR = "iqr"  # MELSEC iQ-R/iQ-L (0002/0003)
 
 
-class SlmpProfileClass(str, Enum):
-    """Profile class identified by :func:`~slmp.core.recommend_profile`."""
-
-    MODERN_IQR = "modern_iqr"  # iQ-R / iQ-L series
-    LEGACY_QL = "legacy_ql"  # Q / L / FX5 series
-    UNKNOWN = "unknown"  # Could not determine from model name/code
-
-
 class DeviceUnit(IntEnum):
     """Device unit (bit or word)."""
 

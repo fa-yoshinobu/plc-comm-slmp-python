@@ -6,7 +6,7 @@ Modern Python library for Mitsubishi PLC communication.
 
 ## Features
 - **Synchronous & Asynchronous**: Flexible API for any workload.
-- **Auto-Discovery**: Simplified connection logic.
+- **Explicit Profiles**: Choose stable frame and series settings per target.
 - **Type Safe**: Robust type hinting for modern IDEs.
 
 [Get Started](user/USER_GUIDE.md) | [API Docs](api/client.md) | [GitHub](https://github.com/fa-yoshinobu/plc-comm-slmp-python)

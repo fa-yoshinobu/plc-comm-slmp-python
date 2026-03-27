@@ -108,8 +108,8 @@ def main() -> None:
     #   timeout          - socket timeout in seconds; increase on slow networks
     #   plc_series       - "iqr" (iQ-R/iQ-F, 32-bit device numbers) or
     #                      "ql"  (Q/L series, 24-bit device numbers)
-    #   frame_type       - "3E" or "4E"; usually auto-detected; set explicitly
-    #                      when the PLC requires a specific frame
+    #   frame_type       - "3E" or "4E"; set explicitly when the PLC requires
+    #                      a specific frame/profile pairing
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
     #   trace_hook       - optional callback(SlmpTraceFrame) for protocol tracing

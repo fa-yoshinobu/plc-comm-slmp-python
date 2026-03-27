@@ -8,9 +8,10 @@ All notable changes to this project will be documented in this file.
 - **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
 - **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
 - **Unstable CLI auto profile flags**: Removed `--series auto` and `--frame-type auto` from the current CLI entry points, including `connection-check`, `other-station-check`, `compatibility-probe`, and `ExtendedDevice-device-recheck`.
+- **Auto profile helpers**: Removed `SlmpClient.resolve_profile()`, `AsyncSlmpClient.resolve_profile()`, `recommend_profile()`, `open_and_connect()`, and `open_and_connect_queued()`. Connection setup is now explicit.
 
 ### Added
-- **`open_and_connect_queued`**: Added a queued high-level connection helper for multi-coroutine shared use.
+- **`QueuedAsyncSlmpClient`**: Added a queued high-level wrapper for multi-coroutine shared use.
 - **Asynchronous API**: New `AsyncSlmpClient` for high-concurrency non-blocking I/O via `asyncio`.
 - **UDP Support**: Full support for UDP transport in both synchronous and asynchronous clients.
 - **3E Frame Support**: Formally enabled and documented support for SLMP 3E frames (binary).
@@ -18,15 +19,10 @@ All notable changes to this project will be documented in this file.
 - **Comprehensive Device Coverage**: Ported all device-related APIs (random, block, monitor, memory, label, remote) to the async client.
 - **`node_search` (sync)**: Added `SlmpClient.node_search()` for UDP broadcast node discovery, matching the existing async implementation.
 - **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` for UDP fire-and-forget IP address configuration (command 0x0E31).
-- **`resolve_profile` (sync + async)**: Added `SlmpClient.resolve_profile()` and `AsyncSlmpClient.resolve_profile()` that automatically probe four frame/series combinations and return an `SlmpProfileRecommendation`.
-- **`SlmpProfileClass` enum**: `MODERN_IQR`, `LEGACY_QL`, and `UNKNOWN` classify the detected PLC profile.
-- **`SlmpProfileRecommendation` dataclass**: Frozen dataclass returned by `resolve_profile()` and `recommend_profile()`, carrying `frame_type`, `plc_series`, `profile_class`, and `is_confident`.
-- **`recommend_profile(info)`**: Heuristic function that maps a `TypeNameInfo` (model code range or name prefix) to an `SlmpProfileRecommendation`.
-- **`open_and_connect` improvement**: Now delegates to `resolve_profile()` internally for automatic frame/series detection.
 
 ### Changed
 - **User-facing docs**: Reoriented the README, user guide, and sample guide around the high-level helper APIs only.
-- **High-level samples**: Expanded the recommended sample documentation and updated `high_level_async.py` to use `open_and_connect` / `open_and_connect_queued` in the main flow.
+- **High-level samples**: Expanded the recommended sample documentation and updated `high_level_async.py` to use explicit `AsyncSlmpClient` / `QueuedAsyncSlmpClient` setup in the main flow.
 - **High-level named reads**: `read_named` / `read_named_sync` now compile the address list once and batch word/DWord reads via `read_random` when possible.
 - **Polling**: `poll` / `poll_sync` now reuse the compiled named-read plan across iterations instead of reparsing and reissuing per-address reads.
 - **TCP receive path**: Reduced intermediate allocations in synchronous TCP frame reads by switching the hot path to `recv_into` and single-frame assembly.
