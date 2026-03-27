@@ -1,4 +1,4 @@
-﻿"""Sample script to demonstrate asynchronous SLMP communication.
+"""Sample script to demonstrate asynchronous SLMP communication.
 
 Key points:
 - AsyncSlmpClient uses asyncio and does not block the event loop while waiting
@@ -64,5 +64,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
