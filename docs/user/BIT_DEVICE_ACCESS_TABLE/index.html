@@ -1497,6 +1497,11 @@ for r in results:
 </tr>
 </tbody>
 </table>
+<p><code>read_named</code> / <code>read_named_sync</code> follow the same practical rule:</p>
+<ul>
+<li>plain <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> addresses are treated as 32-bit current values</li>
+<li><code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, and <code>LSTC</code> are resolved through the corresponding <code>LTN</code> / <code>LSTN</code> helper-backed 4-word decode instead of direct state reads</li>
+</ul>
 <blockquote>
 <p>Long timer / retentive timer set values (LT, LST) are not direct device codes and can only be read via these helpers.</p>
 </blockquote>

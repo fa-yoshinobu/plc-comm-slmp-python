@@ -1320,6 +1320,11 @@ await write_bit_in_word(client, &quot;D50&quot;, bit_index=3, value=False)
 </code></pre>
 <p>Use <code>.bit</code> notation only with word devices such as <code>D50.3</code>.
 Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X20</code>, or <code>Y20</code>.</p>
+<p>Long-device notes for the high-level helper layer:</p>
+<ul>
+<li><code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> default to 32-bit current-value access</li>
+<li><code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, and <code>LSTC</code> are resolved through the corresponding <code>LTN</code> / <code>LSTN</code> helper-backed 4-word decode instead of direct state reads</li>
+</ul>
 <p>This is the most useful helper for dashboards, logging, and application polling.</p>
 <h3 id="write_named-write_named_sync"><code>write_named</code> / <code>write_named_sync</code></h3>
 <p>Write multiple logical values using the same address notation.</p>
@@ -1335,6 +1340,7 @@ Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X2
     },
 )
 </code></pre>
+<p>Plain <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> addresses are treated as 32-bit current values in the high-level write helper too.</p>
 <h3 id="read_words-read_words_sync"><code>read_words</code> / <code>read_words_sync</code></h3>
 <p>Read a contiguous word range.</p>
 <pre><code class="language-python">words = await read_words(client, &quot;D0&quot;, 10)

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.4 - 2026-03-29
+
 ### Removed
 - **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
 - **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
@@ -19,6 +21,9 @@ All notable changes to this project will be documented in this file.
 - **Comprehensive Device Coverage**: Ported all device-related APIs (random, block, monitor, memory, label, remote) to the async client.
 - **`node_search` (sync)**: Added `SlmpClient.node_search()` for UDP broadcast node discovery, matching the existing async implementation.
 - **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` for UDP fire-and-forget IP address configuration (command 0x0E31).
+- **`release_check.bat`**: Added a release-preflight batch entry point that runs CI and docs generation together.
+- **S Device Support**: Added `S` (Step Relay) device code to `DEVICE_CODES`.
+- **Live Verification**: Exhaustively verified the library against GX Simulator 3, confirming bit order consistency across all device families and dynamic system-value updates.
 
 ### Changed
 - **User-facing docs**: Reoriented the README, user guide, and sample guide around the high-level helper APIs only.
@@ -30,9 +35,6 @@ All notable changes to this project will be documented in this file.
 - **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
 - **Documentation**: Added GX Simulator 3 connection guide and updated User Guide for new features.
 
-### Added
-- **`release_check.bat`**: Added a release-preflight batch entry point that runs CI and docs generation together.
-
 ### Fixed
 - **Qualified device DM override**: Explicit `direct_memory_specification` in `ExtensionSpec` is now respected when passing qualified device strings such as `U3E0\G10`; previously the auto-detected DM for `G` (0xF8) or `HG` (0xFA) devices would unconditionally override the caller's value. Auto-detection now only applies when the caller leaves DM at the default (`DIRECT_MEMORY_NORMAL = 0x00`).
 - **Bit Data Packing**: Swapped nibble order in `pack_bit_values` and `unpack_bit_values` to correctly map the first device to the high nibble and the second device to the low nibble, matching the SLMP binary specification and live PLC behavior.
@@ -40,10 +42,6 @@ All notable changes to this project will be documented in this file.
 - **Node Search**: Improved robustness of `decode_node_search_response` against truncated or malformed network data.
 - **File Validation**: Added password length validation (6-32 characters) for iQ-R file subcommands (e.g. `0x0040`).
 - Fixed several type hinting issues in `core.py` and redundant constant definitions.
-
-### Added
-- **S Device Support**: Added `S` (Step Relay) device code to `DEVICE_CODES`.
-- **Live Verification**: Exhaustively verified the library against GX Simulator 3, confirming bit order consistency across all device families and dynamic system-value updates.
 
 ## 0.1.3 - 2026-03-15
 
