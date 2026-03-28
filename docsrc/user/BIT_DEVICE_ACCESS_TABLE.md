@@ -158,6 +158,11 @@ for r in results:
 | `read_lstc_states(head_no, points)` | LSTN -> LSTC coil | `list[bool]` |
 | `read_lsts_states(head_no, points)` | LSTN -> LSTS contact | `list[bool]` |
 
+`read_named` / `read_named_sync` follow the same practical rule:
+
+- plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values
+- `LTS`, `LTC`, `LSTS`, and `LSTC` are resolved through the corresponding `LTN` / `LSTN` helper-backed 4-word decode instead of direct state reads
+
 > Long timer / retentive timer set values (LT, LST) are not direct device codes and can only be read via these helpers.
 
 ---

@@ -156,6 +156,11 @@ snapshot = await read_named(
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
 
+Long-device notes for the high-level helper layer:
+
+- `LTN`, `LSTN`, and `LCN` default to 32-bit current-value access
+- `LTS`, `LTC`, `LSTS`, and `LSTC` are resolved through the corresponding `LTN` / `LSTN` helper-backed 4-word decode instead of direct state reads
+
 This is the most useful helper for dashboards, logging, and application polling.
 
 ### `write_named` / `write_named_sync`
@@ -175,6 +180,8 @@ await write_named(
     },
 )
 ```
+
+Plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values in the high-level write helper too.
 
 ### `read_words` / `read_words_sync`
 

@@ -20,6 +20,18 @@ if TYPE_CHECKING:
 _WORD_DTYPES = frozenset({"U", "S"})
 _DWORD_DTYPES = frozenset({"D", "L", "F"})
 _UNBATCHED_DEVICE_CODES = frozenset({"G", "HG"})
+_DEFAULT_DWORD_DEVICE_CODES = frozenset({"LTN", "LSTN", "LCN"})
+_LONG_TIMER_READ_FAMILIES: dict[str, tuple[str, str]] = {
+    "LTN": ("LTN", "current"),
+    "LTS": ("LTN", "contact"),
+    "LTC": ("LTN", "coil"),
+    "LSTN": ("LSTN", "current"),
+    "LSTS": ("LSTN", "contact"),
+    "LSTC": ("LSTN", "coil"),
+    "LCN": ("LCN", "current"),
+    "LCS": ("LCN", "contact"),
+    "LCC": ("LCN", "coil"),
+}
 
 
 @dataclass(frozen=True)
@@ -29,6 +41,7 @@ class _ReadPlanEntry:
     dtype: str
     bit_index: int | None
     batch_kind: str | None
+    long_timer_read: tuple[str, str] | None
 
 
 @dataclass(frozen=True)
@@ -60,12 +73,16 @@ async def read_typed(
     Returns:
         ``bool`` for ``BIT``, otherwise ``int`` or ``float``.
     """
+    ref = parse_device(device) if isinstance(device, str) else device
     key = dtype.upper()
+    long_read = _get_long_timer_read(ref)
+    if long_read is not None:
+        return await _read_long_family_value(client, ref, key, long_read)
     if key == "BIT":
-        values = await client.read_devices(device, 1, bit_unit=True)
+        values = await client.read_devices(ref, 1, bit_unit=True)
         return bool(values[0])
     if key in ("D", "L", "F"):
-        words = await client.read_devices(device, 2, bit_unit=False)
+        words = await client.read_devices(ref, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
         if key == "F":
             return cast(float, struct.unpack("<f", raw)[0])
@@ -74,7 +91,7 @@ async def read_typed(
         else:
             return cast(int, struct.unpack("<I", raw)[0])
     else:
-        words = await client.read_devices(device, 1, bit_unit=False)
+        words = await client.read_devices(ref, 1, bit_unit=False)
         if key == "S":
             return cast(int, struct.unpack("<h", struct.pack("<H", words[0]))[0])
         return int(words[0])
@@ -122,12 +139,16 @@ def read_typed_sync(
     dtype: str,
 ) -> int | float:
     """Synchronously read one logical value as a Python scalar."""
+    ref = parse_device(device) if isinstance(device, str) else device
     key = dtype.upper()
+    long_read = _get_long_timer_read(ref)
+    if long_read is not None:
+        return _read_long_family_value_sync(client, ref, key, long_read)
     if key == "BIT":
-        values = client.read_devices(device, 1, bit_unit=True)
+        values = client.read_devices(ref, 1, bit_unit=True)
         return bool(values[0])
     if key in ("D", "L", "F"):
-        words = client.read_devices(device, 2, bit_unit=False)
+        words = client.read_devices(ref, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
         if key == "F":
             return cast(float, struct.unpack("<f", raw)[0])
@@ -136,7 +157,7 @@ def read_typed_sync(
         else:
             return cast(int, struct.unpack("<I", raw)[0])
     else:
-        words = client.read_devices(device, 1, bit_unit=False)
+        words = client.read_devices(ref, 1, bit_unit=False)
         if key == "S":
             return cast(int, struct.unpack("<h", struct.pack("<H", words[0]))[0])
         return int(words[0])
@@ -305,7 +326,9 @@ async def write_named(
             await write_bit_in_word(client, base, bit_idx or 0, bool(value))
         else:
             device = parse_device(base)
-            await write_typed(client, base, _normalize_dtype_for_device(device, dtype or "U"), value)
+            resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
+            _validate_long_timer_entry(address, device, resolved_dtype)
+            await write_typed(client, base, resolved_dtype, value)
 
 
 def write_named_sync(
@@ -320,7 +343,9 @@ def write_named_sync(
             write_bit_in_word_sync(client, base, bit_idx or 0, bool(value))
         else:
             device = parse_device(base)
-            write_typed_sync(client, base, _normalize_dtype_for_device(device, dtype or "U"), value)
+            resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
+            _validate_long_timer_entry(address, device, resolved_dtype)
+            write_typed_sync(client, base, resolved_dtype, value)
 
 
 # ---------------------------------------------------------------------------
@@ -350,11 +375,43 @@ def _is_batchable_word_device(device: DeviceRef) -> bool:
     return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
 
 
+def _address_has_explicit_dtype(address: str) -> bool:
+    return ":" in address
+
+
 def _normalize_dtype_for_device(device: DeviceRef, dtype: str) -> str:
     code = DEVICE_CODES.get(device.code)
     if code is not None and code.unit == DeviceUnit.BIT and dtype == "U":
         return "BIT"
     return dtype
+
+
+def _resolve_dtype_for_address(address: str, device: DeviceRef, dtype: str, bit_index: int | None) -> str:
+    normalized = _normalize_dtype_for_device(device, dtype or "U")
+    if not _address_has_explicit_dtype(address) and bit_index is None and device.code in _DEFAULT_DWORD_DEVICE_CODES:
+        return "D"
+    return normalized
+
+
+def _get_long_timer_read(device: DeviceRef) -> tuple[str, str] | None:
+    return _LONG_TIMER_READ_FAMILIES.get(device.code)
+
+
+def _validate_long_timer_entry(address: str, device: DeviceRef, dtype: str) -> None:
+    long_read = _get_long_timer_read(device)
+    if long_read is None:
+        return
+    _, role = long_read
+    if role == "current":
+        if dtype not in {"D", "L"}:
+            raise ValueError(
+                f"Address '{address}' uses a 32-bit long current value. Use the plain form or ':D' / ':L'."
+            )
+        return
+    if dtype != "BIT":
+        raise ValueError(
+            f"Address '{address}' is a long timer state device. Use the plain device form without a dtype override."
+        )
 
 
 def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
@@ -364,6 +421,78 @@ def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
             f"Address '{address}' uses '.bit' notation, which is only valid for word devices. "
             "Address bit devices directly, for example 'M1000' instead of 'M1000.0'."
         )
+
+
+def _coerce_long_current_value(current_value: int, dtype: str) -> int:
+    if dtype == "L":
+        return cast(int, struct.unpack("<i", struct.pack("<I", int(current_value) & 0xFFFFFFFF))[0])
+    return int(current_value)
+
+
+def _decode_long_family_words(words: list[int]) -> tuple[int, bool, bool]:
+    current_value = int(words[0]) | (int(words[1]) << 16)
+    status_word = int(words[2]) & 0xFFFF
+    return current_value, bool(status_word & 0x0002), bool(status_word & 0x0001)
+
+
+async def _read_long_family_point(
+    client: AsyncSlmpClient,
+    prefix: str,
+    head_no: int,
+) -> tuple[int, bool, bool]:
+    if prefix == "LTN":
+        timer = (await client.read_long_timer(head_no=head_no, points=1))[0]
+        return int(timer.current_value), bool(timer.contact), bool(timer.coil)
+    if prefix == "LSTN":
+        timer = (await client.read_long_retentive_timer(head_no=head_no, points=1))[0]
+        return int(timer.current_value), bool(timer.contact), bool(timer.coil)
+    words = await client.read_devices(DeviceRef("LCN", head_no), 4, bit_unit=False)
+    return _decode_long_family_words(list(words))
+
+
+def _read_long_family_point_sync(
+    client: SlmpClient,
+    prefix: str,
+    head_no: int,
+) -> tuple[int, bool, bool]:
+    if prefix == "LTN":
+        timer = client.read_long_timer(head_no=head_no, points=1)[0]
+        return int(timer.current_value), bool(timer.contact), bool(timer.coil)
+    if prefix == "LSTN":
+        timer = client.read_long_retentive_timer(head_no=head_no, points=1)[0]
+        return int(timer.current_value), bool(timer.contact), bool(timer.coil)
+    words = client.read_devices(DeviceRef("LCN", head_no), 4, bit_unit=False)
+    return _decode_long_family_words(list(words))
+
+
+async def _read_long_family_value(
+    client: AsyncSlmpClient,
+    device: DeviceRef,
+    dtype: str,
+    long_read: tuple[str, str],
+) -> int | bool:
+    prefix, role = long_read
+    current_value, contact, coil = await _read_long_family_point(client, prefix, device.number)
+    if role == "current":
+        return _coerce_long_current_value(current_value, dtype)
+    if role == "contact":
+        return contact
+    return coil
+
+
+def _read_long_family_value_sync(
+    client: SlmpClient,
+    device: DeviceRef,
+    dtype: str,
+    long_read: tuple[str, str],
+) -> int | bool:
+    prefix, role = long_read
+    current_value, contact, coil = _read_long_family_point_sync(client, prefix, device.number)
+    if role == "current":
+        return _coerce_long_current_value(current_value, dtype)
+    if role == "contact":
+        return contact
+    return coil
 
 
 def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
@@ -376,10 +505,14 @@ def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
         device = parse_device(base)
-        dtype = _normalize_dtype_for_device(device, dtype)
+        dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
+        _validate_long_timer_entry(address, device, dtype)
         batch_kind: str | None = None
+        long_timer_read = _get_long_timer_read(device)
 
-        if dtype == "BIT_IN_WORD":
+        if long_timer_read is not None:
+            batch_kind = "LONG_TIMER"
+        elif dtype == "BIT_IN_WORD":
             _validate_bit_in_word_target(address, device)
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
@@ -399,7 +532,7 @@ def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
                     dword_devices.append(device)
                     seen_dwords.add(device)
 
-        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind))
+        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind, long_timer_read))
 
     return _ReadPlan(tuple(entries), tuple(word_devices), tuple(dword_devices))
 
@@ -475,8 +608,23 @@ async def _read_named_with_plan(
 ) -> dict[str, int | float | bool]:
     result: dict[str, int | float | bool] = {}
     word_values, dword_values = await _read_random_maps(client, plan)
+    long_timer_cache: dict[tuple[str, int], Any] = {}
 
     for entry in plan.entries:
+        if entry.batch_kind == "LONG_TIMER":
+            assert entry.long_timer_read is not None
+            prefix, role = entry.long_timer_read
+            cache_key = (prefix, entry.device.number)
+            if cache_key not in long_timer_cache:
+                long_timer_cache[cache_key] = await _read_long_family_point(client, prefix, entry.device.number)
+            current_value, contact, coil = long_timer_cache[cache_key]
+            if role == "current":
+                result[entry.address] = _coerce_long_current_value(current_value, entry.dtype)
+            elif role == "contact":
+                result[entry.address] = bool(contact)
+            else:
+                result[entry.address] = bool(coil)
+            continue
         if entry.batch_kind == "WORD":
             word = word_values[str(entry.device)]
             if entry.dtype == "BIT_IN_WORD":
@@ -502,8 +650,23 @@ def _read_named_with_plan_sync(
 ) -> dict[str, int | float | bool]:
     result: dict[str, int | float | bool] = {}
     word_values, dword_values = _read_random_maps_sync(client, plan)
+    long_timer_cache: dict[tuple[str, int], Any] = {}
 
     for entry in plan.entries:
+        if entry.batch_kind == "LONG_TIMER":
+            assert entry.long_timer_read is not None
+            prefix, role = entry.long_timer_read
+            cache_key = (prefix, entry.device.number)
+            if cache_key not in long_timer_cache:
+                long_timer_cache[cache_key] = _read_long_family_point_sync(client, prefix, entry.device.number)
+            current_value, contact, coil = long_timer_cache[cache_key]
+            if role == "current":
+                result[entry.address] = _coerce_long_current_value(current_value, entry.dtype)
+            elif role == "contact":
+                result[entry.address] = bool(contact)
+            else:
+                result[entry.address] = bool(coil)
+            continue
         if entry.batch_kind == "WORD":
             word = word_values[str(entry.device)]
             if entry.dtype == "BIT_IN_WORD":

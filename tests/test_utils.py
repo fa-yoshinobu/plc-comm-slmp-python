@@ -4,7 +4,7 @@ import struct
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from slmp.core import DeviceRef, RandomReadResult
+from slmp.core import DeviceRef, LongTimerResult, RandomReadResult
 from slmp.utils import (
     QueuedAsyncSlmpClient,
     _compile_read_plan,
@@ -122,7 +122,30 @@ class TestReadTypedSync(unittest.TestCase):
         client = MagicMock()
         client.read_devices.return_value = [True]
         self.assertTrue(read_typed_sync(client, "M100", "BIT"))
-        client.read_devices.assert_called_once_with("M100", 1, bit_unit=True)
+        client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=True)
+
+    def test_long_families_use_helper_backed_reads(self):
+        client = MagicMock()
+        client.read_long_timer.return_value = [
+            LongTimerResult(10, "LTN10", 0x00010002, True, False, 0x0002, [2, 1, 2, 0])
+        ]
+        client.read_long_retentive_timer.return_value = [
+            LongTimerResult(20, "LSTN20", 7, False, True, 0x0001, [7, 0, 1, 0])
+        ]
+        client.read_devices.return_value = [0x0008, 0x0000, 0x0003, 0x0000]
+
+        self.assertEqual(read_typed_sync(client, "LTN10", "D"), 0x00010002)
+        self.assertTrue(read_typed_sync(client, "LTS10", "BIT"))
+        self.assertFalse(read_typed_sync(client, "LTC10", "BIT"))
+        self.assertEqual(read_typed_sync(client, "LSTN20", "D"), 7)
+        self.assertTrue(read_typed_sync(client, "LSTC20", "BIT"))
+        self.assertEqual(read_typed_sync(client, "LCN30", "D"), 8)
+        self.assertTrue(read_typed_sync(client, "LCS30", "BIT"))
+        self.assertTrue(read_typed_sync(client, "LCC30", "BIT"))
+
+        client.read_long_timer.assert_called()
+        client.read_long_retentive_timer.assert_called()
+        client.read_devices.assert_called_with(DeviceRef("LCN", 30), 4, bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +243,37 @@ class TestReadNamedSync(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only valid for word devices"):
             read_named_sync(client, ["M100.0"])
 
+    def test_long_timer_family_uses_helper_backed_reads(self):
+        client = MagicMock()
+        client.read_long_timer.side_effect = [
+            [LongTimerResult(10, "LTN10", 0x00010002, True, False, 0x0002, [2, 1, 2, 0])],
+        ]
+        client.read_long_retentive_timer.side_effect = [
+            [LongTimerResult(20, "LSTN20", 7, False, True, 0x0001, [7, 0, 1, 0])],
+        ]
+        client.read_devices.side_effect = [
+            [0x0008, 0x0000, 0x0003, 0x0000],
+        ]
+
+        result = read_named_sync(
+            client,
+            ["LTN10", "LTS10", "LTC10", "LSTN20", "LSTS20", "LSTC20", "LCN30", "LCS30", "LCC30"],
+        )
+
+        self.assertEqual(result["LTN10"], 0x00010002)
+        self.assertTrue(result["LTS10"])
+        self.assertFalse(result["LTC10"])
+        self.assertEqual(result["LSTN20"], 7)
+        self.assertFalse(result["LSTS20"])
+        self.assertTrue(result["LSTC20"])
+        self.assertEqual(result["LCN30"], 8)
+        self.assertTrue(result["LCS30"])
+        self.assertTrue(result["LCC30"])
+        client.read_random.assert_not_called()
+        client.read_long_timer.assert_called_once_with(head_no=10, points=1)
+        client.read_long_retentive_timer.assert_called_once_with(head_no=20, points=1)
+        client.read_devices.assert_called_once_with(DeviceRef("LCN", 30), 4, bit_unit=False)
+
 
 # ---------------------------------------------------------------------------
 # write_named_sync
@@ -253,6 +307,19 @@ class TestWriteNamedSync(unittest.TestCase):
         client = MagicMock()
         with self.assertRaisesRegex(ValueError, "only valid for word devices"):
             write_named_sync(client, {"M100.0": True})
+
+    def test_write_named_defaults_long_current_values_to_dword(self):
+        client = MagicMock()
+        write_named_sync(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
+
+        self.assertEqual(
+            client.write_devices.call_args_list,
+            [
+                unittest.mock.call("LTN10", [1, 0], bit_unit=False),
+                unittest.mock.call("LSTN20", [2, 0], bit_unit=False),
+                unittest.mock.call("LCN30", [3, 0], bit_unit=False),
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +396,24 @@ class TestReadPlan(unittest.TestCase):
         self.assertEqual(plan.dword_devices, (DeviceRef("D", 101),))
         self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", None])
 
+    def test_compile_read_plan_marks_long_timer_helper_reads_and_long_currents(self):
+        plan = _compile_read_plan(["LTN10", "LTS10", "LTC10", "LSTN20", "LCN30", "LCS30", "LCC30"])
+
+        self.assertEqual(plan.word_devices, ())
+        self.assertEqual(plan.dword_devices, ())
+        self.assertEqual(
+            [(entry.address, entry.dtype, entry.batch_kind) for entry in plan.entries],
+            [
+                ("LTN10", "D", "LONG_TIMER"),
+                ("LTS10", "BIT", "LONG_TIMER"),
+                ("LTC10", "BIT", "LONG_TIMER"),
+                ("LSTN20", "D", "LONG_TIMER"),
+                ("LCN30", "D", "LONG_TIMER"),
+                ("LCS30", "BIT", "LONG_TIMER"),
+                ("LCC30", "BIT", "LONG_TIMER"),
+            ],
+        )
+
 
 class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
     async def test_context_manager_connects_and_closes_inner_client(self):
@@ -360,6 +445,21 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
         client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
         await write_named(client, {"D100": 1, "D200": 2})
         self.assertEqual(client.write_devices.call_count, 2)
+
+    async def test_write_named_defaults_long_current_values_to_dword(self):
+        client = MagicMock()
+        client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+
+        await write_named(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
+
+        self.assertEqual(
+            client.write_devices.call_args_list,
+            [
+                unittest.mock.call("LTN10", [1, 0], bit_unit=False),
+                unittest.mock.call("LSTN20", [2, 0], bit_unit=False),
+                unittest.mock.call("LCN30", [3, 0], bit_unit=False),
+            ],
+        )
 
 
 if __name__ == "__main__":
