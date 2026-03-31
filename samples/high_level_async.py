@@ -28,13 +28,16 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from slmp import (
-    AsyncSlmpClient,
-    QueuedAsyncSlmpClient,
+    SlmpConnectionOptions,
+    normalize_address,
+    open_and_connect,
     poll,
-    read_dwords,
+    read_dwords_chunked,
+    read_dwords_single_request,
     read_named,
     read_typed,
-    read_words,
+    read_words_chunked,
+    read_words_single_request,
     write_bit_in_word,
     write_named,
     write_typed,
@@ -95,9 +98,9 @@ def parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 
-def build_client(host: str, port: int, timeout: float, series: str, frame_type: str) -> AsyncSlmpClient:
-    return AsyncSlmpClient(
-        host,
+def build_options(host: str, port: int, timeout: float, series: str, frame_type: str) -> SlmpConnectionOptions:
+    return SlmpConnectionOptions(
+        host=host,
         port=port,
         timeout=timeout,
         plc_series=series,
@@ -119,13 +122,13 @@ async def demo_explicit_connect(host: str, port: int, timeout: float, series: st
     Use case: application code and validation scripts where the PLC profile is
               known and should remain stable for the full session.
     """
-    client = build_client(host, port, timeout, series, frame_type)
-    await client.connect()
+    options = build_options(host, port, timeout, series, frame_type)
+    client = await open_and_connect(options)
     print(f"[connect] frame={client.frame_type!s}  series={client.plc_series!s}")
     await client.close()
 
 
-async def demo_typed_rw(client: AsyncSlmpClient) -> None:
+async def demo_typed_rw(client) -> None:
     """
     read_typed / write_typed - single device with automatic type conversion.
 
@@ -150,29 +153,29 @@ async def demo_typed_rw(client: AsyncSlmpClient) -> None:
     print("[write_typed] Wrote 42->D100, 3.14->D200, -100->D202")
 
 
-async def demo_chunked_reads(client: AsyncSlmpClient) -> None:
+async def demo_contiguous_reads(client) -> None:
     """
-    read_words / read_dwords - contiguous block reads.
+    Explicit contiguous helpers.
 
-    max_per_request: maximum words per SLMP request (protocol limit 960).
-    allow_split=True: auto-split requests larger than max_per_request.
-                      Without this flag a ValueError is raised immediately
-                      when count > max_per_request.
+    `*_single_request` keeps one logical read on one PLC request.
+    `*_chunked` is the explicit opt-in surface for large multi-request reads.
 
     Use case: reading a recipe table of 1000 words that exceeds the 960-word
-              SLMP limit in a single pass.
+              SLMP limit while keeping the call site explicit about chunking.
     """
-    words = await read_words(client, "D0", 10)
-    print(f"[read_words]  D0-D9 = {words}")
+    words = await read_words_single_request(client, "D0", 10)
+    print(f"[read_words_single_request]  D0-D9 = {words}")
 
-    dwords = await read_dwords(client, "D0", 4)
-    print(f"[read_dwords] D0-D7 (as 4 x uint32) = {dwords}")
+    dwords = await read_dwords_single_request(client, "D0", 4)
+    print(f"[read_dwords_single_request] D0-D7 (as 4 x uint32) = {dwords}")
 
-    large = await read_words(client, "D0", 1000, allow_split=True)
-    print(f"[read_words allow_split] D0-D999: {len(large)} words")
+    large_words = await read_words_chunked(client, "D0", 1000)
+    large_dwords = await read_dwords_chunked(client, "D200", 120)
+    print(f"[read_words_chunked] D0-D999: {len(large_words)} words")
+    print(f"[read_dwords_chunked] D200-D439: {len(large_dwords)} dwords")
 
 
-async def demo_bit_in_word(client: AsyncSlmpClient) -> None:
+async def demo_bit_in_word(client) -> None:
     """
     write_bit_in_word - set/clear one bit inside a word device.
 
@@ -188,7 +191,7 @@ async def demo_bit_in_word(client: AsyncSlmpClient) -> None:
     print("[write_bit_in_word] Clear bit 3 of D50")
 
 
-async def demo_named_rw(client: AsyncSlmpClient) -> None:
+async def demo_named_rw(client) -> None:
     """
     read_named / write_named - multi-device mixed-type access by address string.
 
@@ -227,7 +230,7 @@ async def demo_named_rw(client: AsyncSlmpClient) -> None:
     print("[write_named] Wrote mixed-type values")
 
 
-async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
+async def demo_poll(client, count: int) -> None:
     """
     poll - async generator that yields a snapshot dict every *interval* seconds.
 
@@ -258,15 +261,15 @@ async def demo_queued_client(host: str, port: int, timeout: float, series: str, 
     Use case: any asyncio application where more than one task needs to
               issue SLMP requests on the same connection simultaneously.
     """
-    async with QueuedAsyncSlmpClient(build_client(host, port, timeout, series, frame_type)) as queued:
-        # Launch two concurrent tasks that both use the shared connection.
+    async with await open_and_connect(build_options(host, port, timeout, series, frame_type)) as queued:
+
         async def task_a() -> None:
-            v = await read_typed(queued, "D100", "U")  # type: ignore[arg-type]
-            print(f"[queued task-A] D100 = {v}")
+            first = await read_named(queued, ["D100", "D200:F"])
+            print(f"[queued task-A] {first}")
 
         async def task_b() -> None:
-            v = await read_typed(queued, "D200", "F")  # type: ignore[arg-type]
-            print(f"[queued task-B] D200:F = {v}")
+            second = await read_named(queued, ["D202:L", "D50.3"])
+            print(f"[queued task-B] {second}")
 
         await asyncio.gather(task_a(), task_b())
 
@@ -277,13 +280,17 @@ async def demo_queued_client(host: str, port: int, timeout: float, series: str, 
 
 
 async def run(args: argparse.Namespace) -> None:
+    print(f"[normalize_address] x20 -> {normalize_address('x20')}")
+
     # 1. Connect once with explicit stable settings
     await demo_explicit_connect(args.host, args.port, args.timeout, args.series, args.frame_type)
 
     # 2-5. high-level helpers - connect once, run all demos
-    async with build_client(args.host, args.port, args.timeout, args.series, args.frame_type) as client:
+    async with await open_and_connect(
+        build_options(args.host, args.port, args.timeout, args.series, args.frame_type)
+    ) as client:
         await demo_typed_rw(client)
-        await demo_chunked_reads(client)
+        await demo_contiguous_reads(client)
         await demo_bit_in_word(client)
         await demo_named_rw(client)
         await demo_poll(client, args.poll_count)

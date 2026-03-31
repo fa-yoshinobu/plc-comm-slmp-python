@@ -15,7 +15,7 @@ python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iq
 Included examples:
 
 - typed scalar reads and writes
-- chunked word and dword reads
+- explicit `single_request` and `chunked` contiguous reads
 - bit-in-word updates
 - mixed `read_named_sync` / `write_named_sync`
 - periodic polling
@@ -28,9 +28,9 @@ python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series i
 
 Included examples:
 
-- explicit `AsyncSlmpClient`
+- `SlmpConnectionOptions` plus `open_and_connect`
 - typed scalar reads and writes
-- chunked reads with `allow_split=True`
+- explicit `single_request` and `chunked` contiguous reads
 - bit-in-word updates
 - mixed `read_named` / `write_named`
 - `poll`
@@ -40,10 +40,13 @@ Included examples:
 
 They use the same helper set described in the user guide:
 
-- `AsyncSlmpClient`
+- `SlmpConnectionOptions`
+- `open_and_connect` / `open_and_connect_sync`
 - `QueuedAsyncSlmpClient`
+- `normalize_address`
 - `read_typed` / `write_typed`
-- `read_words` / `read_dwords`
+- `read_words_single_request` / `read_dwords_single_request`
+- `read_words_chunked` / `read_dwords_chunked`
 - `write_bit_in_word`
 - `read_named` / `write_named`
 - `poll`

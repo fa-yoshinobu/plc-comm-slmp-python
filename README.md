@@ -13,11 +13,15 @@ High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E f
 
 This repository now treats the high-level helper layer as the recommended user surface:
 
+- `SlmpConnectionOptions`
+- `open_and_connect` / `open_and_connect_sync`
 - `AsyncSlmpClient`
 - `QueuedAsyncSlmpClient`
 - `SlmpClient`
+- `normalize_address`
 - `read_typed` / `write_typed`
-- `read_words` / `read_dwords`
+- `read_words_single_request` / `read_dwords_single_request`
+- `read_words_chunked` / `read_dwords_chunked`
 - `write_bit_in_word`
 - `read_named` / `write_named`
 - `poll`
@@ -39,16 +43,17 @@ Recommended async path:
 ```python
 import asyncio
 
-from slmp import AsyncSlmpClient, read_named, write_typed
+from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_typed
 
 
 async def main() -> None:
-    async with AsyncSlmpClient(
-        "192.168.250.100",
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
         port=1025,
         plc_series="iqr",
         frame_type="4e",
-    ) as client:
+    )
+    async with await open_and_connect(options) as client:
         before = await read_named(client, ["D100", "D200:F", "D50.3"])
         print("before:", before)
 
@@ -69,19 +74,35 @@ Choose the connection profile explicitly:
 Recommended sync path:
 
 ```python
-from slmp import SlmpClient, read_named_sync, write_typed_sync
+from slmp import (
+    SlmpConnectionOptions,
+    open_and_connect_sync,
+    read_named_sync,
+    write_typed_sync,
+)
 
-with SlmpClient(
-    "192.168.250.100",
+options = SlmpConnectionOptions(
+    host="192.168.250.100",
     port=1025,
     plc_series="iqr",
     frame_type="4e",
-) as client:
+)
+
+with open_and_connect_sync(options) as client:
     print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
     write_typed_sync(client, "D100", "U", 42)
 ```
 
 ## High-Level API Guide
+
+### Address normalization
+
+```python
+from slmp import normalize_address
+
+print(normalize_address("x20"))   # X20
+print(normalize_address("d200"))  # D200
+```
 
 ### Single typed values
 
@@ -135,14 +156,28 @@ await write_named(
 
 The same default applies on writes: plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values in the high-level helper layer.
 
-### Chunked word and dword reads
+### Explicit contiguous helpers
 
 ```python
-from slmp import read_words, read_dwords
+from slmp import (
+    read_dwords_chunked,
+    read_dwords_single_request,
+    read_words_chunked,
+    read_words_single_request,
+)
 
-words = await read_words(client, "D0", 1000, allow_split=True)
-dwords = await read_dwords(client, "D200", 120, allow_split=True)
+words = await read_words_single_request(client, "D0", 120)
+dwords = await read_dwords_single_request(client, "D200", 16)
+
+large_words = await read_words_chunked(client, "D1000", 1000)
+large_dwords = await read_dwords_chunked(client, "D2000", 120)
 ```
+
+`*_single_request` never changes one logical request into multiple PLC requests.
+If the request does not fit, it returns an error.
+
+`*_chunked` is the explicit opt-in surface for multi-request transfers.
+Use it only when the caller accepts protocol-defined chunk boundaries.
 
 ### Polling
 

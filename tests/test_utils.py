@@ -2,24 +2,35 @@
 
 import struct
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from slmp.core import DeviceRef, LongTimerResult, RandomReadResult
 from slmp.utils import (
     QueuedAsyncSlmpClient,
+    SlmpConnectionOptions,
     _compile_read_plan,
     _parse_address,
+    normalize_address,
+    open_and_connect,
     poll_sync,
     read_bits_sync,
+    read_dwords_chunked_sync,
+    read_dwords_single_request_sync,
     read_dwords_sync,
     read_named_sync,
     read_typed_sync,
+    read_words_chunked_sync,
+    read_words_single_request_sync,
     read_words_sync,
     write_bit_in_word_sync,
     write_bits_sync,
+    write_dwords_chunked_sync,
+    write_dwords_single_request_sync,
     write_named,
     write_named_sync,
     write_typed_sync,
+    write_words_chunked_sync,
+    write_words_single_request_sync,
 )
 
 # ---------------------------------------------------------------------------
@@ -81,6 +92,9 @@ class TestParseAddress(unittest.TestCase):
     def test_bit_in_word_hex(self):
         _, _, idx = _parse_address("D0.A")
         self.assertEqual(idx, 10)
+
+    def test_normalize_address(self):
+        self.assertEqual(normalize_address("d100"), "D100")
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +342,12 @@ class TestWriteNamedSync(unittest.TestCase):
 
 
 class TestReadWordsSyncChunking(unittest.TestCase):
+    def test_read_words_single_request_sync(self):
+        client = _make_sync_client(list(range(4)))
+        result = read_words_single_request_sync(client, "D0", 4)
+        self.assertEqual(result, [0, 1, 2, 3])
+        client.read_devices.assert_called_once_with(DeviceRef("D", 0), 4, bit_unit=False)
+
     def test_no_split_within_limit(self):
         client = _make_sync_client(list(range(10)))
         result = read_words_sync(client, "D0", 10)
@@ -352,6 +372,62 @@ class TestReadWordsSyncChunking(unittest.TestCase):
         client = _make_sync_client([lo, hi])
         result = read_dwords_sync(client, "D0", 1)
         self.assertEqual(result, [100000])
+
+    def test_read_dwords_single_request_sync(self):
+        raw = struct.pack("<II", 100000, 200000)
+        words = list(struct.unpack("<HHHH", raw))
+        client = _make_sync_client(words)
+        result = read_dwords_single_request_sync(client, "D0", 2)
+        self.assertEqual(result, [100000, 200000])
+
+    def test_read_words_chunked_sync(self):
+        chunk1 = list(range(8))
+        chunk2 = list(range(8, 12))
+        client = _make_sync_client(chunk1, chunk2)
+        result = read_words_chunked_sync(client, "D0", 12, max_per_request=8)
+        self.assertEqual(result, list(range(12)))
+        self.assertEqual(client.read_devices.call_count, 2)
+
+    def test_read_dwords_chunked_sync_preserves_dword_boundaries(self):
+        raw1 = struct.pack("<II", 1, 2)
+        raw2 = struct.pack("<II", 3, 4)
+        client = _make_sync_client(list(struct.unpack("<HHHH", raw1)), list(struct.unpack("<HHHH", raw2)))
+        result = read_dwords_chunked_sync(client, "D0", 4, max_dwords_per_request=2)
+        self.assertEqual(result, [1, 2, 3, 4])
+
+
+class TestWriteWordsSyncChunking(unittest.TestCase):
+    def test_write_words_single_request_sync(self):
+        client = MagicMock()
+        write_words_single_request_sync(client, "D0", [1, 2, 3])
+        client.write_devices.assert_called_once_with("D0", [1, 2, 3], bit_unit=False)
+
+    def test_write_dwords_single_request_sync(self):
+        client = MagicMock()
+        write_dwords_single_request_sync(client, "D0", [1, 2])
+        client.write_devices.assert_called_once_with("D0", [1, 0, 2, 0], bit_unit=False)
+
+    def test_write_words_chunked_sync(self):
+        client = MagicMock()
+        write_words_chunked_sync(client, "D0", list(range(12)), max_per_request=8)
+        self.assertEqual(
+            client.write_devices.call_args_list,
+            [
+                unittest.mock.call(DeviceRef("D", 0), list(range(8)), bit_unit=False),
+                unittest.mock.call(DeviceRef("D", 8), list(range(8, 12)), bit_unit=False),
+            ],
+        )
+
+    def test_write_dwords_chunked_sync(self):
+        client = MagicMock()
+        write_dwords_chunked_sync(client, "D0", [1, 2, 3], max_dwords_per_request=2)
+        self.assertEqual(
+            client.write_devices.call_args_list,
+            [
+                unittest.mock.call(DeviceRef("D", 0), [1, 0, 2, 0], bit_unit=False),
+                unittest.mock.call(DeviceRef("D", 4), [3, 0], bit_unit=False),
+            ],
+        )
 
 
 class TestBitBlockHelpers(unittest.TestCase):
@@ -428,6 +504,18 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertIs(entered, queued)
         inner.connect.assert_awaited_once()
         inner.close.assert_awaited_once()
+
+    async def test_open_and_connect_returns_queued_client(self):
+        options = SlmpConnectionOptions("127.0.0.1", port=1025)
+        with patch("slmp.async_client.AsyncSlmpClient") as client_cls:
+            inner = MagicMock()
+            inner.connect = AsyncMock()
+            client_cls.return_value = inner
+
+            queued = await open_and_connect(options)
+
+        self.assertIsInstance(queued, QueuedAsyncSlmpClient)
+        inner.connect.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

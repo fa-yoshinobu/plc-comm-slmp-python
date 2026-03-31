@@ -11,16 +11,17 @@ For normal application code, start here instead of the low-level protocol method
 ```python
 import asyncio
 
-from slmp import AsyncSlmpClient, read_named
+from slmp import SlmpConnectionOptions, open_and_connect, read_named
 
 
 async def main() -> None:
-    async with AsyncSlmpClient(
-        "192.168.250.100",
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
         port=1025,
         plc_series="iqr",
         frame_type="4e",
-    ) as client:
+    )
+    async with await open_and_connect(options) as client:
         snapshot = await read_named(client, ["D100", "D200:F", "D50.3"])
         print(snapshot)
 
@@ -64,14 +65,16 @@ Use this when multiple coroutines share one PLC connection.
 ### Sync application code
 
 ```python
-from slmp import SlmpClient, read_named_sync, write_typed_sync
+from slmp import SlmpConnectionOptions, open_and_connect_sync, read_named_sync, write_typed_sync
 
-with SlmpClient(
-    "192.168.250.100",
+options = SlmpConnectionOptions(
+    host="192.168.250.100",
     port=1025,
     plc_series="iqr",
     frame_type="4e",
-) as client:
+)
+
+with open_and_connect_sync(options) as client:
     print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
     write_typed_sync(client, "D100", "U", 42)
 ```
@@ -80,6 +83,15 @@ For sync code, the recommended pattern is:
 
 1. open a `SlmpClient`
 2. use the `*_sync` helper functions
+
+### Address normalization
+
+```python
+from slmp import normalize_address
+
+assert normalize_address("x20") == "X20"
+assert normalize_address("d200") == "D200"
+```
 
 ## High-Level Helper Set
 
@@ -183,25 +195,45 @@ await write_named(
 
 Plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values in the high-level write helper too.
 
-### `read_words` / `read_words_sync`
+### `read_words_single_request` / `read_words_single_request_sync`
 
-Read a contiguous word range.
-
-```python
-words = await read_words(client, "D0", 10)
-large_words = await read_words(client, "D0", 1000, allow_split=True)
-```
-
-Use `allow_split=True` when the requested length exceeds one SLMP request.
-
-### `read_dwords` / `read_dwords_sync`
-
-Read contiguous 32-bit values.
+Read a contiguous word range using exactly one PLC request.
 
 ```python
-dwords = await read_dwords(client, "D200", 8)
-large_dwords = await read_dwords(client, "D200", 200, allow_split=True)
+words = await read_words_single_request(client, "D0", 10)
 ```
+
+If the requested length does not fit in one request, this helper returns an error.
+
+### `read_words_chunked` / `read_words_chunked_sync`
+
+Read a large contiguous word range using explicit multi-request chunking.
+
+```python
+large_words = await read_words_chunked(client, "D0", 1000)
+```
+
+Use this only when protocol-defined chunk boundaries are acceptable for the caller.
+
+### `read_dwords_single_request` / `read_dwords_single_request_sync`
+
+Read contiguous 32-bit values using exactly one PLC request.
+
+```python
+dwords = await read_dwords_single_request(client, "D200", 8)
+```
+
+If the requested length does not fit in one request, this helper returns an error.
+
+### `read_dwords_chunked` / `read_dwords_chunked_sync`
+
+Read a large contiguous dword range using explicit multi-request chunking.
+
+```python
+large_dwords = await read_dwords_chunked(client, "D200", 200)
+```
+
+This helper preserves 32-bit boundaries. It does not split inside one logical dword.
 
 ### `poll` / `poll_sync`
 
@@ -254,8 +286,8 @@ await write_named(
 ### Example 3: large historian read
 
 ```python
-history_words = await read_words(client, "D1000", 1200, allow_split=True)
-history_dwords = await read_dwords(client, "D2000", 240, allow_split=True)
+history_words = await read_words_chunked(client, "D1000", 1200)
+history_dwords = await read_dwords_chunked(client, "D2000", 240)
 ```
 
 ### Example 4: one shared async connection

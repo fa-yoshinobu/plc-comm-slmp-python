@@ -29,12 +29,16 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from slmp import (
-    SlmpClient,
+    SlmpConnectionOptions,
+    normalize_address,
+    open_and_connect_sync,
     poll_sync,
-    read_dwords_sync,
+    read_dwords_chunked_sync,
+    read_dwords_single_request_sync,
     read_named_sync,
     read_typed_sync,
-    read_words_sync,
+    read_words_chunked_sync,
+    read_words_single_request_sync,
     write_bit_in_word_sync,
     write_named_sync,
     write_typed_sync,
@@ -100,8 +104,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    print(f"[normalize_address] x20 -> {normalize_address('x20')}")
 
-    # SlmpClient options:
+    # SlmpConnectionOptions:
     #   host             - PLC IP / hostname
     #   port             - SLMP port; depends on PLC hardware and firmware settings
     #   transport        - "tcp" (default) or "udp"
@@ -113,8 +118,8 @@ def main() -> None:
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
     #   trace_hook       - optional callback(SlmpTraceFrame) for protocol tracing
-    client = SlmpClient(
-        args.host,
+    options = SlmpConnectionOptions(
+        host=args.host,
         port=args.port,
         transport="tcp",
         timeout=args.timeout,
@@ -122,7 +127,7 @@ def main() -> None:
         monitoring_timer=args.monitoring_timer,
     )
 
-    with client:
+    with open_and_connect_sync(options) as client:
         print(f"Connected to {args.host}:{args.port} ({args.series})")
 
         # ---------------------------------------------------------------
@@ -146,24 +151,23 @@ def main() -> None:
         print("[write_typed_sync] Wrote 42->D100, 3.14->D200, -100->D202")
 
         # ---------------------------------------------------------------
-        # 2. read_words_sync / read_dwords_sync
+        # 2. explicit contiguous helpers
         #
-        # Read a contiguous block of words (16-bit) or dwords (32-bit).
-        # allow_split=True automatically chunks reads larger than 960 words
-        # into multiple requests - required for large array reads.
+        # Use *_single_request_sync when one logical request must stay one PLC request.
+        # Use *_chunked_sync only when multi-request chunking is explicitly acceptable.
         #
         # Use case: reading a recipe table of 200 words in one call.
         # ---------------------------------------------------------------
-        words = read_words_sync(client, "D0", 10)
-        print(f"[read_words_sync]  D0-D9 = {words}")
+        words = read_words_single_request_sync(client, "D0", 10)
+        print(f"[read_words_single_request_sync]  D0-D9 = {words}")
 
-        dwords = read_dwords_sync(client, "D0", 4)
-        print(f"[read_dwords_sync] D0-D7 (as 4 x uint32) = {dwords}")
+        dwords = read_dwords_single_request_sync(client, "D0", 4)
+        print(f"[read_dwords_single_request_sync] D0-D7 (as 4 x uint32) = {dwords}")
 
-        # Reading more than 960 words requires allow_split=True.
-        # Without it a ValueError is raised immediately - no network traffic.
-        large = read_words_sync(client, "D0", 1000, allow_split=True)
-        print(f"[read_words_sync allow_split] D0-D999: {len(large)} words read")
+        large_words = read_words_chunked_sync(client, "D0", 1000)
+        large_dwords = read_dwords_chunked_sync(client, "D200", 120)
+        print(f"[read_words_chunked_sync] D0-D999: {len(large_words)} words read")
+        print(f"[read_dwords_chunked_sync] D200-D439: {len(large_dwords)} dwords read")
 
         # ---------------------------------------------------------------
         # 3. write_bit_in_word_sync

@@ -9,8 +9,8 @@ from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from .constants import DEVICE_CODES, DeviceUnit
-from .core import DeviceRef, parse_device
+from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
+from .core import DeviceRef, SlmpTarget, parse_device
 
 if TYPE_CHECKING:
     from .async_client import AsyncSlmpClient
@@ -49,6 +49,22 @@ class _ReadPlan:
     entries: tuple[_ReadPlanEntry, ...]
     word_devices: tuple[DeviceRef, ...]
     dword_devices: tuple[DeviceRef, ...]
+
+
+@dataclass(frozen=True)
+class SlmpConnectionOptions:
+    """Stable connection settings for one queued SLMP session."""
+
+    host: str
+    port: int = 5000
+    transport: str = "tcp"
+    timeout: float = 3.0
+    plc_series: PLCSeries | str = PLCSeries.QL
+    frame_type: FrameType | str = FrameType.FRAME_4E
+    default_target: SlmpTarget | None = None
+    monitoring_timer: int = 0x0010
+    raise_on_error: bool = True
+    trace_hook: Any | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +384,13 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
         except ValueError:
             pass
     return address.strip(), "U", None
+
+
+def normalize_address(address: str | DeviceRef) -> str:
+    """Return the canonical string form of one SLMP device address."""
+
+    ref = parse_device(address) if isinstance(address, str) else address
+    return str(ref)
 
 
 def _is_batchable_word_device(device: DeviceRef) -> bool:
@@ -719,8 +742,138 @@ def poll_sync(
 
 
 # ---------------------------------------------------------------------------
-# Chunked reads  (async)
+# Contiguous reads and writes  (async)
 # ---------------------------------------------------------------------------
+
+
+async def read_words_single_request(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[int]:
+    """Read contiguous 16-bit values using one protocol request."""
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    return list(await client.read_devices(ref, count, bit_unit=False))
+
+
+async def read_dwords_single_request(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[int]:
+    """Read contiguous unsigned 32-bit values using one protocol request."""
+
+    words = await read_words_single_request(client, device, count * 2)
+    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+
+
+async def write_words_single_request(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+) -> None:
+    """Write contiguous 16-bit values using one protocol request."""
+
+    await client.write_devices(device, [int(value) & 0xFFFF for value in values], bit_unit=False)
+
+
+async def write_dwords_single_request(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+) -> None:
+    """Write contiguous unsigned 32-bit values using one protocol request."""
+
+    words: list[int] = []
+    for value in values:
+        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
+    await write_words_single_request(client, device, words)
+
+
+async def read_words_chunked(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    count: int,
+    max_per_request: int = 960,
+) -> list[int]:
+    """Read contiguous 16-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    effective_max = (max_per_request // 2) * 2
+    if effective_max <= 0:
+        raise ValueError("max_per_request must be at least 2")
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    result: list[int] = []
+    remaining = count
+    offset = 0
+    while remaining > 0:
+        chunk = min(remaining, effective_max)
+        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        words = await read_words_single_request(client, chunk_ref, chunk)
+        result.extend(words)
+        offset += chunk
+        remaining -= chunk
+    return result
+
+
+async def read_dwords_chunked(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    count: int,
+    max_dwords_per_request: int = 480,
+) -> list[int]:
+    """Read contiguous unsigned 32-bit values across multiple aligned requests."""
+
+    words = await read_words_chunked(client, device, count * 2, max_per_request=max_dwords_per_request * 2)
+    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+
+
+async def write_words_chunked(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+    max_per_request: int = 960,
+) -> None:
+    """Write contiguous 16-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    effective_max = (max_per_request // 2) * 2
+    if effective_max <= 0:
+        raise ValueError("max_per_request must be at least 2")
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    offset = 0
+    while offset < len(values):
+        chunk = min(len(values) - offset, effective_max)
+        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        await write_words_single_request(client, chunk_ref, values[offset : offset + chunk])
+        offset += chunk
+
+
+async def write_dwords_chunked(
+    client: AsyncSlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+    max_dwords_per_request: int = 480,
+) -> None:
+    """Write contiguous unsigned 32-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    if max_dwords_per_request <= 0:
+        raise ValueError("max_dwords_per_request must be at least 1")
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    offset = 0
+    while offset < len(values):
+        chunk = min(len(values) - offset, max_dwords_per_request)
+        chunk_ref = DeviceRef(ref.code, ref.number + (offset * 2))
+        await write_dwords_single_request(client, chunk_ref, values[offset : offset + chunk])
+        offset += chunk
 
 
 async def read_words(
@@ -736,34 +889,18 @@ async def read_words(
     Chunk boundaries stay aligned to 2-word boundaries so 32-bit values are
     not torn across split requests.
     """
-    from .core import DeviceRef, parse_device
-
-    # Always use an even effective_max to keep DWord boundaries aligned.
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
     if not allow_split:
+        effective_max = (max_per_request // 2) * 2
+        if effective_max <= 0:
+            raise ValueError("max_per_request must be at least 2")
         if count > effective_max:
             raise ValueError(
                 f"count {count} exceeds max_per_request {effective_max};"
                 " pass allow_split=True to split the read across multiple requests"
             )
-        ref = parse_device(device) if isinstance(device, str) else device
-        return list(await client.read_devices(ref, count, bit_unit=False))
+        return await read_words_single_request(client, device, count)
 
-    ref = parse_device(device) if isinstance(device, str) else device
-    result: list[int] = []
-    remaining = count
-    offset = 0
-    while remaining > 0:
-        chunk = min(remaining, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
-        words = await client.read_devices(chunk_ref, chunk, bit_unit=False)
-        result.extend(words)
-        offset += chunk
-        remaining -= chunk
-    return result
+    return await read_words_chunked(client, device, count, max_per_request=max_per_request)
 
 
 async def read_dwords(
@@ -775,23 +912,153 @@ async def read_dwords(
     allow_split: bool = False,
 ) -> list[int]:
     """Read a contiguous DWord range as unsigned 32-bit integers."""
-    words = await read_words(
-        client,
-        device,
-        count * 2,
-        max_per_request=max_dwords_per_request * 2,
-        allow_split=allow_split,
-    )
+    if not allow_split:
+        effective_max = max_dwords_per_request
+        if effective_max <= 0:
+            raise ValueError("max_dwords_per_request must be at least 1")
+        if count > effective_max:
+            raise ValueError(
+                f"count {count} exceeds max_dwords_per_request {effective_max};"
+                " pass allow_split=True to split the read across multiple requests"
+            )
+        return await read_dwords_single_request(client, device, count)
+
+    return await read_dwords_chunked(client, device, count, max_dwords_per_request=max_dwords_per_request)
+
+
+# ---------------------------------------------------------------------------
+# Contiguous reads and writes  (sync)
+# ---------------------------------------------------------------------------
+
+
+def read_words_single_request_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[int]:
+    """Synchronously read contiguous 16-bit values using one protocol request."""
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    return list(client.read_devices(ref, count, bit_unit=False))
+
+
+def read_dwords_single_request_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    count: int,
+) -> list[int]:
+    """Synchronously read contiguous unsigned 32-bit values using one protocol request."""
+
+    words = read_words_single_request_sync(client, device, count * 2)
+    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+
+
+def write_words_single_request_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+) -> None:
+    """Synchronously write contiguous 16-bit values using one protocol request."""
+
+    client.write_devices(device, [int(value) & 0xFFFF for value in values], bit_unit=False)
+
+
+def write_dwords_single_request_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+) -> None:
+    """Synchronously write contiguous unsigned 32-bit values using one protocol request."""
+
+    words: list[int] = []
+    for value in values:
+        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
+    write_words_single_request_sync(client, device, words)
+
+
+def read_words_chunked_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    count: int,
+    max_per_request: int = 960,
+) -> list[int]:
+    """Synchronously read contiguous 16-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    effective_max = (max_per_request // 2) * 2
+    if effective_max <= 0:
+        raise ValueError("max_per_request must be at least 2")
+
+    ref = parse_device(device) if isinstance(device, str) else device
     result: list[int] = []
-    for i in range(count):
-        raw = struct.pack("<HH", words[i * 2], words[i * 2 + 1])
-        result.append(struct.unpack("<I", raw)[0])
+    remaining = count
+    offset = 0
+    while remaining > 0:
+        chunk = min(remaining, effective_max)
+        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        words = read_words_single_request_sync(client, chunk_ref, chunk)
+        result.extend(words)
+        offset += chunk
+        remaining -= chunk
     return result
 
 
-# ---------------------------------------------------------------------------
-# Chunked reads  (sync)
-# ---------------------------------------------------------------------------
+def read_dwords_chunked_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    count: int,
+    max_dwords_per_request: int = 480,
+) -> list[int]:
+    """Synchronously read contiguous unsigned 32-bit values across multiple aligned requests."""
+
+    words = read_words_chunked_sync(client, device, count * 2, max_per_request=max_dwords_per_request * 2)
+    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+
+
+def write_words_chunked_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+    max_per_request: int = 960,
+) -> None:
+    """Synchronously write contiguous 16-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    effective_max = (max_per_request // 2) * 2
+    if effective_max <= 0:
+        raise ValueError("max_per_request must be at least 2")
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    offset = 0
+    while offset < len(values):
+        chunk = min(len(values) - offset, effective_max)
+        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        write_words_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
+        offset += chunk
+
+
+def write_dwords_chunked_sync(
+    client: SlmpClient,
+    device: str | DeviceRef,
+    values: list[int],
+    max_dwords_per_request: int = 480,
+) -> None:
+    """Synchronously write contiguous unsigned 32-bit values across multiple aligned requests."""
+
+    from .core import DeviceRef
+
+    if max_dwords_per_request <= 0:
+        raise ValueError("max_dwords_per_request must be at least 1")
+
+    ref = parse_device(device) if isinstance(device, str) else device
+    offset = 0
+    while offset < len(values):
+        chunk = min(len(values) - offset, max_dwords_per_request)
+        chunk_ref = DeviceRef(ref.code, ref.number + (offset * 2))
+        write_dwords_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
+        offset += chunk
 
 
 def read_words_sync(
@@ -803,33 +1070,18 @@ def read_words_sync(
     allow_split: bool = False,
 ) -> list[int]:
     """Synchronously read a contiguous word-device range."""
-    from .core import DeviceRef, parse_device
-
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
     if not allow_split:
+        effective_max = (max_per_request // 2) * 2
+        if effective_max <= 0:
+            raise ValueError("max_per_request must be at least 2")
         if count > effective_max:
             raise ValueError(
                 f"count {count} exceeds max_per_request {effective_max};"
                 " pass allow_split=True to split the read across multiple requests"
             )
-        ref = parse_device(device) if isinstance(device, str) else device
-        return list(client.read_devices(ref, count, bit_unit=False))
+        return read_words_single_request_sync(client, device, count)
 
-    ref = parse_device(device) if isinstance(device, str) else device
-    result: list[int] = []
-    remaining = count
-    offset = 0
-    while remaining > 0:
-        chunk = min(remaining, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
-        words = client.read_devices(chunk_ref, chunk, bit_unit=False)
-        result.extend(words)
-        offset += chunk
-        remaining -= chunk
-    return result
+    return read_words_chunked_sync(client, device, count, max_per_request=max_per_request)
 
 
 def read_dwords_sync(
@@ -841,18 +1093,69 @@ def read_dwords_sync(
     allow_split: bool = False,
 ) -> list[int]:
     """Synchronously read a contiguous DWord range."""
-    words = read_words_sync(
-        client,
-        device,
-        count * 2,
-        max_per_request=max_dwords_per_request * 2,
-        allow_split=allow_split,
+    if not allow_split:
+        effective_max = max_dwords_per_request
+        if effective_max <= 0:
+            raise ValueError("max_dwords_per_request must be at least 1")
+        if count > effective_max:
+            raise ValueError(
+                f"count {count} exceeds max_dwords_per_request {effective_max};"
+                " pass allow_split=True to split the read across multiple requests"
+            )
+        return read_dwords_single_request_sync(client, device, count)
+
+    return read_dwords_chunked_sync(client, device, count, max_dwords_per_request=max_dwords_per_request)
+
+
+# ---------------------------------------------------------------------------
+# Connection helpers
+# ---------------------------------------------------------------------------
+
+
+async def open_and_connect(
+    options: SlmpConnectionOptions,
+) -> QueuedAsyncSlmpClient:
+    """Create, connect, and wrap one queued async SLMP client."""
+
+    from .async_client import AsyncSlmpClient
+
+    inner = AsyncSlmpClient(
+        options.host,
+        options.port,
+        transport=options.transport,
+        timeout=options.timeout,
+        plc_series=options.plc_series,
+        frame_type=options.frame_type,
+        default_target=options.default_target,
+        monitoring_timer=options.monitoring_timer,
+        raise_on_error=options.raise_on_error,
+        trace_hook=options.trace_hook,
     )
-    result: list[int] = []
-    for i in range(count):
-        raw = struct.pack("<HH", words[i * 2], words[i * 2 + 1])
-        result.append(struct.unpack("<I", raw)[0])
-    return result
+    await inner.connect()
+    return QueuedAsyncSlmpClient(inner)
+
+
+def open_and_connect_sync(
+    options: SlmpConnectionOptions,
+) -> SlmpClient:
+    """Create and connect one synchronous SLMP client."""
+
+    from .client import SlmpClient
+
+    client = SlmpClient(
+        options.host,
+        options.port,
+        transport=options.transport,
+        timeout=options.timeout,
+        plc_series=options.plc_series,
+        frame_type=options.frame_type,
+        default_target=options.default_target,
+        monitoring_timer=options.monitoring_timer,
+        raise_on_error=options.raise_on_error,
+        trace_hook=options.trace_hook,
+    )
+    client.connect()
+    return client
 
 
 # ---------------------------------------------------------------------------
