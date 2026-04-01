@@ -53,7 +53,25 @@ class _ReadPlan:
 
 @dataclass(frozen=True)
 class SlmpConnectionOptions:
-    """Stable connection settings for one queued SLMP session."""
+    """Stable connection settings for one queued SLMP session.
+
+    The options object is the recommended input for :func:`open_and_connect`
+    and :func:`open_and_connect_sync`. It keeps transport-level settings and
+    protocol-level defaults together so generated API docs can point users to
+    one explicit connection entry point.
+
+    Attributes:
+        host: PLC hostname or IP address.
+        port: TCP or UDP port used by the SLMP endpoint.
+        transport: Transport name such as ``"tcp"`` or ``"udp"``.
+        timeout: Socket timeout in seconds.
+        plc_series: PLC family used by request framing rules.
+        frame_type: 3E or 4E frame selection.
+        default_target: Optional routing target applied to requests.
+        monitoring_timer: SLMP monitoring timer encoded into frames.
+        raise_on_error: Whether protocol errors raise exceptions immediately.
+        trace_hook: Optional callback for transport tracing.
+    """
 
     host: str
     port: int = 5000
@@ -387,7 +405,12 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
 
 
 def normalize_address(address: str | DeviceRef) -> str:
-    """Return the canonical string form of one SLMP device address."""
+    """Return the canonical helper-layer form of one SLMP device address.
+
+    The helper accepts free-form user text such as ``" d200:f "`` or an
+    already parsed :class:`DeviceRef`. The result is suitable for logs,
+    configuration files, and cache keys.
+    """
 
     ref = parse_device(address) if isinstance(address, str) else address
     return str(ref)
@@ -751,7 +774,11 @@ async def read_words_single_request(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Read contiguous 16-bit values using one protocol request."""
+    """Read contiguous 16-bit values using one protocol request.
+
+    This is the explicit atomic path for one contiguous word range. If the
+    caller wants multi-request behavior, use :func:`read_words_chunked`.
+    """
 
     ref = parse_device(device) if isinstance(device, str) else device
     return list(await client.read_devices(ref, count, bit_unit=False))
@@ -762,7 +789,11 @@ async def read_dwords_single_request(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Read contiguous unsigned 32-bit values using one protocol request."""
+    """Read contiguous unsigned 32-bit values using one protocol request.
+
+    Adjacent word pairs are combined in little-endian order and never split
+    across requests by this helper.
+    """
 
     words = await read_words_single_request(client, device, count * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
@@ -773,7 +804,11 @@ async def write_words_single_request(
     device: str | DeviceRef,
     values: list[int],
 ) -> None:
-    """Write contiguous 16-bit values using one protocol request."""
+    """Write contiguous 16-bit values using one protocol request.
+
+    Use this helper for logical ranges that should stay within one protocol
+    write operation.
+    """
 
     await client.write_devices(device, [int(value) & 0xFFFF for value in values], bit_unit=False)
 
@@ -783,7 +818,10 @@ async def write_dwords_single_request(
     device: str | DeviceRef,
     values: list[int],
 ) -> None:
-    """Write contiguous unsigned 32-bit values using one protocol request."""
+    """Write contiguous unsigned 32-bit values using one protocol request.
+
+    Each Python ``int`` is encoded as two PLC words in little-endian order.
+    """
 
     words: list[int] = []
     for value in values:
@@ -797,7 +835,11 @@ async def read_words_chunked(
     count: int,
     max_per_request: int = 960,
 ) -> list[int]:
-    """Read contiguous 16-bit values across multiple aligned requests."""
+    """Read contiguous 16-bit values across multiple aligned requests.
+
+    Chunking is explicit here. Use this helper only when multi-request read
+    semantics are acceptable to the caller.
+    """
 
     from .core import DeviceRef
 
@@ -825,7 +867,11 @@ async def read_dwords_chunked(
     count: int,
     max_dwords_per_request: int = 480,
 ) -> list[int]:
-    """Read contiguous unsigned 32-bit values across multiple aligned requests."""
+    """Read contiguous unsigned 32-bit values across multiple aligned requests.
+
+    Chunk boundaries stay aligned to full dwords so one logical 32-bit value
+    is never torn across requests.
+    """
 
     words = await read_words_chunked(client, device, count * 2, max_per_request=max_dwords_per_request * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
@@ -837,7 +883,11 @@ async def write_words_chunked(
     values: list[int],
     max_per_request: int = 960,
 ) -> None:
-    """Write contiguous 16-bit values across multiple aligned requests."""
+    """Write contiguous 16-bit values across multiple aligned requests.
+
+    Use this helper only when multiple write operations are acceptable to the
+    caller.
+    """
 
     from .core import DeviceRef
 
@@ -860,7 +910,11 @@ async def write_dwords_chunked(
     values: list[int],
     max_dwords_per_request: int = 480,
 ) -> None:
-    """Write contiguous unsigned 32-bit values across multiple aligned requests."""
+    """Write contiguous unsigned 32-bit values across multiple aligned requests.
+
+    Each chunk boundary is aligned to full dwords so one logical value remains
+    intact inside one request.
+    """
 
     from .core import DeviceRef
 
@@ -1115,7 +1169,17 @@ def read_dwords_sync(
 async def open_and_connect(
     options: SlmpConnectionOptions,
 ) -> QueuedAsyncSlmpClient:
-    """Create, connect, and wrap one queued async SLMP client."""
+    """Create, connect, and wrap one queued async SLMP client.
+
+    This is the recommended async entry point for applications that share one
+    connection across polling, named reads, and writes.
+
+    Args:
+        options: Stable connection settings for the session.
+
+    Returns:
+        A connected :class:`QueuedAsyncSlmpClient`.
+    """
 
     from .async_client import AsyncSlmpClient
 
@@ -1138,7 +1202,14 @@ async def open_and_connect(
 def open_and_connect_sync(
     options: SlmpConnectionOptions,
 ) -> SlmpClient:
-    """Create and connect one synchronous SLMP client."""
+    """Create and connect one synchronous SLMP client.
+
+    Args:
+        options: Stable connection settings for the session.
+
+    Returns:
+        A connected synchronous :class:`SlmpClient`.
+    """
 
     from .client import SlmpClient
 
@@ -1169,6 +1240,9 @@ class QueuedAsyncSlmpClient:
     The wrapper exposes the same methods as :class:`AsyncSlmpClient`, but every
     coroutine call is executed under one lock. Use it when one connection is
     shared by polling, snapshot, and write tasks.
+
+    The wrapper does not change protocol semantics. It only prevents multiple
+    helper-layer coroutines from interleaving frames on the same socket.
     """
 
     def __init__(self, inner: AsyncSlmpClient) -> None:
