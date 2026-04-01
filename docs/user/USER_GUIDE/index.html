@@ -417,6 +417,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#address-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Address normalization
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -490,10 +501,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_words-read_words_sync" class="md-nav__link">
+  <a href="#read_words_single_request-read_words_single_request_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_words / read_words_sync
+        read_words_single_request / read_words_single_request_sync
       
     </span>
   </a>
@@ -501,10 +512,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_dwords-read_dwords_sync" class="md-nav__link">
+  <a href="#read_words_chunked-read_words_chunked_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_dwords / read_dwords_sync
+        read_words_chunked / read_words_chunked_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords_single_request-read_dwords_single_request_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords_single_request / read_dwords_single_request_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords_chunked-read_dwords_chunked_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords_chunked / read_dwords_chunked_sync
       
     </span>
   </a>
@@ -942,6 +975,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#address-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Address normalization
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1015,10 +1059,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_words-read_words_sync" class="md-nav__link">
+  <a href="#read_words_single_request-read_words_single_request_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_words / read_words_sync
+        read_words_single_request / read_words_single_request_sync
       
     </span>
   </a>
@@ -1026,10 +1070,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#read_dwords-read_dwords_sync" class="md-nav__link">
+  <a href="#read_words_chunked-read_words_chunked_sync" class="md-nav__link">
     <span class="md-ellipsis">
       
-        read_dwords / read_dwords_sync
+        read_words_chunked / read_words_chunked_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords_single_request-read_dwords_single_request_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords_single_request / read_dwords_single_request_sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dwords_chunked-read_dwords_chunked_sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dwords_chunked / read_dwords_chunked_sync
       
     </span>
   </a>
@@ -1151,16 +1217,17 @@
 <h3 id="async-connection-with-explicit-profile-selection">Async connection with explicit profile selection</h3>
 <pre><code class="language-python">import asyncio
 
-from slmp import AsyncSlmpClient, read_named
+from slmp import SlmpConnectionOptions, open_and_connect, read_named
 
 
 async def main() -&gt; None:
-    async with AsyncSlmpClient(
-        &quot;192.168.250.100&quot;,
+    options = SlmpConnectionOptions(
+        host=&quot;192.168.250.100&quot;,
         port=1025,
         plc_series=&quot;iqr&quot;,
         frame_type=&quot;4e&quot;,
-    ) as client:
+    )
+    async with await open_and_connect(options) as client:
         snapshot = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;])
         print(snapshot)
 
@@ -1197,14 +1264,16 @@ asyncio.run(main())
 </code></pre>
 <p>Use this when multiple coroutines share one PLC connection.</p>
 <h3 id="sync-application-code">Sync application code</h3>
-<pre><code class="language-python">from slmp import SlmpClient, read_named_sync, write_typed_sync
+<pre><code class="language-python">from slmp import SlmpConnectionOptions, open_and_connect_sync, read_named_sync, write_typed_sync
 
-with SlmpClient(
-    &quot;192.168.250.100&quot;,
+options = SlmpConnectionOptions(
+    host=&quot;192.168.250.100&quot;,
     port=1025,
     plc_series=&quot;iqr&quot;,
     frame_type=&quot;4e&quot;,
-) as client:
+)
+
+with open_and_connect_sync(options) as client:
     print(read_named_sync(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;]))
     write_typed_sync(client, &quot;D100&quot;, &quot;U&quot;, 42)
 </code></pre>
@@ -1213,6 +1282,12 @@ with SlmpClient(
 <li>open a <code>SlmpClient</code></li>
 <li>use the <code>*_sync</code> helper functions</li>
 </ol>
+<h3 id="address-normalization">Address normalization</h3>
+<pre><code class="language-python">from slmp import normalize_address
+
+assert normalize_address(&quot;x20&quot;) == &quot;X20&quot;
+assert normalize_address(&quot;d200&quot;) == &quot;D200&quot;
+</code></pre>
 <h2 id="high-level-helper-set">High-Level Helper Set</h2>
 <h3 id="read_typed-read_typed_sync"><code>read_typed</code> / <code>read_typed_sync</code></h3>
 <p>Read one logical value with type conversion.</p>
@@ -1341,17 +1416,26 @@ Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X2
 )
 </code></pre>
 <p>Plain <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> addresses are treated as 32-bit current values in the high-level write helper too.</p>
-<h3 id="read_words-read_words_sync"><code>read_words</code> / <code>read_words_sync</code></h3>
-<p>Read a contiguous word range.</p>
-<pre><code class="language-python">words = await read_words(client, &quot;D0&quot;, 10)
-large_words = await read_words(client, &quot;D0&quot;, 1000, allow_split=True)
+<h3 id="read_words_single_request-read_words_single_request_sync"><code>read_words_single_request</code> / <code>read_words_single_request_sync</code></h3>
+<p>Read a contiguous word range using exactly one PLC request.</p>
+<pre><code class="language-python">words = await read_words_single_request(client, &quot;D0&quot;, 10)
 </code></pre>
-<p>Use <code>allow_split=True</code> when the requested length exceeds one SLMP request.</p>
-<h3 id="read_dwords-read_dwords_sync"><code>read_dwords</code> / <code>read_dwords_sync</code></h3>
-<p>Read contiguous 32-bit values.</p>
-<pre><code class="language-python">dwords = await read_dwords(client, &quot;D200&quot;, 8)
-large_dwords = await read_dwords(client, &quot;D200&quot;, 200, allow_split=True)
+<p>If the requested length does not fit in one request, this helper returns an error.</p>
+<h3 id="read_words_chunked-read_words_chunked_sync"><code>read_words_chunked</code> / <code>read_words_chunked_sync</code></h3>
+<p>Read a large contiguous word range using explicit multi-request chunking.</p>
+<pre><code class="language-python">large_words = await read_words_chunked(client, &quot;D0&quot;, 1000)
 </code></pre>
+<p>Use this only when protocol-defined chunk boundaries are acceptable for the caller.</p>
+<h3 id="read_dwords_single_request-read_dwords_single_request_sync"><code>read_dwords_single_request</code> / <code>read_dwords_single_request_sync</code></h3>
+<p>Read contiguous 32-bit values using exactly one PLC request.</p>
+<pre><code class="language-python">dwords = await read_dwords_single_request(client, &quot;D200&quot;, 8)
+</code></pre>
+<p>If the requested length does not fit in one request, this helper returns an error.</p>
+<h3 id="read_dwords_chunked-read_dwords_chunked_sync"><code>read_dwords_chunked</code> / <code>read_dwords_chunked_sync</code></h3>
+<p>Read a large contiguous dword range using explicit multi-request chunking.</p>
+<pre><code class="language-python">large_dwords = await read_dwords_chunked(client, &quot;D200&quot;, 200)
+</code></pre>
+<p>This helper preserves 32-bit boundaries. It does not split inside one logical dword.</p>
 <h3 id="poll-poll_sync"><code>poll</code> / <code>poll_sync</code></h3>
 <p>Yield repeated snapshots at a fixed interval.</p>
 <pre><code class="language-python">async for snapshot in poll(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;], interval=1.0):
@@ -1387,8 +1471,8 @@ large_dwords = await read_dwords(client, &quot;D200&quot;, 200, allow_split=True
 )
 </code></pre>
 <h3 id="example-3-large-historian-read">Example 3: large historian read</h3>
-<pre><code class="language-python">history_words = await read_words(client, &quot;D1000&quot;, 1200, allow_split=True)
-history_dwords = await read_dwords(client, &quot;D2000&quot;, 240, allow_split=True)
+<pre><code class="language-python">history_words = await read_words_chunked(client, &quot;D1000&quot;, 1200)
+history_dwords = await read_dwords_chunked(client, &quot;D2000&quot;, 240)
 </code></pre>
 <h3 id="example-4-one-shared-async-connection">Example 4: one shared async connection</h3>
 <pre><code class="language-python">inner = AsyncSlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_series=&quot;iqr&quot;, frame_type=&quot;4e&quot;)

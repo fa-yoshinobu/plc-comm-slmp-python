@@ -764,10 +764,14 @@
 </code></pre>
 <p>What it demonstrates:</p>
 <ul>
+<li><code>SlmpConnectionOptions</code></li>
+<li><code>open_and_connect_sync</code></li>
 <li><code>read_typed_sync</code></li>
 <li><code>write_typed_sync</code></li>
-<li><code>read_words_sync</code></li>
-<li><code>read_dwords_sync</code></li>
+<li><code>read_words_single_request_sync</code></li>
+<li><code>read_dwords_single_request_sync</code></li>
+<li><code>read_words_chunked_sync</code></li>
+<li><code>read_dwords_chunked_sync</code></li>
 <li><code>write_bit_in_word_sync</code></li>
 <li><code>read_named_sync</code></li>
 <li><code>write_named_sync</code></li>
@@ -777,7 +781,7 @@
 <ul>
 <li>read one <code>ushort</code>, one <code>short</code>, one <code>float32</code>, and one signed 32-bit value</li>
 <li>write a typed recipe value</li>
-<li>read a large contiguous range with <code>allow_split=True</code></li>
+<li>read contiguous areas through explicit <code>single_request</code> and <code>chunked</code> helpers</li>
 <li>set and clear one bit inside a control word</li>
 <li>read a mixed snapshot such as <code>["D100", "D200:F", "D202:L", "D50.3"]</code></li>
 <li>poll the same snapshot repeatedly</li>
@@ -788,11 +792,14 @@
 </code></pre>
 <p>What it demonstrates:</p>
 <ul>
-<li>explicit <code>AsyncSlmpClient</code></li>
+<li><code>SlmpConnectionOptions</code></li>
+<li><code>open_and_connect</code></li>
 <li><code>read_typed</code></li>
 <li><code>write_typed</code></li>
-<li><code>read_words</code></li>
-<li><code>read_dwords</code></li>
+<li><code>read_words_single_request</code></li>
+<li><code>read_dwords_single_request</code></li>
+<li><code>read_words_chunked</code></li>
+<li><code>read_dwords_chunked</code></li>
 <li><code>write_bit_in_word</code></li>
 <li><code>read_named</code></li>
 <li><code>write_named</code></li>
@@ -803,7 +810,7 @@
 <ul>
 <li>connect with an explicit frame/profile pair</li>
 <li>read and write typed scalar values</li>
-<li>read large arrays with request splitting</li>
+<li>read large arrays with explicit chunked helpers</li>
 <li>update one flag inside a word</li>
 <li>read and write mixed logical values by address string</li>
 <li>poll a snapshot every second</li>

@@ -10,11 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 authors = [{ name = "fa-yoshinobu" }]
+license = "MIT"
 
 license-files = ["LICENSE"]
 keywords = ["slmp", "melsec", "mitsubishi", "plc", "3e", "4e", "binary"]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
