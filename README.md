@@ -7,11 +7,11 @@
 
 # SLMP Protocol for Python
 
-![Illustration](docsrc/assets/melsec.png)
+![Illustration](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-slmp-python/main/docsrc/assets/melsec.png)
 
 High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E frames.
 
-This repository now treats the high-level helper layer as the recommended user surface:
+This repository treats the high-level helper layer as the recommended user surface:
 
 - `SlmpConnectionOptions`
 - `open_and_connect` / `open_and_connect_sync`
@@ -26,15 +26,13 @@ This repository now treats the high-level helper layer as the recommended user s
 - `read_named` / `write_named`
 - `poll`
 
-Low-level protocol methods still exist for maintainers and validation work, but they are not the primary user path.
-
 ## Installation
 
 ```bash
 pip install slmp-connect-python
 ```
 
-The latest release lives at https://pypi.org/project/slmp-connect-python/, where wheel/tarball downloads and metadata are available.
+The latest release lives at <https://pypi.org/project/slmp-connect-python/>, where wheel and tarball downloads and metadata are available.
 
 ## Quick Start
 
@@ -71,31 +69,32 @@ Choose the connection profile explicitly:
 - `plc_series="iqr", frame_type="4e"` for iQ-R / iQ-F targets
 - `plc_series="ql", frame_type="3e"` for Q / L targets
 
-Recommended sync path:
+## Supported PLC Registers
 
-```python
-from slmp import (
-    SlmpConnectionOptions,
-    open_and_connect_sync,
-    read_named_sync,
-    write_typed_sync,
-)
+Start with these public high-level families first:
 
-options = SlmpConnectionOptions(
-    host="192.168.250.100",
-    port=1025,
-    plc_series="iqr",
-    frame_type="4e",
-)
+- word devices: `D`, `SD`, `R`, `ZR`, `TN`, `CN`
+- bit devices: `M`, `X`, `Y`, `SM`, `B`
+- typed forms: `D200:F`, `D300:L`, `D100:S`
+- mixed snapshot forms: `D50.3`, `D100`, `D200:F`
+- current-value long families: `LTN`, `LSTN`, `LCN`
 
-with open_and_connect_sync(options) as client:
-    print(read_named_sync(client, ["D100", "D200:F", "D50.3"]))
-    write_typed_sync(client, "D100", "U", 42)
-```
+See the full public table in [Supported PLC Registers](docsrc/user/SUPPORTED_REGISTERS.md).
+
+## Public Documentation
+
+- [Getting Started](docsrc/user/GETTING_STARTED.md)
+- [Supported PLC Registers](docsrc/user/SUPPORTED_REGISTERS.md)
+- [Latest Communication Verification](docsrc/user/LATEST_COMMUNICATION_VERIFICATION.md)
+- [User Guide](docsrc/user/USER_GUIDE.md)
+- [Samples](docsrc/user/SAMPLES.md)
+- [Error Codes](docsrc/user/ERROR_CODES.md)
+
+Maintainer-only notes and retained evidence live under `internal_docs/`.
 
 ## High-Level API Guide
 
-### Address normalization
+### Address Normalization
 
 ```python
 from slmp import normalize_address
@@ -104,7 +103,7 @@ print(normalize_address("x20"))   # X20
 print(normalize_address("d200"))  # D200
 ```
 
-### Single typed values
+### Single Typed Values
 
 ```python
 from slmp import read_typed, write_typed
@@ -114,127 +113,8 @@ counter = await read_typed(client, "D300", "L")
 await write_typed(client, "D100", "U", 1234)
 ```
 
-### Mixed reads with one call
-
-```python
-from slmp import read_named
-
-snapshot = await read_named(
-    client,
-    [
-        "D100",
-        "D200:F",
-        "D300:L",
-        "D50.3",
-    ],
-)
-```
-
 Use `.bit` notation only with word devices such as `D50.3`.
-Address bit devices directly as `M1000`, `M1001`, ... rather than `M1000.0`.
-
-For long-device families in the high-level helpers:
-
-- `LTN`, `LSTN`, and `LCN` default to 32-bit current-value reads and writes
-- `LTS`, `LTC`, `LSTS`, and `LSTC` are resolved through the corresponding `LTN` / `LSTN` helper-backed 4-word decode instead of direct state reads
-
-### Mixed writes with one call
-
-```python
-from slmp import write_named
-
-await write_named(
-    client,
-    {
-        "D100": 42,
-        "D200:F": 3.14,
-        "D300:L": -200,
-        "D50.3": True,
-    },
-)
-```
-
-The same default applies on writes: plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values in the high-level helper layer.
-
-### Explicit contiguous helpers
-
-```python
-from slmp import (
-    read_dwords_chunked,
-    read_dwords_single_request,
-    read_words_chunked,
-    read_words_single_request,
-)
-
-words = await read_words_single_request(client, "D0", 120)
-dwords = await read_dwords_single_request(client, "D200", 16)
-
-large_words = await read_words_chunked(client, "D1000", 1000)
-large_dwords = await read_dwords_chunked(client, "D2000", 120)
-```
-
-`*_single_request` never changes one logical request into multiple PLC requests.
-If the request does not fit, it returns an error.
-
-`*_chunked` is the explicit opt-in surface for multi-request transfers.
-Use it only when the caller accepts protocol-defined chunk boundaries.
-
-### Polling
-
-```python
-from slmp import poll
-
-async for snapshot in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
-    print(snapshot)
-```
-
-### Shared connection for multiple coroutines
-
-```python
-from slmp import AsyncSlmpClient, QueuedAsyncSlmpClient
-
-inner = AsyncSlmpClient("192.168.250.100", port=1025, plc_series="iqr", frame_type="4e")
-async with QueuedAsyncSlmpClient(inner) as client:
-    first = await read_named(client, ["D100", "D200:F"])
-    second = await read_named(client, ["D300", "D50.3"])
-```
-
-## Sample Programs
-
-The buildable sample files with the richest high-level examples are:
-
-- [`samples/high_level_sync.py`](samples/high_level_sync.py)
-  - typed reads and writes
-  - chunked word and dword reads
-  - bit-in-word writes
-  - mixed `read_named_sync` / `write_named_sync`
-  - polling
-- [`samples/high_level_async.py`](samples/high_level_async.py)
-  - explicit `AsyncSlmpClient`
-  - typed reads and writes
-  - chunked reads
-  - `read_named` / `write_named`
-  - polling
-  - shared queued connection example
-
-Run them from the repository root:
-
-```bash
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
-```
-
-More sample commands are listed in [docsrc/user/SAMPLES.md](docsrc/user/SAMPLES.md).
-
-## Documentation
-
-User-facing documents:
-
-- [User Guide](docsrc/user/USER_GUIDE.md)
-- [Samples](docsrc/user/SAMPLES.md)
-- [Error Codes](docsrc/user/ERROR_CODES.md)
-
-Maintainer and validation material remains in `docsrc/maintainer/` and `docsrc/validation/`.
+Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
 
 ## Development
 
@@ -243,8 +123,6 @@ run_ci.bat
 build_docs.bat
 release_check.bat
 ```
-
-`run_ci.bat` validates the package and also builds the single-file CLI tool in `publish/`.
 
 ## License
 

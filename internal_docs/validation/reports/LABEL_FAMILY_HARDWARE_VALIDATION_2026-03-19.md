@@ -58,7 +58,7 @@ From the manual label verification run:
 
 ## Source Evidence
 
-- `docsrc/maintainer/iqr_r08cpu/pending_live_verification_latest.md`
-- `docsrc/maintainer/iqr_r08cpu/manual_label_verification_latest.md`
-- `docsrc/maintainer/communication_test_record.md`
+- `internal_docs/maintainer/iqr_r08cpu/pending_live_verification_latest.md`
+- `internal_docs/maintainer/iqr_r08cpu/manual_label_verification_latest.md`
+- `internal_docs/maintainer/communication_test_record.md`
 

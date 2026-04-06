@@ -423,7 +423,7 @@ _COMPATIBILITY_COMBO_FALLBACK_ORDER = ("3e/ql", "4e/ql", "3e/iqr", "4e/iqr")
 
 
 def _compatibility_default_policy_output() -> str:
-    return "docs/validation/reports/compatibility_policy.json"
+    return "internal_docs/validation/reports/compatibility_policy.json"
 
 
 def _resolve_detected_family(*, label: str | None, model: str | None) -> str | None:
@@ -5170,7 +5170,7 @@ def compatibility_matrix_render_main(argv: Sequence[str] | None = None) -> int:
     """Render PLC_COMPATIBILITY.md from compatibility probe JSON files."""
     parser = argparse.ArgumentParser(description="Render PLC_COMPATIBILITY.md from compatibility probe JSON files")
     parser.add_argument("--input", action="append", required=True, help="compatibility_probe_latest.json; repeatable")
-    parser.add_argument("--output", default="docs/validation/reports/PLC_COMPATIBILITY.md")
+    parser.add_argument("--output", default="internal_docs/validation/reports/PLC_COMPATIBILITY.md")
     parser.add_argument(
         "--policy-output",
         default=_compatibility_default_policy_output(),

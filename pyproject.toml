@@ -67,7 +67,7 @@ slmp-regression-suite = "slmp.cli:regression_suite_main"
 
 [tool.setuptools.packages.find]
 include = ["slmp*"]
-exclude = ["tests*", "scripts*", "docsrc/maintainer*", "docsrc/validation*"]
+exclude = ["tests*", "scripts*", "internal_docs*"]
 
 [tool.setuptools]
 include-package-data = true

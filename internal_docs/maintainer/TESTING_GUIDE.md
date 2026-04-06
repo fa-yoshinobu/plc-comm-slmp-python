@@ -186,14 +186,14 @@ Higher-risk families remain opt-in:
 Render the matrix after collecting one JSON file per PLC path you want represented:
 
 ```powershell
-python scripts/slmp_compatibility_matrix_render.py --input internal_docsrc/compatibility_r08cpu_main/compatibility_probe_latest.json --output docsrc/validation/reports/PLC_COMPATIBILITY.md
+python scripts/slmp_compatibility_matrix_render.py --input internal_docsrc/compatibility_r08cpu_main/compatibility_probe_latest.json --output internal_docs/validation/reports/PLC_COMPATIBILITY.md
 ```
 
 Useful renderer behavior:
 
 - rows are ordered by product family, then by PLC label
 - `--omit-pending-columns` hides command columns that are still `PENDING` for every PLC row
-- the same render pass also emits `docsrc/validation/reports/compatibility_policy.json`
+- the same render pass also emits `internal_docs/validation/reports/compatibility_policy.json`
 
 Interpretation rules:
 
@@ -319,7 +319,7 @@ Frame dumps:
 
 Multi-CPU `G/HG` expansion checklist:
 
-- `docsrc/validation/reports/G_HG_MULTI_CPU_CHECKLIST_2026-03-19.md`
+- `internal_docs/validation/reports/G_HG_MULTI_CPU_HARDWARE_RECHECK_2026-03-19.md`
 
 ### G/HG Extended Specification Coverage Sweep
 

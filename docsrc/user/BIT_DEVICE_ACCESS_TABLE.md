@@ -271,7 +271,7 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only protocol and testing notes are kept in the source checkout
-  under `docsrc/maintainer/`.
+  under `internal_docs/maintainer/`.
 
 
 

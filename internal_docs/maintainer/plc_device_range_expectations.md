@@ -219,7 +219,7 @@ These are not pure range issues. They are command-path or target-specific behavi
 - `internal_docsrc/iqr_r08cpu/register_boundary_probe_latest.md`
 - `internal_docsrc/open_items.md`
 - `internal_docsrc/manual_implementation_differences.md`
-- `docsrc/validation/reports/ZR1535996_CAPTURE_2026-03-19.md`
-- `docsrc/validation/reports/ZR1535996_HARDWARE_REVALIDATION_2026-03-19.md`
-- `docsrc/validation/reports/R_FIXED_LIMIT_POLICY_2026-03-19.md`
+- `internal_docs/validation/reports/ZR1535996_CAPTURE_2026-03-19.md`
+- `internal_docs/validation/reports/ZR1535996_HARDWARE_REVALIDATION_2026-03-19.md`
+- `internal_docs/validation/reports/R_FIXED_LIMIT_POLICY_2026-03-19.md`
 

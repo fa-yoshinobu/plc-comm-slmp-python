@@ -38,6 +38,9 @@ exclude_docs: |
 nav:
   - Overview: index.md
   - User Docs:
+      - Getting Started: user/GETTING_STARTED.md
+      - Supported PLC Registers: user/SUPPORTED_REGISTERS.md
+      - Latest Communication Verification: user/LATEST_COMMUNICATION_VERIFICATION.md
       - User Guide: user/USER_GUIDE.md
       - Samples: user/SAMPLES.md
       - Error Codes: user/ERROR_CODES.md
@@ -47,8 +50,3 @@ nav:
       - Core: api/core.md
       - Constants: api/constants.md
   - Change Log: CHANGELOG.md
-
-
-
-
-

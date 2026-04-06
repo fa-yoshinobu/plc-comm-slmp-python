@@ -258,8 +258,8 @@ For convenience, the typed `_ext` APIs also accept qualified device strings such
 - `Uxxxx\...` overrides `extension_specification` with hex `xxxx`
 - the device part after `\` is still parsed by the normal device parser
 - this override does not prove what the target means by that `Uxxxx` value; it only controls the encoded Extended Specification qualifier
-- the byte-level layout difference for `G/HG` is documented in `docsrc/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md`
-- the Q/L-style `U01\G22` capture evidence is documented in `docsrc/validation/reports/U01_G22_extended_device_CAPTURE_2026-03-19.md`
+- the byte-level layout difference for `G/HG` is documented in `internal_docs/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md`
+- the Q/L-style `U01\G22` capture evidence is documented in `internal_docs/validation/reports/U01_G22_extended_device_CAPTURE_2026-03-19.md`
 - in the user's current multi-CPU environment, `U3E0..U3E3` are the meaningful `G/HG` qualifiers and map to CPU No.1..No.4 memory
 - lower `U**` values remain plain I/O unit addresses unless the target family defines a CPU-memory mapping for that range
 
@@ -271,7 +271,7 @@ Before the capture-aligned iQ-R `G/HG` builder was added, the generic repository
 3. both series modes are tested (`iqr` and `ql`)
 
 This means Extended Specification framing/parameter requirements on this PLC setup are stricter than what was inferred from manual examples alone. Later capture-based `U3E0\G10`, `U3E0\HG20`, and `U01\G22` success cases showed that `G/HG` are not universally impossible, and the current builder now matches that reordered payload layout in unit tests. A live R120PCPU smoke recheck also passed for single-word `G10` / `HG20`, but broader validation is still required.
-The concrete byte-order difference between the old generic builder and the captured working layout is recorded in `docsrc/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md`.
+The concrete byte-order difference between the old generic builder and the captured working layout is recorded in `internal_docs/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md`.
 At the moment, `G/HG` is the only family with a confirmed dedicated Extended Specification builder branch in this repository.
 Current operational status is tracked in:
 1. `internal_docsrc/open_items.md`

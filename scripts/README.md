@@ -8,7 +8,7 @@ You can use either:
 - `python scripts/<name>.py ...`
 - the installed console entry point
 
-Use [TESTING_GUIDE.md](../docsrc/maintainer/TESTING_GUIDE.md) for when to run each script and [USER_GUIDE.md](../docsrc/user/USER_GUIDE.md) for API-side context.
+Use [TESTING_GUIDE.md](../internal_docs/maintainer/TESTING_GUIDE.md) for when to run each script and [USER_GUIDE.md](../docsrc/user/USER_GUIDE.md) for API-side context.
 
 ## Start Here
 
@@ -42,9 +42,9 @@ If you need human confirmation, use:
 - `slmp_compatibility_probe.py`
   - Run a structured compatibility probe and emit both Markdown and JSON results.
 - `slmp_compatibility_matrix_render.py`
-  - Render `docsrc/validation/reports/PLC_COMPATIBILITY.md` from probe JSON files.
+  - Render `internal_docs/validation/reports/PLC_COMPATIBILITY.md` from probe JSON files.
   - `--omit-pending-columns` is available when you want to hide command families that were not probed yet.
-  - The same run also emits `docsrc/validation/reports/compatibility_policy.json` for explicit compatibility-policy defaults.
+  - The same run also emits `internal_docs/validation/reports/compatibility_policy.json` for explicit compatibility-policy defaults.
 - `slmp_init_model_docs.py`
   - Create `internal_docsrc/<series>_<model>/`.
 - `slmp_device_access_matrix_sync.py`

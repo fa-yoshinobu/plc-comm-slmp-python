@@ -47,6 +47,6 @@ with SlmpClient(HOST, port=PORT, transport="tcp", plc_series="ql") as cli:
 
 ## 5. Relationship to Earlier Evidence
 
-- `docsrc/validation/reports/ZR1535996_CAPTURE_2026-03-19.md` recorded packet-capture evidence for direct `0401/1401` access to the same device.
+- `internal_docs/validation/reports/ZR1535996_CAPTURE_2026-03-19.md` recorded packet-capture evidence for direct `0401/1401` access to the same device.
 - This report adds repository-driven live confirmation through the current Python client implementation.
 

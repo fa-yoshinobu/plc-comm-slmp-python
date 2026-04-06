@@ -37,7 +37,7 @@ Additional observed behavior while locked:
 
 ## Source Evidence
 
-- `docsrc/maintainer/iqr_r08cpu/pending_live_verification_latest.md`
-- `docsrc/maintainer/communication_test_record.md`
-- `docsrc/maintainer/iqr_r08cpu/README.md`
+- `internal_docs/maintainer/iqr_r08cpu/pending_live_verification_latest.md`
+- `internal_docs/maintainer/communication_test_record.md`
+- `internal_docs/maintainer/iqr_r08cpu/README.md`
 

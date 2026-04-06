@@ -632,7 +632,7 @@ options:
                         auto; ql -> 3e, iqr -> 4e)
   --compatibility-policy COMPATIBILITY_POLICY
                         optional compatibility policy JSON; defaults to
-                        docsrc/validation/reports/compatibility_policy.json when
+                        internal_docs/validation/reports/compatibility_policy.json when
                         present
   --monitoring-timer MONITORING_TIMER
                         e.g. 0x0010
@@ -973,7 +973,7 @@ options:
   --frame-type {auto,3e,4e}
   --compatibility-policy COMPATIBILITY_POLICY
                         optional compatibility policy JSON; defaults to
-                        docsrc/validation/reports/compatibility_policy.json when
+                        internal_docs/validation/reports/compatibility_policy.json when
                         present
   --monitoring-timer MONITORING_TIMER
                         e.g. 0x0010

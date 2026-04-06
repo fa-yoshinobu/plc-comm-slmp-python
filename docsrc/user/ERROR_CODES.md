@@ -3,7 +3,7 @@
 This file is the quick end-code table for users of the library.
 
 The maintainer-facing error-code reference is kept in the source checkout under
-`docsrc/maintainer/`.
+`internal_docs/maintainer/`.
 
 ## 1. Where Errors Come From
 
@@ -68,7 +68,7 @@ For error handling implementation examples, see the [User Guide error handling s
 
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only testing and internal error-reference notes are kept in the
-  source checkout under `docsrc/maintainer/`.
+  source checkout under `internal_docs/maintainer/`.
 
 Note for `0xC051`:
 
