@@ -40,7 +40,7 @@ Optional packaging smoke check:
 
 ```powershell
 python -m venv %TEMP%\\slmp_release_smoke
-%TEMP%\\slmp_release_smoke\\Scripts\\python.exe -m pip install .\\dist\\slmp_connect_python-0.1.3-py3-none-any.whl
+%TEMP%\\slmp_release_smoke\\Scripts\\python.exe -m pip install .\\dist\\slmp_connect_python-0.1.6-py3-none-any.whl
 %TEMP%\\slmp_release_smoke\\Scripts\\python.exe -c "import slmp; print(slmp.__version__)"
 %TEMP%\\slmp_release_smoke\\Scripts\\slmp-connection-check.exe --help
 ```
@@ -101,6 +101,5 @@ Then:
 
 ## 8. Current Baseline
 
-- package version: `0.1.3`
+- package version: `0.1.6`
 - validated target: Mitsubishi MELSEC iQ-R `R08CPU`
-

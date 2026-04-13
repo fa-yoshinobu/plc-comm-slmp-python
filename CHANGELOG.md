@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.6 - 2026-04-13
+
+### Changed
+- CI now checks out `plc-comm-slmp-cross-verify/specs/shared` before running the shared-vector parity tests, so the package tests use the same canonical verification inputs as the cross-library harness.
+
+### Fixed
+- `slmp.__version__` now matches the packaged project version and upcoming release tag.
+
 ## 0.1.5 - 2026-04-01
 
 ## 0.1.4 - 2026-03-29
@@ -138,7 +146,6 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-
 
 
 
