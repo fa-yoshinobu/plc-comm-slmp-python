@@ -1731,13 +1731,36 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(payload, b"\x64\x00\x00\xa8\x02\x00")
 
     def test_practical_path_warning_for_lt_direct_access(self) -> None:
-        """Test test_practical_path_warning_for_lt_direct_access."""
+        """Direct LT state access must fail instead of warning."""
         client = FakeClient()
-        client.next_response_data = b"\x00"
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        with self.assertRaisesRegex(ValueError, "Direct bit read is not supported for LTC"):
             client.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
-        self.assertTrue(any(item.category is SlmpPracticalPathWarning for item in caught))
+        self.assertIsNone(client.last_request)
+
+    def test_direct_bit_read_rejects_long_timer_state_devices(self) -> None:
+        """Direct bit reads for LT/LST state devices must fail before transport."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct bit read is not supported for LTC"):
+            client.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_direct_word_read_requires_four_word_long_timer_blocks(self) -> None:
+        """LTN/LSTN direct reads must use 4-word units."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
+            client.read_devices("LTN0", 2, bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        client.next_response_data = b"\x01\x00\x02\x00\x03\x00\x04\x00"
+        out = client.read_devices("LTN0", 4, bit_unit=False, series=PLCSeries.IQR)
+        self.assertEqual(out, [1, 2, 3, 4])
+
+    def test_read_dwords_rejects_long_timer_direct_dword_path(self) -> None:
+        """Helper dword reads must not use 2-word direct LT paths."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
+            client.read_dwords("LTN0", 1, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
 
     def test_temporarily_unsupported_device_error_for_g_direct_only(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_g_direct_only."""
@@ -2692,6 +2715,13 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(out.word["D101"], 0x5678)
         self.assertEqual(out.dword["D200"], 0x00009ABC)
 
+    def test_read_random_rejects_lcs_lcc(self) -> None:
+        """Read Random must reject long counter state devices."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Read Random \\(0x0403\\) does not support LCS/LCC"):
+            client.read_random(word_devices=["LCS10"], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_run_monitor_cycle_returns_typed_result(self) -> None:
         """Test test_run_monitor_cycle_returns_typed_result."""
         client = FakeClient()
@@ -2729,6 +2759,13 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(out.bit_blocks[0].device, "M1000")
         self.assertEqual(out.bit_blocks[0].values, [0x0005, 0x0001, 0x0001, 0x0001])
 
+    def test_read_block_rejects_lcs_lcc(self) -> None:
+        """Read Block must reject long counter state devices."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Read Block \\(0x0406\\) does not support LCS/LCC"):
+            client.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_write_block_multi_point_bit_values_are_packed_words(self) -> None:
         """Test test_write_block_multi_point_bit_values_are_packed_words."""
         client = FakeClient()
@@ -2744,6 +2781,20 @@ class TestDeviceApi(unittest.TestCase):
             payload,
             b"\x00\x01" + encode_device_spec("M1000", series=PLCSeries.IQR) + b"\x02\x00" + b"\x05\x00\x01\x00",
         )
+
+    def test_write_block_rejects_lcs_lcc(self) -> None:
+        """Write Block must reject long counter state devices."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Write Block \\(0x1406\\) does not support LCS/LCC"):
+            client.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_register_monitor_devices_rejects_lcs_lcc(self) -> None:
+        """Monitor register must reject long counter state devices."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Entry Monitor Device \\(0x0801\\) does not support LCS/LCC"):
+            client.register_monitor_devices(word_devices=["LCS10"], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
 
     def test_read_type_name_returns_typed_result(self) -> None:
         """Test test_read_type_name_returns_typed_result."""

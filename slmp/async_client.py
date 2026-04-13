@@ -40,6 +40,11 @@ from .core import (
     _label_array_data_bytes,
     _normalize_items,
     _raise_response_error,
+    _validate_block_read_devices,
+    _validate_block_write_devices,
+    _validate_direct_read_device,
+    _validate_monitor_register_devices,
+    _validate_random_read_devices,
     _warn_boundary_behavior,
     _warn_practical_device_path,
     build_device_modification_flags,
@@ -290,6 +295,7 @@ class AsyncSlmpClient:
         _check_points_u16(points, "points")
         s = PLCSeries(series) if series is not None else self.plc_series
         ref = parse_device(device)
+        _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=s, access_kind="direct")
         _warn_boundary_behavior(ref, series=s, points=points, write=False, bit_unit=bit_unit, access_kind="direct")
@@ -500,6 +506,7 @@ class AsyncSlmpClient:
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
         words = [parse_device(d) for d in word_devices]
         dwords = [parse_device(d) for d in dword_devices]
+        _validate_random_read_devices(words, dwords)
         _check_temporarily_unsupported_devices(words)
         _check_temporarily_unsupported_devices(dwords)
         payload = bytearray([len(words), len(dwords)])
@@ -676,12 +683,19 @@ class AsyncSlmpClient:
         _check_random_read_like_counts(len(word_devices), len(dword_devices), series=s, name="register_monitor_devices")
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
         payload = bytearray([len(word_devices), len(dword_devices)])
+        word_refs: list[DeviceRef] = []
+        dword_refs: list[DeviceRef] = []
         for dev in word_devices:
-            _check_temporarily_unsupported_device(parse_device(dev))
-            payload += encode_device_spec(dev, series=s)
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s)
+            word_refs.append(ref)
         for dev in dword_devices:
-            _check_temporarily_unsupported_device(parse_device(dev))
-            payload += encode_device_spec(dev, series=s)
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s)
+            dword_refs.append(ref)
+        _validate_monitor_register_devices(word_refs, dword_refs)
         await self.request(Command.DEVICE_ENTRY_MONITOR, subcommand=sub, data=bytes(payload))
 
     async def register_monitor_devices_ext(
@@ -751,13 +765,16 @@ class AsyncSlmpClient:
         norm_word = []
         for dev, pts in word_blocks:
             ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
             norm_word.append((ref, pts))
             payload += encode_device_spec(ref, series=s) + pts.to_bytes(2, "little")
         norm_bit = []
         for dev, pts in bit_blocks:
             ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
             norm_bit.append((ref, pts))
             payload += encode_device_spec(ref, series=s) + pts.to_bytes(2, "little")
+        _validate_block_read_devices([ref for ref, _ in norm_word], [ref for ref, _ in norm_bit])
         resp = await self.request(Command.DEVICE_READ_BLOCK, subcommand=sub, data=bytes(payload))
         offset = 0
         word_res = []
@@ -792,10 +809,19 @@ class AsyncSlmpClient:
         _check_block_request_limits(word_blocks, bit_blocks, series=s, name="write_block")
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
         payload = bytearray([len(word_blocks), len(bit_blocks)])
+        word_refs = []
         for dev, vals in word_blocks:
-            payload += encode_device_spec(parse_device(dev), series=s) + len(vals).to_bytes(2, "little")
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s) + len(vals).to_bytes(2, "little")
+            word_refs.append(ref)
+        bit_refs = []
         for dev, vals in bit_blocks:
-            payload += encode_device_spec(parse_device(dev), series=s) + len(vals).to_bytes(2, "little")
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s) + len(vals).to_bytes(2, "little")
+            bit_refs.append(ref)
+        _validate_block_write_devices(word_refs, bit_refs)
         for _, vals in word_blocks:
             for v in vals:
                 payload += int(v).to_bytes(2, "little")

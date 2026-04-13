@@ -34,7 +34,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
     pytest = _PytestFallback()
 
 from slmp.async_client import AsyncSlmpClient
-from slmp.constants import Command
+from slmp.constants import Command, PLCSeries
 from slmp.core import SlmpError, SlmpResponse, SlmpTarget
 
 # --- Mock SLMP Server for Testing ---
@@ -219,6 +219,70 @@ async def test_async_read_word_helper_uses_low_word_first() -> None:
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.DEVICE_READ)
     assert cli.last_request[2][-2:] == b"\x02\x00"
+
+
+@pytest.mark.asyncio
+async def test_async_direct_bit_read_rejects_long_timer_state_devices() -> None:
+    """Async direct bit reads for LT/LST state devices must fail before transport."""
+    cli = FakeAsyncClient()
+
+    with pytest.raises(ValueError, match="Direct bit read is not supported for LTC"):
+        await cli.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
+
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_direct_word_read_requires_four_word_long_timer_blocks() -> None:
+    """Async LTN/LSTN direct reads must use 4-word units."""
+    cli = FakeAsyncClient()
+
+    with pytest.raises(ValueError, match="requires 4-word blocks"):
+        await cli.read_devices("LTN0", 2, bit_unit=False, series=PLCSeries.IQR)
+
+    assert cli.last_request is None
+
+    cli.next_response_data = b"\x01\x00\x02\x00\x03\x00\x04\x00"
+    values = await cli.read_devices("LTN0", 4, bit_unit=False, series=PLCSeries.IQR)
+    assert values == [1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_async_read_random_rejects_lcs_lcc() -> None:
+    """Async Read Random must reject long counter state devices."""
+    cli = FakeAsyncClient()
+
+    with pytest.raises(ValueError, match="Read Random \\(0x0403\\) does not support LCS/LCC"):
+        await cli.read_random(word_devices=["LCS10"], series=PLCSeries.IQR)
+
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_block_rejects_lcs_lcc() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match=r"Read Block \(0x0406\) does not support LCS/LCC"):
+        await cli.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_write_block_rejects_lcs_lcc() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match=r"Write Block \(0x1406\) does not support LCS/LCC"):
+        await cli.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_register_monitor_devices_rejects_lcs_lcc() -> None:
+    """Async monitor register must reject long counter state devices."""
+    cli = FakeAsyncClient()
+
+    with pytest.raises(ValueError, match="Entry Monitor Device \\(0x0801\\) does not support LCS/LCC"):
+        await cli.register_monitor_devices(word_devices=["LCS10"], series=PLCSeries.IQR)
+
+    assert cli.last_request is None
 
 
 @pytest.mark.asyncio

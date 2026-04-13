@@ -40,6 +40,11 @@ from .core import (
     _label_array_data_bytes,
     _normalize_items,
     _raise_response_error,
+    _validate_block_read_devices,
+    _validate_block_write_devices,
+    _validate_direct_read_device,
+    _validate_monitor_register_devices,
+    _validate_random_read_devices,
     _warn_boundary_behavior,
     _warn_practical_device_path,
     build_device_modification_flags,
@@ -305,6 +310,7 @@ class SlmpClient:
         _check_points_u16(points, "points")
         s = PLCSeries(series) if series is not None else self.plc_series
         ref = parse_device(device)
+        _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=s, access_kind="direct")
         _warn_boundary_behavior(
@@ -552,6 +558,7 @@ class SlmpClient:
 
         words = [parse_device(d) for d in word_devices]
         dwords = [parse_device(d) for d in dword_devices]
+        _validate_random_read_devices(words, dwords)
         _check_temporarily_unsupported_devices(words)
         _check_temporarily_unsupported_devices(dwords)
 
@@ -787,12 +794,19 @@ class SlmpClient:
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
 
         payload = bytearray([len(word_devices), len(dword_devices)])
+        word_refs: list[DeviceRef] = []
+        dword_refs: list[DeviceRef] = []
         for dev in word_devices:
-            _check_temporarily_unsupported_device(parse_device(dev))
-            payload += encode_device_spec(dev, series=s)
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s)
+            word_refs.append(ref)
         for dev in dword_devices:
-            _check_temporarily_unsupported_device(parse_device(dev))
-            payload += encode_device_spec(dev, series=s)
+            ref = parse_device(dev)
+            _check_temporarily_unsupported_device(ref)
+            payload += encode_device_spec(ref, series=s)
+            dword_refs.append(ref)
+        _validate_monitor_register_devices(word_refs, dword_refs)
         self.request(Command.DEVICE_ENTRY_MONITOR, subcommand=sub, data=bytes(payload))
 
     def register_monitor_devices_ext(
@@ -907,6 +921,7 @@ class SlmpClient:
             norm_bit.append((ref, points))
             payload += encode_device_spec(ref, series=s)
             payload += points.to_bytes(2, "little")
+        _validate_block_read_devices([ref for ref, _ in norm_word], [ref for ref, _ in norm_bit])
 
         resp = self.request(Command.DEVICE_READ_BLOCK, subcommand=sub, data=bytes(payload))
 
@@ -968,6 +983,8 @@ class SlmpClient:
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
 
         payload = bytearray([len(word_blocks), len(bit_blocks)])
+        word_refs: list[DeviceRef] = []
+        bit_refs: list[DeviceRef] = []
         for dev, values in word_blocks:
             ref = parse_device(dev)
             _check_temporarily_unsupported_device(ref)
@@ -975,6 +992,7 @@ class SlmpClient:
             _check_points_u16(len(values), "word block size")
             payload += encode_device_spec(ref, series=s)
             payload += len(values).to_bytes(2, "little")
+            word_refs.append(ref)
         for dev, values in bit_blocks:
             ref = parse_device(dev)
             _check_temporarily_unsupported_device(ref)
@@ -982,6 +1000,8 @@ class SlmpClient:
             _check_points_u16(len(values), "bit block size")
             payload += encode_device_spec(ref, series=s)
             payload += len(values).to_bytes(2, "little")
+            bit_refs.append(ref)
+        _validate_block_write_devices(word_refs, bit_refs)
 
         for _, values in word_blocks:
             for value in values:

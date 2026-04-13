@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.7 - 2026-04-13
+
+### Added
+- Client-side guard coverage for unsupported long-timer and long-counter-state command paths, including synchronous and asynchronous regression tests.
+
+### Changed
+- The public client surfaces now reject unsupported direct reads for `LTS/LTC/LSTS/LSTC` and unsupported `LCS/LCC` random, block, and monitor-registration commands before transport.
+
 ## 0.1.6 - 2026-04-13
 
 ### Changed
@@ -146,6 +154,5 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-
 
 

@@ -866,6 +866,51 @@ def _check_temporarily_unsupported_devices(refs: Sequence[DeviceRef], *, access_
         _check_temporarily_unsupported_device(ref, access_kind=access_kind)
 
 
+def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool) -> None:
+    if bit_unit and ref.code in _LT_LST_DIRECT_CODES:
+        raise ValueError(
+            f"Direct bit read is not supported for {ref.code}. "
+            "Use read_ltc_states/read_lts_states/read_lstc_states/read_lsts_states or read_long_timer/read_long_retentive_timer."
+        )
+    if not bit_unit and ref.code in _LT_LST_CURRENT_CODES and points % 4 != 0:
+        raise ValueError(
+            f"Direct read of {ref.code} requires 4-word blocks. "
+            f"Requested points={points}; use a multiple of 4 or the long timer helpers."
+        )
+
+
+def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
+        raise ValueError(
+            "Read Random (0x0403) does not support LCS/LCC. "
+            "Use read_typed/read_named or read_devices('LCN..', 4, bit_unit=False)."
+        )
+
+
+def _validate_block_read_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *bit_refs)):
+        raise ValueError(
+            "Read Block (0x0406) does not support LCS/LCC. "
+            "Use read_typed/read_named or read_devices('LCN..', 4, bit_unit=False)."
+        )
+
+
+def _validate_block_write_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *bit_refs)):
+        raise ValueError(
+            "Write Block (0x1406) does not support LCS/LCC. "
+            "Use write_devices/write_random_bits or helper-backed writes instead."
+        )
+
+
+def _validate_monitor_register_devices(word_refs: Sequence[DeviceRef], dword_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
+        raise ValueError(
+            "Entry Monitor Device (0x0801) does not support LCS/LCC. "
+            "Use read_typed/read_named or monitor the LCN 4-word status block instead."
+        )
+
+
 def _warn_practical_device_path(ref: DeviceRef, *, series: PLCSeries, access_kind: str) -> None:
     if series != PLCSeries.IQR:
         return
@@ -934,6 +979,8 @@ def _warn_boundary_behavior(
 
 
 _LT_LST_DIRECT_CODES = frozenset({"LTC", "LTS", "LSTC", "LSTS"})
+_LT_LST_CURRENT_CODES = frozenset({"LTN", "LSTN"})
+_LC_CONTACT_CODES = frozenset({"LCS", "LCC"})
 _G_HG_CODES = frozenset({"G", "HG"})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})
