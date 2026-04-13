@@ -141,17 +141,17 @@ Accessed via `read_words()` / `write_words()`.
 
 ## Long Timer / Retentive Timer Helpers (iQ-R)
 
-These helpers read device data in 4-word units (32-bit current value + 32-bit set value) and return `LongTimerResult` objects.
+These helpers read 4-word device blocks and return `LongTimerResult` objects.
 
 ```python
 results = client.read_long_timer(head_no=0, points=4)
 for r in results:
-    print(r.current_value, r.set_value, r.contact, r.coil)
+    print(r.current_value, r.status_word, r.contact, r.coil)
 ```
 
 | Method | Reads | Returns |
 |--------|-------|---------|
-| `read_long_timer(head_no, points)` | LTN | `list[LongTimerResult]` with `.current_value`, `.set_value`, `.contact` (LTS), `.coil` (LTC) |
+| `read_long_timer(head_no, points)` | LTN | `list[LongTimerResult]` with `.current_value`, `.status_word`, `.contact` (LTS), `.coil` (LTC), `.raw_words` |
 | `read_long_retentive_timer(head_no, points)` | LSTN | `list[LongTimerResult]` for LST |
 | `read_ltc_states(head_no, points)` | LTN -> LTC coil | `list[bool]` |
 | `read_lts_states(head_no, points)` | LTN -> LTS contact | `list[bool]` |
@@ -272,7 +272,6 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only protocol and testing notes are kept in the source checkout
   under `internal_docs/maintainer/`.
-
 
 
 

@@ -327,13 +327,29 @@ class TestWriteNamedSync(unittest.TestCase):
         write_named_sync(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
 
         self.assertEqual(
-            client.write_devices.call_args_list,
+            client.write_random_words.call_args_list,
             [
-                unittest.mock.call("LTN10", [1, 0], bit_unit=False),
-                unittest.mock.call("LSTN20", [2, 0], bit_unit=False),
-                unittest.mock.call("LCN30", [3, 0], bit_unit=False),
+                unittest.mock.call(dword_values={DeviceRef("LTN", 10): 1}, series=client.plc_series),
+                unittest.mock.call(dword_values={DeviceRef("LSTN", 20): 2}, series=client.plc_series),
+                unittest.mock.call(dword_values={DeviceRef("LCN", 30): 3}, series=client.plc_series),
             ],
         )
+
+    def test_write_named_routes_long_timer_state_writes_to_native_paths(self):
+        client = MagicMock()
+        write_named_sync(client, {"LTC10": True, "LTS10": False, "LSTC20": True, "LSTS20": False, "LCC30": True, "LCS30": False})
+
+        self.assertEqual(
+            client.write_random_bits.call_args_list,
+            [
+                unittest.mock.call({DeviceRef("LTC", 10): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LTS", 10): False}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LSTC", 20): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LSTS", 20): False}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LCC", 30): True}, series=client.plc_series),
+            ],
+        )
+        client.write_devices.assert_called_once_with(DeviceRef("LCS", 30), [0], bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -537,17 +553,42 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
     async def test_write_named_defaults_long_current_values_to_dword(self):
         client = MagicMock()
         client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+        client.write_random_words = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+        client.write_random_bits = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
 
         await write_named(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
 
         self.assertEqual(
-            client.write_devices.call_args_list,
+            client.write_random_words.call_args_list,
             [
-                unittest.mock.call("LTN10", [1, 0], bit_unit=False),
-                unittest.mock.call("LSTN20", [2, 0], bit_unit=False),
-                unittest.mock.call("LCN30", [3, 0], bit_unit=False),
+                unittest.mock.call(dword_values={DeviceRef("LTN", 10): 1}, series=client.plc_series),
+                unittest.mock.call(dword_values={DeviceRef("LSTN", 20): 2}, series=client.plc_series),
+                unittest.mock.call(dword_values={DeviceRef("LCN", 30): 3}, series=client.plc_series),
             ],
         )
+
+    async def test_write_named_routes_long_timer_state_writes_to_native_paths(self):
+        client = MagicMock()
+        client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+        client.write_random_words = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+        client.write_random_bits = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+
+        await write_named(
+            client,
+            {"LTC10": True, "LTS10": False, "LSTC20": True, "LSTS20": False, "LCC30": True, "LCS30": False},
+        )
+
+        self.assertEqual(
+            client.write_random_bits.call_args_list,
+            [
+                unittest.mock.call({DeviceRef("LTC", 10): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LTS", 10): False}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LSTC", 20): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LSTS", 20): False}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LCC", 30): True}, series=client.plc_series),
+            ],
+        )
+        client.write_devices.assert_called_once_with(DeviceRef("LCS", 30), [0], bit_unit=False)
 
 
 if __name__ == "__main__":

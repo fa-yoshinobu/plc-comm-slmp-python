@@ -145,7 +145,12 @@ async def write_typed(
         dtype: Type code accepted by :func:`read_typed`.
         value: Application value to encode and write.
     """
+    ref = parse_device(device) if isinstance(device, str) else device
     key = dtype.upper()
+    long_read = _get_long_timer_read(ref)
+    if long_read is not None:
+        await _write_long_family_value(client, ref, key, value, long_read)
+        return
     if key == "BIT":
         await client.write_devices(device, [bool(value)], bit_unit=True)
         return
@@ -204,7 +209,12 @@ def write_typed_sync(
     value: int | float,
 ) -> None:
     """Synchronously write one logical value using the requested type."""
+    ref = parse_device(device) if isinstance(device, str) else device
     key = dtype.upper()
+    long_read = _get_long_timer_read(ref)
+    if long_read is not None:
+        _write_long_family_value_sync(client, ref, key, value, long_read)
+        return
     if key == "BIT":
         client.write_devices(device, [bool(value)], bit_unit=True)
         return
@@ -458,6 +468,46 @@ def _validate_long_timer_entry(address: str, device: DeviceRef, dtype: str) -> N
         raise ValueError(
             f"Address '{address}' is a long timer state device. Use the plain device form without a dtype override."
         )
+
+
+async def _write_long_family_value(
+    client: AsyncSlmpClient,
+    device: DeviceRef,
+    dtype: str,
+    value: int | float,
+    long_read: tuple[str, str],
+) -> None:
+    _, role = long_read
+    if role == "current":
+        await client.write_random_words(
+            dword_values={device: int(value) & 0xFFFFFFFF},
+            series=client.plc_series,
+        )
+        return
+    if device.code == "LCS":
+        await client.write_devices(device, [1 if bool(value) else 0], bit_unit=False)
+        return
+    await client.write_random_bits({device: bool(value)}, series=client.plc_series)
+
+
+def _write_long_family_value_sync(
+    client: SlmpClient,
+    device: DeviceRef,
+    dtype: str,
+    value: int | float,
+    long_read: tuple[str, str],
+) -> None:
+    _, role = long_read
+    if role == "current":
+        client.write_random_words(
+            dword_values={device: int(value) & 0xFFFFFFFF},
+            series=client.plc_series,
+        )
+        return
+    if device.code == "LCS":
+        client.write_devices(device, [1 if bool(value) else 0], bit_unit=False)
+        return
+    client.write_random_bits({device: bool(value)}, series=client.plc_series)
 
 
 def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
