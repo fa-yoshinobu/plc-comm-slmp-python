@@ -15,6 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Clone shared verification vectors
+        run: |
+          target="$GITHUB_WORKSPACE/../plc-comm-slmp-cross-verify"
+          rm -rf "$target"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/fa-yoshinobu/plc-comm-slmp-cross-verify.git "$target"
+          git -C "$target" sparse-checkout set specs/shared
+
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
