@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.6 - 2026-04-13
+
+### Changed
+- CI now checks out `plc-comm-slmp-cross-verify/specs/shared` before running the shared-vector parity tests, so the package tests use the same canonical verification inputs as the cross-library harness.
+
+### Fixed
+- `slmp.__version__` now matches the packaged project version and upcoming release tag.
+
 ### Added
 - **Asynchronous API**: New `AsyncSlmpClient` for high-concurrency non-blocking I/O via `asyncio`.
 - **UDP Support**: Full support for UDP transport in both synchronous and asynchronous clients.
