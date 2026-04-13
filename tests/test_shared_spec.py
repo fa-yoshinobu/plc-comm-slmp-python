@@ -11,7 +11,9 @@ from slmp.client import SlmpClient
 from slmp.constants import PLCSeries
 from slmp.utils import _parse_address, normalize_address
 
-_SHARED_SPEC_DIR = Path(__file__).resolve().parents[2] / "slmp-shared-spec"
+_SHARED_SPEC_DIR = (
+    Path(__file__).resolve().parents[2] / "plc-comm-slmp-cross-verify" / "specs" / "shared"
+)
 
 
 def _load_json(name: str) -> dict[str, Any]:

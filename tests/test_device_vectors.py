@@ -7,7 +7,9 @@ from pathlib import Path
 from slmp.constants import PLCSeries
 from slmp.core import encode_device_spec
 
-_SHARED_SPEC_DIR = Path(__file__).resolve().parents[2] / "slmp-shared-spec"
+_SHARED_SPEC_DIR = (
+    Path(__file__).resolve().parents[2] / "plc-comm-slmp-cross-verify" / "specs" / "shared"
+)
 _VECTORS = json.loads((_SHARED_SPEC_DIR / "device_spec_vectors.json").read_text(encoding="utf-8"))["vectors"]
 
 
