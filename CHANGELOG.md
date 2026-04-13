@@ -25,7 +25,7 @@ All notable changes to this project will be documented in this file.
 - **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` for UDP fire-and-forget IP address configuration (command 0x0E31).
 - **`release_check.bat`**: Added a release-preflight batch entry point that runs CI and docs generation together.
 - **S Device Support**: Added `S` (Step Relay) device code to `DEVICE_CODES`.
-- **Live Verification**: Exhaustively verified the library against GX Simulator 3, confirming bit order consistency across all device families and dynamic system-value updates.
+- **Compatibility Verification Notes**: Recorded compatibility verification findings for bit order consistency across device families and dynamic system-value behavior.
 
 ### Changed
 - **User-facing docs**: Reoriented the README, user guide, and sample guide around the high-level helper APIs only.
@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 - **TCP receive path**: Reduced intermediate allocations in synchronous TCP frame reads by switching the hot path to `recv_into` and single-frame assembly.
 - **Docstrings**: Expanded high-level helper docstrings so generated API docs describe the recommended connection, typed reads/writes, named snapshots, polling, and queued usage paths more clearly.
 - **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
-- **Documentation**: Added GX Simulator 3 connection guide and updated User Guide for new features.
+- **Documentation**: Updated the User Guide and compatibility notes for the newer feature set.
 
 ### Fixed
 - **Qualified device DM override**: Explicit `direct_memory_specification` in `ExtensionSpec` is now respected when passing qualified device strings such as `U3E0\G10`; previously the auto-detected DM for `G` (0xF8) or `HG` (0xFA) devices would unconditionally override the caller's value. Auto-detection now only applies when the caller leaves DM at the default (`DIRECT_MEMORY_NORMAL = 0x00`).
@@ -138,7 +138,6 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-
 
 
 

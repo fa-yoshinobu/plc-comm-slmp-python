@@ -1,28 +1,30 @@
-"""Cross-language spec compliance: SLMP device spec encoding vectors.
-
-Each vector in slmp_device_vectors.json defines an expected byte sequence for a
-given device string and series. The same JSON is consumed by the .NET test suite,
-ensuring Python and .NET produce identical wire bytes.
-"""
+"""Cross-language spec compliance: shared SLMP device vectors."""
 
 import json
+import unittest
 from pathlib import Path
-
-import pytest
 
 from slmp.constants import PLCSeries
 from slmp.core import encode_device_spec
 
-_VECTORS_PATH = Path(__file__).parent / "vectors" / "slmp_device_vectors.json"
-_VECTORS = json.loads(_VECTORS_PATH.read_text())["vectors"]
+_SHARED_SPEC_DIR = Path(__file__).resolve().parents[2] / "slmp-shared-spec"
+_VECTORS = json.loads((_SHARED_SPEC_DIR / "device_spec_vectors.json").read_text(encoding="utf-8"))["vectors"]
 
 
-@pytest.mark.parametrize("vec", _VECTORS, ids=lambda v: v["id"])
-def test_device_spec_encoding(vec: dict) -> None:
-    series = PLCSeries.IQR if vec["series"] == "iqr" else PLCSeries.QL
-    result = encode_device_spec(vec["device"], series=series)
-    expected = bytes.fromhex(vec["hex"])
-    assert result == expected, (
-        f"[{vec['id']}] device={vec['device']} series={vec['series']}: "
-        f"got {result.hex().upper()!r}, expected {vec['hex']!r}"
-    )
+class TestDeviceVectors(unittest.TestCase):
+    def test_device_spec_encoding(self) -> None:
+        for vec in _VECTORS:
+            if "python" not in vec.get("implementations", []):
+                continue
+            with self.subTest(case=vec["id"]):
+                series = PLCSeries.IQR if vec["series"] == "iqr" else PLCSeries.QL
+                result = encode_device_spec(vec["device"], series=series)
+                expected = bytes.fromhex(vec["hex"])
+                self.assertEqual(
+                    result,
+                    expected,
+                    msg=(
+                        f"[{vec['id']}] device={vec['device']} series={vec['series']}: "
+                        f"got {result.hex().upper()!r}, expected {vec['hex']!r}"
+                    ),
+                )

@@ -1,8 +1,37 @@
 """Unit tests for AsyncSlmpClient using a mock SLMP server."""
 
 import asyncio
+import re
+from contextlib import AbstractContextManager
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import this module without pytest
+    class _RaisesContext(AbstractContextManager):
+        def __init__(self, expected_exception: type[BaseException], match: str | None = None) -> None:
+            self._expected_exception = expected_exception
+            self._match = match
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            if exc_type is None:
+                raise AssertionError(f"{self._expected_exception.__name__} was not raised")
+            if not issubclass(exc_type, self._expected_exception):
+                return False
+            if self._match and not re.search(self._match, str(exc)):
+                raise AssertionError(f"{self._match!r} did not match {exc!r}")
+            return True
+
+    class _PytestFallback:
+        class mark:
+            @staticmethod
+            def asyncio(func):
+                return func
+
+        @staticmethod
+        def raises(expected_exception: type[BaseException], match: str | None = None) -> _RaisesContext:
+            return _RaisesContext(expected_exception, match)
+
+    pytest = _PytestFallback()
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.constants import Command

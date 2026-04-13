@@ -337,7 +337,17 @@ class TestWriteNamedSync(unittest.TestCase):
 
     def test_write_named_routes_long_timer_state_writes_to_native_paths(self):
         client = MagicMock()
-        write_named_sync(client, {"LTC10": True, "LTS10": False, "LSTC20": True, "LSTS20": False, "LCC30": True, "LCS30": False})
+        write_named_sync(
+            client,
+            {
+                "LTC10": True,
+                "LTS10": False,
+                "LSTC20": True,
+                "LSTS20": False,
+                "LCC30": True,
+                "LCS30": False,
+            },
+        )
 
         self.assertEqual(
             client.write_random_bits.call_args_list,

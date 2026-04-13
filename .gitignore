@@ -13,6 +13,7 @@ publish/
 .coverage.*
 htmlcov/
 site/
+_site/
 internal_docs/*/archive/
 internal_docs/*/frame_dumps*/
 *.pcap

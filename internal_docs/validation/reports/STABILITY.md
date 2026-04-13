@@ -1,7 +1,7 @@
 # Stability and Verification Report (2026-03-18)
 
 ## 1. Executive Summary
-This document records the exhaustive verification and bug-fixing process performed to ensure the library's "production-grade" stability. The library was tested against **GX Simulator 3 (iQ-R Series)** covering all device families, frame types, and concurrency models.
+This document records the verification and bug-fixing process performed to improve stability. It summarizes protocol and compatibility findings that informed the current implementation.
 
 ## 2. Critical Bug Fixes
 ### 2.1. Bit Packing Order (The SM400/401 Issue)
@@ -32,12 +32,12 @@ This document records the exhaustive verification and bug-fixing process perform
 | Cross-Client | Sync Write -> Async Read| Mixed | **PASS** | Implementation parity |
 | Concurrency | 4E | Async | **PASS** | 20 parallel tasks |
 
-## 4. Test Suite
-The following new automated tests were added to the permanent repository:
-- `tests/test_live_sim.py`: Standard SIM verification.
-- `tests/test_live_sim_exhaustive.py`: All device family connectivity.
-- `tests/test_live_sim_mixed_frames.py`: Frame compatibility.
-- `tests/test_live_sim_ultimate.py`: Sync vs Async parity.
-- `tests/test_bugs_and_edges.py`: Edge cases and regression tests.
+## 4. Current Permanent Tests
+The current permanent repository tests focus on local and repeatable checks:
+- `tests/test_async_client.py`: async client protocol behavior and timeout coverage.
+- `tests/test_bugs_and_edges.py`: focused regressions and edge cases.
+- `tests/test_device_vectors.py`: device encoding and vector coverage.
+- `tests/test_slmp.py`: synchronous protocol behavior and command coverage.
+- `tests/test_utils.py`: helper-layer batching, typing, and address normalization.
 
-**Total Tests: 83+ | Status: 100% SUCCESS**
+Historical simulator-oriented validation notes were removed from the permanent test suite.

@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
-- **Documentation**: Added GX Simulator 3 connection guide and updated User Guide for new features.
+- **Documentation**: Updated the User Guide and compatibility notes for the newer feature set.
 
 ### Fixed
 - **Bit Data Packing**: Swapped nibble order in `pack_bit_values` and `unpack_bit_values` to correctly map the first device to the high nibble and the second device to the low nibble, matching the SLMP binary specification and live PLC behavior.
@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **S Device Support**: Added `S` (Step Relay) device code to `DEVICE_CODES`.
-- **Live Verification**: Exhaustively verified the library against GX Simulator 3, confirming bit order consistency across all device families and dynamic system-value updates.
+- **Compatibility Verification Notes**: Recorded compatibility verification findings for bit order consistency across device families and dynamic system-value behavior.
 
 ## 0.1.3 - 2026-03-15
 
@@ -119,4 +119,3 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-

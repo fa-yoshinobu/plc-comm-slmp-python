@@ -402,6 +402,7 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
 
     Returns (base_device, dtype, bit_index).
     """
+    address = address.strip()
     if ":" in address:
         base, dtype = address.split(":", 1)
         return base.strip(), dtype.strip().upper(), None
@@ -422,8 +423,20 @@ def normalize_address(address: str | DeviceRef) -> str:
     configuration files, and cache keys.
     """
 
-    ref = parse_device(address) if isinstance(address, str) else address
-    return str(ref)
+    if not isinstance(address, str):
+        return str(address)
+
+    text = address.strip()
+    if ":" not in text and "." not in text:
+        return str(parse_device(text))
+
+    base, dtype, bit_index = _parse_address(text)
+    canonical_base = str(parse_device(base))
+    if bit_index is not None:
+        return f"{canonical_base}.{bit_index:X}"
+    if ":" in text:
+        return f"{canonical_base}:{dtype}"
+    return canonical_base
 
 
 def _is_batchable_word_device(device: DeviceRef) -> bool:
