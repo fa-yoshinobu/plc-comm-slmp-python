@@ -15,6 +15,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Checkout shared verification vectors
+        uses: actions/checkout@v6
+        with:
+          repository: fa-yoshinobu/plc-comm-slmp-cross-verify
+          ref: main
+          path: plc-comm-slmp-cross-verify
+          sparse-checkout: |
+            specs/shared
+          token: ${{ secrets.CROSS_VERIFY_REPO_TOKEN != '' && secrets.CROSS_VERIFY_REPO_TOKEN || github.token }}
+
+      - name: Expose shared vectors at sibling path
+        run: ln -sfn "$GITHUB_WORKSPACE/plc-comm-slmp-cross-verify" "$GITHUB_WORKSPACE/../plc-comm-slmp-cross-verify"
+
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
