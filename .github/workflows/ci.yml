@@ -17,12 +17,10 @@ jobs:
 
       - name: Clone shared verification vectors
         run: |
-          rm -rf plc-comm-slmp-cross-verify
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/fa-yoshinobu/plc-comm-slmp-cross-verify.git plc-comm-slmp-cross-verify
-          git -C plc-comm-slmp-cross-verify sparse-checkout set specs/shared
-
-      - name: Expose shared vectors at sibling path
-        run: ln -sfn "$GITHUB_WORKSPACE/plc-comm-slmp-cross-verify" "$GITHUB_WORKSPACE/../plc-comm-slmp-cross-verify"
+          target="$GITHUB_WORKSPACE/../plc-comm-slmp-cross-verify"
+          rm -rf "$target"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/fa-yoshinobu/plc-comm-slmp-cross-verify.git "$target"
+          git -C "$target" sparse-checkout set specs/shared
 
       - uses: actions/setup-python@v6
         with:
