@@ -24,6 +24,7 @@ def _build_word_block(start: int, count: int, values: dict[int, int]) -> bytes:
 
 class _FakeSyncClient(SlmpClient):
     def __init__(self, **kwargs: object) -> None:
+        kwargs.setdefault("_allow_manual_profile", True)
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
@@ -35,6 +36,7 @@ class _FakeSyncClient(SlmpClient):
 
 class _FakeAsyncClient(AsyncSlmpClient):
     def __init__(self, **kwargs: object) -> None:
+        kwargs.setdefault("_allow_manual_profile", True)
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""

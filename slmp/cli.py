@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from .client import SlmpClient
+from .client import SlmpClient as _StandardSlmpClient
 from .constants import (
     DEVICE_CODES,
     DIRECT_MEMORY_CPU_BUFFER,
@@ -48,6 +48,12 @@ from .core import (
     unpack_bit_values,
 )
 from .errors import SlmpPracticalPathWarning
+
+
+def SlmpClient(*args: object, **kwargs: object) -> _StandardSlmpClient:
+    """Internal low-level constructor for CLI probe commands."""
+    kwargs["_allow_manual_profile"] = True
+    return _StandardSlmpClient(*args, **kwargs)
 
 
 def _int_auto(text: str) -> int:

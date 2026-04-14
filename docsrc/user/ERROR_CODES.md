@@ -43,7 +43,7 @@ There are three different failure layers:
 from slmp import SlmpClient
 from slmp.errors import SlmpError
 
-with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_series="iqr") as cli:
+with SlmpClient("192.168.250.100", port=1025, transport="tcp", plc_family="iq-r") as cli:
     try:
         cli.read_devices("D100", 1)
     except SlmpError as e:
@@ -73,4 +73,3 @@ For error handling implementation examples, see the [User Guide error handling s
 Note for `0xC051`:
 
 - the current project treats it as manual-confirmed for word-count / unit violations
-

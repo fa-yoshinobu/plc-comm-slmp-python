@@ -18,12 +18,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from slmp.async_client import AsyncSlmpClient
-from slmp.constants import FrameType, PLCSeries
 
 
 async def read_one_plc(host: str, port: int) -> dict[str, object]:
     """Connect to a single PLC and return a snapshot of several devices."""
-    async with AsyncSlmpClient(host, port, frame_type=FrameType.FRAME_4E, plc_series=PLCSeries.IQR) as cli:
+    async with AsyncSlmpClient(host, port, plc_family="iq-r") as cli:
         info = await cli.read_type_name()
         d100 = await cli.read_devices("D100", 1)
         m0 = await cli.read_devices("M0", 1, bit_unit=True)

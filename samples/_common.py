@@ -24,7 +24,12 @@ def add_connection_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--host", required=True, help="PLC or Ethernet module host name / IP")
     parser.add_argument("--port", type=int, default=1025, help="SLMP port number")
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp", help="Transport protocol")
-    parser.add_argument("--series", choices=("ql", "iqr"), default="iqr", help="PLC device encoding family")
+    parser.add_argument(
+        "--plc-family",
+        choices=("iq-f", "iq-r", "iq-l", "mx-f", "mx-r", "qcpu", "lcpu", "qnu", "qnudv"),
+        default="iq-r",
+        help="Canonical PLC family used to derive frame/profile defaults",
+    )
     parser.add_argument("--timeout", type=float, default=3.0, help="Socket timeout in seconds")
     parser.add_argument(
         "--monitoring-timer",
@@ -51,7 +56,7 @@ def create_client_from_args(
         port=args.port,
         transport=args.transport,
         timeout=args.timeout,
-        plc_series=args.series,
+        plc_family=args.plc_family,
         monitoring_timer=args.monitoring_timer,
         default_target=default_target,
     )

@@ -79,7 +79,7 @@ class SlmpClient:
 
     Examples:
         >>> from slmp.client import SlmpClient
-        >>> with SlmpClient("192.168.250.100", 1025) as client:
+        >>> with SlmpClient("192.168.250.100", 1025, plc_family="iq-r") as client:
         ...     values = client.read_devices("D100", 5)
         ...     print(values)
         [0, 0, 0, 0, 0]
@@ -100,6 +100,7 @@ class SlmpClient:
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
         device_family: object | None = None,
+        _allow_manual_profile: bool = False,
     ) -> None:
         """Initialize the SLMP client.
 
@@ -108,16 +109,9 @@ class SlmpClient:
             port: PLC port number. Defaults to 5000.
             transport: Transport protocol ('tcp' or 'udp'). Defaults to 'tcp'.
             timeout: Socket timeout in seconds. Defaults to 3.0.
-            plc_family: Canonical high-level PLC family. When set, the client
-                derives frame type, access profile, and address/range handling
-                from that family.
-            plc_series: Low-level target PLC series override. Use only when
-                ``plc_family`` is not provided.
-            frame_type: Low-level SLMP frame type override. Use only when
-                ``plc_family`` is not provided.
-            device_family: Canonical address family used for string device parsing,
-                such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``. Use only
-                when ``plc_family`` is not provided.
+            plc_family: Canonical high-level PLC family. The standard client
+                route requires this and derives frame type, access profile,
+                and address/range handling from it.
             default_target: Default target station routing information.
             monitoring_timer: Default monitoring timer value (multiples of 250ms). Defaults to 0x0010 (4s).
             raise_on_error: Whether to raise SlmpError on non-zero end codes. Defaults to True.
@@ -129,6 +123,17 @@ class SlmpClient:
         if self.transport not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
+        if not _allow_manual_profile:
+            if plc_family is None and all(value is None for value in (plc_series, frame_type, device_family)):
+                raise ValueError(
+                    "plc_family is required for the standard SlmpClient route unless you explicitly opt into a low-level frame/profile path."
+                )
+            if plc_family is not None and any(
+                value is not None for value in (plc_series, frame_type, device_family)
+            ):
+                raise ValueError(
+                    "plc_family is the only supported PLC selector for the standard SlmpClient route."
+                )
         (
             self.plc_family,
             self.plc_series,

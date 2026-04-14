@@ -250,7 +250,7 @@ By default, requests target the directly connected PLC (own station). To route t
 from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
 # Constructor default: all requests go to Network 1, Station 1
-client = SlmpClient("192.168.250.100", default_target=SlmpTarget(network=0x01, station=0x01))
+client = SlmpClient("192.168.250.100", plc_family="iq-r", default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
 target = SlmpTarget(network=0x01, station=0x01)
@@ -292,5 +292,4 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only protocol and testing notes are kept in the source checkout
   under `internal_docs/maintainer/`.
-
 

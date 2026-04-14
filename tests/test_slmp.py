@@ -55,6 +55,7 @@ class FakeClient(SlmpClient):
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize FakeClient."""
+        kwargs.setdefault("_allow_manual_profile", True)
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes, dict[str, Any]] | None = None
         self.requests: list[tuple[int, int, bytes, dict[str, Any]]] = []

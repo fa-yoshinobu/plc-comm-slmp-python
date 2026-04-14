@@ -103,6 +103,7 @@ class FakeAsyncClient(AsyncSlmpClient):
 
     def __init__(self, **kwargs) -> None:
         """Initialize fake client."""
+        kwargs.setdefault("_allow_manual_profile", True)
         super().__init__("127.0.0.1", **kwargs)
         self.last_request = None
         self.next_response_data = b""
@@ -143,7 +144,7 @@ async def test_async_connect_and_read_model() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port) as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
             info = await cli.read_type_name()
             assert info.model == "MOCK-PLC"
             assert info.model_code == 0x1234
@@ -158,7 +159,7 @@ async def test_async_read_devices() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port) as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
             val = await cli.read_devices("D100", 1)
             assert val == [1]
     finally:
@@ -233,7 +234,7 @@ async def test_async_concurrency() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port) as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
             # Send 5 requests concurrently
             tasks = [cli.read_devices(f"D{i}", 1) for i in range(5)]
             results = await asyncio.gather(*tasks)
@@ -249,7 +250,7 @@ async def test_async_concurrency() -> None:
 async def test_async_timeout() -> None:
     """Test timeout behavior."""
     # Specify a port that is not listening
-    cli = AsyncSlmpClient("127.0.0.1", 1, timeout=0.1)
+    cli = AsyncSlmpClient("127.0.0.1", 1, plc_family="iq-r", timeout=0.1)
     with pytest.raises(ConnectionError):
         await cli.connect()
 
@@ -259,7 +260,7 @@ async def test_async_udp_read() -> None:
     """Test device reading over UDP (using a simple mock)."""
     # Note: Mocking UDP server is slightly different, but for simplicity
     # we test the client setup and a simulated timeout to verify the UDP path.
-    cli = AsyncSlmpClient("127.0.0.1", 9999, transport="udp", timeout=0.1)
+    cli = AsyncSlmpClient("127.0.0.1", 9999, plc_family="iq-r", transport="udp", timeout=0.1)
     await cli.connect()
     try:
         with pytest.raises(SlmpError, match="UDP communication timeout"):

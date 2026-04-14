@@ -110,13 +110,13 @@ class AsyncSlmpClient:
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], Any] | None = None,
         device_family: object | None = None,
+        _allow_manual_profile: bool = False,
     ) -> None:
         """Initialize the asynchronous SLMP client.
 
-        ``plc_family`` is the recommended high-level entry and fixes the
-        frame type, access profile, and address/range handling. Raw
-        ``plc_series`` / ``frame_type`` / ``device_family`` inputs remain as
-        a low-level path when ``plc_family`` is not provided.
+        The standard async client route requires ``plc_family`` and fixes the
+        frame type, access profile, and address/range handling from that one
+        explicit family.
         """
         self.host = host
         self.port = port
@@ -124,6 +124,17 @@ class AsyncSlmpClient:
         if self.transport_type not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
+        if not _allow_manual_profile:
+            if plc_family is None and all(value is None for value in (plc_series, frame_type, device_family)):
+                raise ValueError(
+                    "plc_family is required for the standard AsyncSlmpClient route unless you explicitly opt into a low-level frame/profile path."
+                )
+            if plc_family is not None and any(
+                value is not None for value in (plc_series, frame_type, device_family)
+            ):
+                raise ValueError(
+                    "plc_family is the only supported PLC selector for the standard AsyncSlmpClient route."
+                )
         (
             self.plc_family,
             self.plc_series,

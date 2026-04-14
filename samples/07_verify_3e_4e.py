@@ -40,10 +40,12 @@ def run_test(ip: str, port: int, frame_type: FrameType) -> None:
     client = SlmpClient(
         host=ip,
         port=port,
+        plc_family="qnu",
         frame_type=frame_type,
         plc_series=PLCSeries.QL,  # 3E is common for Q/L series
         timeout=2.0,
         trace_hook=trace_packet,  # Hook to inspect the generated packets
+        _allow_manual_profile=True,
     )
 
     try:
