@@ -6,11 +6,11 @@ import asyncio
 import struct
 import time
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, cast
 
 from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
-from .core import DeviceRef, SlmpTarget, parse_device
+from .core import DeviceRef, SlmpTarget, _require_explicit_device_family_for_xy, parse_device
 
 if TYPE_CHECKING:
     from .async_client import AsyncSlmpClient
@@ -67,6 +67,8 @@ class SlmpConnectionOptions:
         timeout: Socket timeout in seconds.
         plc_series: PLC family used by request framing rules.
         frame_type: 3E or 4E frame selection.
+        device_family: Canonical address family used for string device parsing,
+            such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``.
         default_target: Optional routing target applied to requests.
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.
@@ -83,6 +85,34 @@ class SlmpConnectionOptions:
     monitoring_timer: int = 0x0010
     raise_on_error: bool = True
     trace_hook: Any | None = None
+    device_family: object | None = None
+
+
+def _client_device_family(client: object) -> object | None:
+    family = getattr(client, "device_family", None)
+    if family is None:
+        return None
+    if isinstance(family, str):
+        return family
+    value = getattr(family, "value", None)
+    if isinstance(value, str):
+        return family
+    return None
+
+
+def _parse_device_for_family(
+    device: str | DeviceRef,
+    family: object | None = None,
+) -> DeviceRef:
+    ref = parse_device(device, family=family)
+    return _require_explicit_device_family_for_xy(device, family, ref)
+
+
+def _parse_device_for_client(
+    client: object,
+    device: str | DeviceRef,
+) -> DeviceRef:
+    return _parse_device_for_family(device, _client_device_family(client))
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +137,7 @@ async def read_typed(
     Returns:
         ``bool`` for ``BIT``, otherwise ``int`` or ``float``.
     """
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
@@ -145,7 +175,7 @@ async def write_typed(
         dtype: Type code accepted by :func:`read_typed`.
         value: Application value to encode and write.
     """
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
@@ -178,7 +208,7 @@ def read_typed_sync(
     dtype: str,
 ) -> int | float:
     """Synchronously read one logical value as a Python scalar."""
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
@@ -209,7 +239,7 @@ def write_typed_sync(
     value: int | float,
 ) -> None:
     """Synchronously write one logical value using the requested type."""
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
@@ -336,7 +366,7 @@ async def read_named(
         The address list is compiled once, then grouped into random reads where
         possible. Use ``.bit`` notation only with word devices.
     """
-    plan = _compile_read_plan(addresses)
+    plan = _compile_read_plan(addresses, family=_client_device_family(client))
     return await _read_named_with_plan(client, plan)
 
 
@@ -345,7 +375,7 @@ def read_named_sync(
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
     """Synchronously read a mixed logical snapshot by address string."""
-    plan = _compile_read_plan(addresses)
+    plan = _compile_read_plan(addresses, family=_client_device_family(client))
     return _read_named_with_plan_sync(client, plan)
 
 
@@ -363,13 +393,14 @@ async def write_named(
     ``D50.3`` updates one bit inside one word. Direct bit devices such as
     ``M1000`` are normalized to ``"BIT"`` writes.
     """
+    family = _client_device_family(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, parse_device(base))
+            _validate_bit_in_word_target(address, _parse_device_for_family(base, family))
             await write_bit_in_word(client, base, bit_idx or 0, bool(value))
         else:
-            device = parse_device(base)
+            device = _parse_device_for_family(base, family)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
             _validate_long_timer_entry(address, device, resolved_dtype)
             await write_typed(client, base, resolved_dtype, value)
@@ -380,13 +411,14 @@ def write_named_sync(
     updates: dict[str, int | float | bool],
 ) -> None:
     """Synchronously write a mixed logical snapshot by address string."""
+    family = _client_device_family(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, parse_device(base))
+            _validate_bit_in_word_target(address, _parse_device_for_family(base, family))
             write_bit_in_word_sync(client, base, bit_idx or 0, bool(value))
         else:
-            device = parse_device(base)
+            device = _parse_device_for_family(base, family)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
             _validate_long_timer_entry(address, device, resolved_dtype)
             write_typed_sync(client, base, resolved_dtype, value)
@@ -415,7 +447,11 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
     return address.strip(), "U", None
 
 
-def normalize_address(address: str | DeviceRef) -> str:
+def normalize_address(
+    address: str | DeviceRef,
+    *,
+    family: object | None = None,
+) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
 
     The helper accepts free-form user text such as ``" d200:f "`` or an
@@ -428,10 +464,10 @@ def normalize_address(address: str | DeviceRef) -> str:
 
     text = address.strip()
     if ":" not in text and "." not in text:
-        return str(parse_device(text))
+        return str(parse_device(text, family=family))
 
     base, dtype, bit_index = _parse_address(text)
-    canonical_base = str(parse_device(base))
+    canonical_base = str(parse_device(base, family=family))
     if bit_index is not None:
         return f"{canonical_base}.{bit_index:X}"
     if ":" in text:
@@ -604,7 +640,11 @@ def _read_long_family_value_sync(
     return coil
 
 
-def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
+def _compile_read_plan(
+    addresses: list[str],
+    *,
+    family: object | None = None,
+) -> _ReadPlan:
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
     dword_devices: list[DeviceRef] = []
@@ -613,7 +653,7 @@ def _compile_read_plan(addresses: list[str]) -> _ReadPlan:
 
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
-        device = parse_device(base)
+        device = _parse_device_for_family(base, family)
         dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
         _validate_long_timer_entry(address, device, dtype)
         batch_kind: str | None = None
@@ -809,7 +849,7 @@ async def poll(
 
     The address list is compiled once and reused for every cycle.
     """
-    plan = _compile_read_plan(addresses)
+    plan = _compile_read_plan(addresses, family=_client_device_family(client))
     while True:
         yield await _read_named_with_plan(client, plan)
         await asyncio.sleep(interval)
@@ -821,7 +861,7 @@ def poll_sync(
     interval: float,
 ) -> Iterator[dict[str, int | float | bool]]:
     """Synchronously yield mixed snapshots at a fixed interval."""
-    plan = _compile_read_plan(addresses)
+    plan = _compile_read_plan(addresses, family=_client_device_family(client))
     while True:
         yield _read_named_with_plan_sync(client, plan)
         time.sleep(interval)
@@ -843,7 +883,7 @@ async def read_words_single_request(
     caller wants multi-request behavior, use :func:`read_words_chunked`.
     """
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     return list(await client.read_devices(ref, count, bit_unit=False))
 
 
@@ -910,13 +950,13 @@ async def read_words_chunked(
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     result: list[int] = []
     remaining = count
     offset = 0
     while remaining > 0:
         chunk = min(remaining, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        chunk_ref = replace(ref, number=ref.number + offset)
         words = await read_words_single_request(client, chunk_ref, chunk)
         result.extend(words)
         offset += chunk
@@ -958,11 +998,11 @@ async def write_words_chunked(
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     offset = 0
     while offset < len(values):
         chunk = min(len(values) - offset, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        chunk_ref = replace(ref, number=ref.number + offset)
         await write_words_single_request(client, chunk_ref, values[offset : offset + chunk])
         offset += chunk
 
@@ -984,11 +1024,11 @@ async def write_dwords_chunked(
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     offset = 0
     while offset < len(values):
         chunk = min(len(values) - offset, max_dwords_per_request)
-        chunk_ref = DeviceRef(ref.code, ref.number + (offset * 2))
+        chunk_ref = replace(ref, number=ref.number + (offset * 2))
         await write_dwords_single_request(client, chunk_ref, values[offset : offset + chunk])
         offset += chunk
 
@@ -1055,7 +1095,7 @@ def read_words_single_request_sync(
 ) -> list[int]:
     """Synchronously read contiguous 16-bit values using one protocol request."""
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     return list(client.read_devices(ref, count, bit_unit=False))
 
 
@@ -1107,13 +1147,13 @@ def read_words_chunked_sync(
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     result: list[int] = []
     remaining = count
     offset = 0
     while remaining > 0:
         chunk = min(remaining, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        chunk_ref = replace(ref, number=ref.number + offset)
         words = read_words_single_request_sync(client, chunk_ref, chunk)
         result.extend(words)
         offset += chunk
@@ -1147,11 +1187,11 @@ def write_words_chunked_sync(
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     offset = 0
     while offset < len(values):
         chunk = min(len(values) - offset, effective_max)
-        chunk_ref = DeviceRef(ref.code, ref.number + offset)
+        chunk_ref = replace(ref, number=ref.number + offset)
         write_words_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
         offset += chunk
 
@@ -1169,11 +1209,11 @@ def write_dwords_chunked_sync(
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
 
-    ref = parse_device(device) if isinstance(device, str) else device
+    ref = _parse_device_for_client(client, device)
     offset = 0
     while offset < len(values):
         chunk = min(len(values) - offset, max_dwords_per_request)
-        chunk_ref = DeviceRef(ref.code, ref.number + (offset * 2))
+        chunk_ref = replace(ref, number=ref.number + (offset * 2))
         write_dwords_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
         offset += chunk
 
@@ -1257,6 +1297,7 @@ async def open_and_connect(
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
+        device_family=options.device_family,
     )
     await inner.connect()
     return QueuedAsyncSlmpClient(inner)
@@ -1287,6 +1328,7 @@ def open_and_connect_sync(
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
+        device_family=options.device_family,
     )
     client.connect()
     return client

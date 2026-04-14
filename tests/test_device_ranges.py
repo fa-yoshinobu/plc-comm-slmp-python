@@ -8,7 +8,7 @@ from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
 from slmp.core import SlmpResponse, SlmpTarget, encode_device_spec
-from slmp.device_ranges import SlmpDeviceRangeFamily, SlmpDeviceRangeNotation
+from slmp.device_ranges import SlmpDeviceRangeFamily, SlmpDeviceRangeNotation, normalize_device_range_family
 
 
 def _pack_words(values: list[int]) -> bytes:
@@ -51,6 +51,10 @@ class _FakeAsyncClient(AsyncSlmpClient):
 
 
 class TestSyncDeviceRanges(unittest.TestCase):
+    def test_family_alias_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported PLC family"):
+            normalize_device_range_family("iqf")
+
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
         client = _FakeSyncClient()
         client.next_response_data = _build_word_block(
@@ -154,4 +158,3 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entries["Z"].address_range, "Z0-Z19")
         self.assertEqual(entries["R"].point_count, 0)
         self.assertIsNone(entries["R"].address_range)
-

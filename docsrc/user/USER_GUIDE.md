@@ -20,6 +20,7 @@ async def main() -> None:
         port=1025,
         plc_series="iqr",
         frame_type="4e",
+        device_family="iq-f",
     )
     async with await open_and_connect(options) as client:
         snapshot = await read_named(client, ["D100", "D200:F", "D50.3"])
@@ -72,6 +73,7 @@ options = SlmpConnectionOptions(
     port=1025,
     plc_series="iqr",
     frame_type="4e",
+    device_family="iq-f",
 )
 
 with open_and_connect_sync(options) as client:
@@ -84,6 +86,35 @@ For sync code, the recommended pattern is:
 1. open a `SlmpClient`
 2. use the `*_sync` helper functions
 
+## Meaning of Each Explicit Setting
+
+| Setting | Where Used | What It Controls | Examples |
+| --- | --- | --- | --- |
+| `frame_type` | client / connection options | SLMP frame envelope on the wire | `3e`, `4e` |
+| `plc_series` | client / connection options | command/access profile used by the library | `ql`, `iqr` |
+| `device_family` | client / connection options | how string device addresses are interpreted | `iq-f`, `qcpu`, `qnudv` |
+| `family` argument | `read_device_range_catalog_for_family(...)` | which SD window and range rules are used for device-range catalog reads | `iq-f`, `qnu`, `qnudv` |
+
+Important separation:
+
+- `frame_type` and `plc_series` are communication settings
+- `device_family` and device-range `family` are address/range settings
+- the last two use the same family vocabulary
+- the library does not auto-detect any of them for the public helper layer
+
+Only canonical family values are accepted:
+
+- `iq-f`
+- `iq-r`
+- `mx-f`
+- `mx-r`
+- `qcpu`
+- `lcpu`
+- `qnu`
+- `qnudv`
+
+Short aliases such as `iqf`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected.
+
 ### Address normalization
 
 ```python
@@ -91,7 +122,12 @@ from slmp import normalize_address
 
 assert normalize_address("x20") == "X20"
 assert normalize_address("d200") == "D200"
+assert normalize_address("x100", family="iq-f") == "X100"
 ```
+
+`X` / `Y` string addresses require explicit `device_family` during communication.
+The library does not auto-detect the PLC family for `X` / `Y`.
+Device-range catalog reads also require the explicit canonical `family` argument.
 
 ## High-Level Helper Set
 
@@ -167,6 +203,8 @@ snapshot = await read_named(
 
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
+For `X` / `Y`, set `device_family` explicitly.
+Use manual octal text such as `X100` / `Y100` for `iQ-F` / FX5, and hexadecimal text such as `X20` / `Y20` for non-`iQ-F` families.
 
 Long-device notes for the high-level helper layer:
 

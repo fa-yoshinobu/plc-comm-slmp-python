@@ -40,7 +40,9 @@ from .core import (
     _encode_label_name,
     _encode_remote_password_payload,
     _label_array_data_bytes,
+    _normalize_device_family_hint,
     _normalize_items,
+    _require_explicit_device_family_for_xy,
     _raise_response_error,
     _validate_block_read_devices,
     _validate_block_write_devices,
@@ -96,6 +98,7 @@ class SlmpClient:
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
+        device_family: object | None = None,
     ) -> None:
         """Initialize the SLMP client.
 
@@ -106,6 +109,8 @@ class SlmpClient:
             timeout: Socket timeout in seconds. Defaults to 3.0.
             plc_series: Target PLC series. Defaults to QL.
             frame_type: SLMP frame type. Defaults to 4E.
+            device_family: Canonical address family used for string device parsing,
+                such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``.
             default_target: Default target station routing information.
             monitoring_timer: Default monitoring timer value (multiples of 250ms). Defaults to 0x0010 (4s).
             raise_on_error: Whether to raise SlmpError on non-zero end codes. Defaults to True.
@@ -123,9 +128,22 @@ class SlmpClient:
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
         self.trace_hook = trace_hook
+        self.device_family = _normalize_device_family_hint(device_family)
 
         self._serial = 0
         self._sock: socket.socket | None = None
+
+    def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
+        ref = parse_device(device, family=self.device_family)
+        return _require_explicit_device_family_for_xy(device, self.device_family, ref)
+
+    def _resolve_extended_device_and_extension(
+        self,
+        device: str | DeviceRef,
+        extension: ExtensionSpec,
+    ) -> tuple[DeviceRef, ExtensionSpec]:
+        ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=self.device_family)
+        return _require_explicit_device_family_for_xy(device, self.device_family, ref), effective_extension
 
     def connect(self) -> None:
         """Open the connection to the PLC.
@@ -315,7 +333,7 @@ class SlmpClient:
         """
         _check_points_u16(points, "points")
         s = PLCSeries(series) if series is not None else self.plc_series
-        ref = parse_device(device)
+        ref = self._parse_device(device)
         _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=s, access_kind="direct")
@@ -361,7 +379,7 @@ class SlmpClient:
         if not values:
             raise ValueError("values must not be empty")
         s = PLCSeries(series) if series is not None else self.plc_series
-        ref = parse_device(device)
+        ref = self._parse_device(device)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=s, access_kind="direct")
         _warn_boundary_behavior(
@@ -493,7 +511,7 @@ class SlmpClient:
         """Extended Device extension read (subcommand 0081/0080 or 0083/0082)."""
         _check_points_u16(points, "points")
         s = PLCSeries(series) if series is not None else self.plc_series
-        ref, effective_extension = resolve_extended_device_and_extension(device, extension)
+        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _warn_practical_device_path(ref, series=s, access_kind="extended_device")
         if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
@@ -523,7 +541,7 @@ class SlmpClient:
         if not values:
             raise ValueError("values must not be empty")
         s = PLCSeries(series) if series is not None else self.plc_series
-        ref, effective_extension = resolve_extended_device_and_extension(device, extension)
+        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _warn_practical_device_path(ref, series=s, access_kind="extended_device")
         if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
@@ -562,8 +580,8 @@ class SlmpClient:
         _check_random_read_like_counts(len(word_devices), len(dword_devices), series=s, name="read_random")
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
 
-        words = [parse_device(d) for d in word_devices]
-        dwords = [parse_device(d) for d in dword_devices]
+        words = [self._parse_device(d) for d in word_devices]
+        dwords = [self._parse_device(d) for d in dword_devices]
         _validate_random_read_devices(words, dwords)
         _check_temporarily_unsupported_devices(words)
         _check_temporarily_unsupported_devices(dwords)
@@ -614,12 +632,12 @@ class SlmpClient:
         words: list[tuple[DeviceRef, ExtensionSpec]] = []
         dwords: list[tuple[DeviceRef, ExtensionSpec]] = []
         for dev, ext in word_devices:
-            ref, effective_extension = resolve_extended_device_and_extension(dev, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             words.append((ref, effective_extension))
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
         for dev, ext in dword_devices:
-            ref, effective_extension = resolve_extended_device_and_extension(dev, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             dwords.append((ref, effective_extension))
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
@@ -696,12 +714,12 @@ class SlmpClient:
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=True)
         payload = bytearray([len(word_values), len(dword_values)])
         for device, value, ext in word_values:
-            ref, effective_extension = resolve_extended_device_and_extension(device, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
             payload += int(value).to_bytes(2, "little", signed=False)
         for device, value, ext in dword_values:
-            ref, effective_extension = resolve_extended_device_and_extension(device, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
             payload += int(value).to_bytes(4, "little", signed=False)
@@ -762,7 +780,7 @@ class SlmpClient:
         sub = resolve_device_subcommand(bit_unit=True, series=s, extension=True)
         payload = bytearray([len(bit_values)])
         for device, state, ext in bit_values:
-            ref, effective_extension = resolve_extended_device_and_extension(device, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
             if s == PLCSeries.IQR:
@@ -803,12 +821,12 @@ class SlmpClient:
         word_refs: list[DeviceRef] = []
         dword_refs: list[DeviceRef] = []
         for dev in word_devices:
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             payload += encode_device_spec(ref, series=s)
             word_refs.append(ref)
         for dev in dword_devices:
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             payload += encode_device_spec(ref, series=s)
             dword_refs.append(ref)
@@ -844,11 +862,11 @@ class SlmpClient:
         sub = resolve_device_subcommand(bit_unit=False, series=s, extension=True)
         payload = bytearray([len(word_devices), len(dword_devices)])
         for dev, ext in word_devices:
-            ref, effective_extension = resolve_extended_device_and_extension(dev, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
         for dev, ext in dword_devices:
-            ref, effective_extension = resolve_extended_device_and_extension(dev, ext)
+            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
             _check_temporarily_unsupported_device(ref, access_kind="extended_device")
             payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
         self.request(Command.DEVICE_ENTRY_MONITOR, subcommand=sub, data=bytes(payload))
@@ -913,7 +931,7 @@ class SlmpClient:
 
         for dev, points in word_blocks:
             _check_points_u16(points, "word_block points")
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             _warn_practical_device_path(ref, series=s, access_kind="direct")
             norm_word.append((ref, points))
@@ -921,7 +939,7 @@ class SlmpClient:
             payload += points.to_bytes(2, "little")
         for dev, points in bit_blocks:
             _check_points_u16(points, "bit_block points")
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             _warn_practical_device_path(ref, series=s, access_kind="direct")
             norm_bit.append((ref, points))
@@ -992,7 +1010,7 @@ class SlmpClient:
         word_refs: list[DeviceRef] = []
         bit_refs: list[DeviceRef] = []
         for dev, values in word_blocks:
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             _warn_practical_device_path(ref, series=s, access_kind="direct")
             _check_points_u16(len(values), "word block size")
@@ -1000,7 +1018,7 @@ class SlmpClient:
             payload += len(values).to_bytes(2, "little")
             word_refs.append(ref)
         for dev, values in bit_blocks:
-            ref = parse_device(dev)
+            ref = self._parse_device(dev)
             _check_temporarily_unsupported_device(ref)
             _warn_practical_device_path(ref, series=s, access_kind="direct")
             _check_points_u16(len(values), "bit block size")
@@ -1816,7 +1834,7 @@ class SlmpClient:
         self,
         family: SlmpDeviceRangeFamily | str,
     ) -> SlmpDeviceRangeCatalog:
-        """Read the configured device-range catalog for one explicit PLC family."""
+        """Read the configured device-range catalog for one canonical explicit PLC family."""
         from .device_ranges import read_device_range_catalog_for_family_sync
 
         return read_device_range_catalog_for_family_sync(self, family)

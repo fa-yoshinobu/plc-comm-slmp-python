@@ -28,6 +28,7 @@ from slmp.client import (
 )
 from slmp.constants import Command, FrameType, PLCSeries
 from slmp.core import (
+    DeviceRef,
     ExtensionSpec,
     SlmpBoundaryBehaviorWarning,
     SlmpError,
@@ -52,9 +53,9 @@ print(f"DEBUG: core file = {slmp.core.__file__}")
 class FakeClient(SlmpClient):
     """Fake SLMP client for testing."""
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize FakeClient."""
-        super().__init__("127.0.0.1")
+        super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes, dict[str, Any]] | None = None
         self.requests: list[tuple[int, int, bytes, dict[str, Any]]] = []
         self.next_response_data = b""
@@ -259,9 +260,17 @@ class TestCodec(unittest.TestCase):
         """Test test_device_and_bit_helpers."""
         self.assertEqual(str(parse_device("D100")), "D100")
         self.assertEqual(str(parse_device("X20")), "X20")
+        self.assertEqual(str(parse_device("Y220", family="iq-f")), "Y220")
+        self.assertEqual(parse_device("Y220", family="iq-f").number - parse_device("Y217", family="iq-f").number, 1)
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.IQR), b"\x64\x00\x00\x00\xa8\x00")
         self.assertEqual(encode_device_spec("R32767", series=PLCSeries.IQR), b"\xff\x7f\x00\x00\xaf\x00")
+        self.assertEqual(
+            encode_device_spec("Y217", series=PLCSeries.IQR, family="iq-f"),
+            b"\x8f\x00\x00\x00\x9d\x00",
+        )
+        with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
+            parse_device("Y220", family="iqf")
         with self.assertRaises(ValueError):
             encode_device_spec("R32768", series=PLCSeries.QL)
         with self.assertRaises(ValueError):
@@ -1729,6 +1738,43 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(command, Command.DEVICE_READ)
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x64\x00\x00\xa8\x02\x00")
+
+    def test_read_devices_xy_requires_explicit_device_family_for_string_addresses(self) -> None:
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "device_family"):
+            client.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
+        self.assertIsNone(client.last_request)
+
+    def test_read_devices_xy_allows_numeric_deviceref_without_device_family(self) -> None:
+        client = FakeClient()
+        client.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
+
+        values = client.read_devices(DeviceRef("X", 0x40), 8, bit_unit=True, series=PLCSeries.QL)
+
+        self.assertEqual(values, [True, False, True, False, True, False, True, False])
+        assert client.last_request is not None
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.DEVICE_READ)
+        self.assertEqual(subcommand, 0x0001)
+        self.assertEqual(payload, b"\x40\x00\x00\x9c\x08\x00")
+
+    def test_read_devices_iqf_xy_uses_octal_start_address(self) -> None:
+        """iQ-F X/Y direct reads must encode the octal device number, not hex text."""
+        client = FakeClient(device_family="iq-f")
+        client.next_response_data = b"\x10"
+
+        values = client.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
+
+        self.assertEqual(values, [True, False])
+        assert client.last_request is not None
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.DEVICE_READ)
+        self.assertEqual(subcommand, 0x0003)
+        self.assertEqual(payload, b"\x8f\x00\x00\x00\x9d\x00\x02\x00")
+
+    def test_invalid_device_family_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
+            FakeClient(device_family="auto")
 
     def test_practical_path_warning_for_lt_direct_access(self) -> None:
         """Direct LT state access must fail instead of warning."""
