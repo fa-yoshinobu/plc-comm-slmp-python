@@ -904,7 +904,8 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
     if bit_unit and ref.code in _LT_LST_DIRECT_CODES:
         raise ValueError(
             f"Direct bit read is not supported for {ref.code}. "
-            "Use read_ltc_states/read_lts_states/read_lstc_states/read_lsts_states or read_long_timer/read_long_retentive_timer."
+            "Use read_ltc_states/read_lts_states/read_lstc_states/read_lsts_states "
+            "or read_long_timer/read_long_retentive_timer."
         )
     if not bit_unit and ref.code in _LT_LST_CURRENT_CODES and points % 4 != 0:
         raise ValueError(
