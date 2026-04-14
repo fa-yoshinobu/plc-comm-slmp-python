@@ -88,7 +88,7 @@ class SlmpConnectionOptions:
     device_family: object | None = None
 
 
-def _client_device_family(client: object) -> object | None:
+def _client_device_family(client: object) -> str | None:
     family = getattr(client, "device_family", None)
     if family is None:
         return None
@@ -96,7 +96,7 @@ def _client_device_family(client: object) -> object | None:
         return family
     value = getattr(family, "value", None)
     if isinstance(value, str):
-        return family
+        return value
     return None
 
 
