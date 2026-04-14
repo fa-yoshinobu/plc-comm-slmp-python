@@ -58,11 +58,11 @@ This page is the canonical public register table for the Python high-level API.
 
 - Start with `D` for the first smoke test.
 - `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
-- `X` and `Y` require explicit `device_family` for communication.
-- device-range catalog reads require the same explicit canonical `family` definition.
+- `X` and `Y` require explicit `plc_family` for communication.
+- device-range catalog reads follow the fixed family rule derived from `plc_family`.
 - non-`iQ-F` `X` / `Y` text such as `X20` uses hexadecimal numbering.
 - `iQ-F` / FX5 `X` / `Y` text such as `X100` uses manual octal notation and is converted to the binary numeric value before transmission.
-- canonical family values are `iq-f`, `iq-r`, `mx-f`, `mx-r`, `qcpu`, `lcpu`, `qnu`, and `qnudv`.
+- canonical `plc_family` values are `iq-f`, `iq-r`, `iq-l`, `mx-f`, `mx-r`, `qcpu`, `lcpu`, `qnu`, and `qnudv`.
 - Most other families use decimal numbers.
 - `.bit` is valid only on word devices such as `D50.3`.
 - `LTN`, `LSTN`, and `LCN` default to 32-bit current-value access in the public high-level helpers.

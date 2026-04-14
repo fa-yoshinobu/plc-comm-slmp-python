@@ -6,11 +6,19 @@ import asyncio
 import struct
 import time
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, cast
 
 from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
-from .core import DeviceRef, SlmpTarget, _require_explicit_device_family_for_xy, parse_device
+from .core import (
+    DeviceRef,
+    SlmpTarget,
+    _normalize_device_family_hint,
+    _require_explicit_device_family_for_xy,
+    _resolve_connection_profile,
+    _resolve_plc_family_defaults,
+    parse_device,
+)
 
 if TYPE_CHECKING:
     from .async_client import AsyncSlmpClient
@@ -62,30 +70,53 @@ class SlmpConnectionOptions:
 
     Attributes:
         host: PLC hostname or IP address.
+        plc_family: Canonical high-level PLC family. This is the only
+            application-level PLC selector for the recommended helper layer.
         port: TCP or UDP port used by the SLMP endpoint.
         transport: Transport name such as ``"tcp"`` or ``"udp"``.
         timeout: Socket timeout in seconds.
-        plc_series: PLC family used by request framing rules.
-        frame_type: 3E or 4E frame selection.
-        device_family: Canonical address family used for string device parsing,
-            such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``.
         default_target: Optional routing target applied to requests.
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.
         trace_hook: Optional callback for transport tracing.
+        plc_series: Derived access profile fixed by ``plc_family``.
+        frame_type: Derived frame type fixed by ``plc_family``.
+        device_family: Derived address family used for string device parsing.
+        device_range_family: Derived family used for device-range catalog reads.
     """
 
     host: str
+    plc_family: object
     port: int = 5000
     transport: str = "tcp"
     timeout: float = 3.0
-    plc_series: PLCSeries | str = PLCSeries.QL
-    frame_type: FrameType | str = FrameType.FRAME_4E
     default_target: SlmpTarget | None = None
     monitoring_timer: int = 0x0010
     raise_on_error: bool = True
     trace_hook: Any | None = None
-    device_family: object | None = None
+    plc_series: PLCSeries = field(init=False)
+    frame_type: FrameType = field(init=False)
+    device_family: str = field(init=False)
+    device_range_family: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        (
+            normalized_plc_family,
+            plc_series,
+            frame_type,
+            device_family,
+            device_range_family,
+        ) = _resolve_connection_profile(
+            plc_family=self.plc_family,
+            plc_series=None,
+            frame_type=None,
+            device_family=None,
+        )
+        object.__setattr__(self, "plc_family", normalized_plc_family)
+        object.__setattr__(self, "plc_series", plc_series)
+        object.__setattr__(self, "frame_type", frame_type)
+        object.__setattr__(self, "device_family", device_family)
+        object.__setattr__(self, "device_range_family", device_range_family)
 
 
 def _client_device_family(client: object) -> str | None:
@@ -450,6 +481,7 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
 def normalize_address(
     address: str | DeviceRef,
     *,
+    plc_family: object | None = None,
     family: object | None = None,
 ) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
@@ -462,12 +494,21 @@ def normalize_address(
     if not isinstance(address, str):
         return str(address)
 
+    if plc_family is not None and family is not None:
+        raise ValueError("Pass either plc_family or family to normalize_address(), not both.")
+    effective_family = family
+    if plc_family is not None:
+        defaults = _resolve_plc_family_defaults(plc_family)
+        effective_family = None if defaults is None else defaults.device_family
+    elif family is not None:
+        effective_family = _normalize_device_family_hint(family)
+
     text = address.strip()
     if ":" not in text and "." not in text:
-        return str(parse_device(text, family=family))
+        return str(parse_device(text, family=effective_family))
 
     base, dtype, bit_index = _parse_address(text)
-    canonical_base = str(parse_device(base, family=family))
+    canonical_base = str(parse_device(base, family=effective_family))
     if bit_index is not None:
         return f"{canonical_base}.{bit_index:X}"
     if ":" in text:
@@ -1285,13 +1326,11 @@ async def open_and_connect(
         options.port,
         transport=options.transport,
         timeout=options.timeout,
-        plc_series=options.plc_series,
-        frame_type=options.frame_type,
+        plc_family=options.plc_family,
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
-        device_family=options.device_family,
     )
     await inner.connect()
     return QueuedAsyncSlmpClient(inner)
@@ -1316,13 +1355,11 @@ def open_and_connect_sync(
         options.port,
         transport=options.transport,
         timeout=options.timeout,
-        plc_series=options.plc_series,
-        frame_type=options.frame_type,
+        plc_family=options.plc_family,
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
-        device_family=options.device_family,
     )
     client.connect()
     return client

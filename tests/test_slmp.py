@@ -1741,7 +1741,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_devices_xy_requires_explicit_device_family_for_string_addresses(self) -> None:
         client = FakeClient()
-        with self.assertRaisesRegex(ValueError, "device_family"):
+        with self.assertRaisesRegex(ValueError, "plc_family"):
             client.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
         self.assertIsNone(client.last_request)
 
@@ -1760,7 +1760,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_devices_iqf_xy_uses_octal_start_address(self) -> None:
         """iQ-F X/Y direct reads must encode the octal device number, not hex text."""
-        client = FakeClient(device_family="iq-f")
+        client = FakeClient(plc_family="iq-f")
         client.next_response_data = b"\x10"
 
         values = client.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
@@ -1775,6 +1775,23 @@ class TestDeviceApi(unittest.TestCase):
     def test_invalid_device_family_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
             FakeClient(device_family="auto")
+
+    def test_invalid_plc_family_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_family"):
+            FakeClient(plc_family="iqf")
+
+    def test_plc_family_derives_fixed_profile_defaults(self) -> None:
+        client = FakeClient(plc_family="iq-l")
+
+        self.assertEqual(client.plc_family, "iq-l")
+        self.assertEqual(client.plc_series, PLCSeries.IQR)
+        self.assertEqual(client.frame_type, FrameType.FRAME_4E)
+        self.assertEqual(client.device_family, "iq-r")
+        self.assertEqual(client.device_range_family, "iq-r")
+
+    def test_plc_family_rejects_manual_profile_override(self) -> None:
+        with self.assertRaisesRegex(ValueError, "plc_family already determines"):
+            FakeClient(plc_family="iq-f", frame_type="4e")
 
     def test_practical_path_warning_for_lt_direct_access(self) -> None:
         """Direct LT state access must fail instead of warning."""

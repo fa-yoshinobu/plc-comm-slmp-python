@@ -39,10 +39,10 @@ from .core import (
     _encode_label_name,
     _encode_remote_password_payload,
     _label_array_data_bytes,
-    _normalize_device_family_hint,
     _normalize_items,
     _raise_response_error,
     _require_explicit_device_family_for_xy,
+    _resolve_connection_profile,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_direct_read_device,
@@ -102,8 +102,9 @@ class AsyncSlmpClient:
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
-        plc_series: PLCSeries | str = PLCSeries.QL,
-        frame_type: FrameType | str = FrameType.FRAME_4E,
+        plc_family: object | None = None,
+        plc_series: PLCSeries | str | None = None,
+        frame_type: FrameType | str | None = None,
         default_target: SlmpTarget | None = None,
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
@@ -112,9 +113,10 @@ class AsyncSlmpClient:
     ) -> None:
         """Initialize the asynchronous SLMP client.
 
-        ``device_family`` must be one canonical family string such as
-        ``"iq-f"``, ``"qcpu"``, or ``"qnudv"`` when string address parsing
-        depends on the PLC family.
+        ``plc_family`` is the recommended high-level entry and fixes the
+        frame type, access profile, and address/range handling. Raw
+        ``plc_series`` / ``frame_type`` / ``device_family`` inputs remain as
+        a low-level path when ``plc_family`` is not provided.
         """
         self.host = host
         self.port = port
@@ -122,13 +124,22 @@ class AsyncSlmpClient:
         if self.transport_type not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
-        self.plc_series = PLCSeries(plc_series)
-        self.frame_type = FrameType(frame_type)
+        (
+            self.plc_family,
+            self.plc_series,
+            self.frame_type,
+            self.device_family,
+            self.device_range_family,
+        ) = _resolve_connection_profile(
+            plc_family=plc_family,
+            plc_series=plc_series,
+            frame_type=frame_type,
+            device_family=device_family,
+        )
         self.default_target = default_target or SlmpTarget()
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
         self.trace_hook = trace_hook
-        self.device_family = _normalize_device_family_hint(device_family)
 
         self._serial = 0
         self._lock = asyncio.Lock()
@@ -886,6 +897,12 @@ class AsyncSlmpClient:
         from .device_ranges import read_device_range_catalog_for_family
 
         return await read_device_range_catalog_for_family(self, family)
+
+    async def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
+        """Read the configured device-range catalog for this client's explicit PLC family."""
+        if self.device_range_family is None:
+            raise ValueError("read_device_range_catalog() requires explicit plc_family on the client.")
+        return await self.read_device_range_catalog_for_family(self.device_range_family)
 
     async def read_cpu_operation_state(self) -> CpuOperationState:
         """Read SD203 and decode the CPU operation state from the lower 4 bits."""

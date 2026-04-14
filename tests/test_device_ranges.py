@@ -23,8 +23,8 @@ def _build_word_block(start: int, count: int, values: dict[int, int]) -> bytes:
 
 
 class _FakeSyncClient(SlmpClient):
-    def __init__(self) -> None:
-        super().__init__("127.0.0.1")
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
 
@@ -34,8 +34,8 @@ class _FakeSyncClient(SlmpClient):
 
 
 class _FakeAsyncClient(AsyncSlmpClient):
-    def __init__(self) -> None:
-        super().__init__("127.0.0.1")
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
 
@@ -54,6 +54,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
     def test_family_alias_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported PLC family"):
             normalize_device_range_family("iqf")
+
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
         client = _FakeSyncClient()
         client.next_response_data = _build_word_block(
@@ -106,6 +107,32 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertIsNone(entries["V"].point_count)
         self.assertEqual(entries["LCS"].point_count, 64)
         self.assertEqual(entries["LCS"].address_range, "LCS0-LCS63")
+
+    def test_read_device_range_catalog_uses_client_plc_family_defaults(self) -> None:
+        client = _FakeSyncClient(plc_family="iq-l")
+        client.next_response_data = _build_word_block(
+            260,
+            50,
+            {
+                260: 4096,
+                262: 4096,
+                280: 8192,
+                282: 1024,
+            },
+        )
+
+        catalog = client.read_device_range_catalog()
+
+        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqR)
+        self.assertEqual(client.plc_family, "iq-l")
+        self.assertEqual(
+            client.last_request,
+            (
+                int(Command.DEVICE_READ),
+                0x0002,
+                encode_device_spec("SD260", series=PLCSeries.IQR) + (50).to_bytes(2, "little"),
+            ),
+        )
 
 
 class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):

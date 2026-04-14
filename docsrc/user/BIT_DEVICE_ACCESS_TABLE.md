@@ -39,13 +39,14 @@ The same rule applies to `B`, `X`, and `Y`.
 | `Y` | explicit family required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `Y20` / `Y100` |
 
 For communication, this library does not auto-detect the PLC family for `X` / `Y`.
-Set canonical `device_family` explicitly.
+Set canonical `plc_family` explicitly.
 
-The same canonical family definition is also used by `read_device_range_catalog_for_family(...)`.
-Only these family values are accepted:
+The device-range catalog follows the fixed family rule derived from `plc_family`.
+Only these `plc_family` values are accepted:
 
 - `iq-f`
 - `iq-r`
+- `iq-l`
 - `mx-f`
 - `mx-r`
 - `qcpu`
@@ -291,6 +292,5 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 - [User Guide](USER_GUIDE.md)
 - Maintainer-only protocol and testing notes are kept in the source checkout
   under `internal_docs/maintainer/`.
-
 
 

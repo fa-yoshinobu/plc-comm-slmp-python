@@ -108,6 +108,60 @@ _DEVICE_FAMILIES = frozenset(
         "qnudv",
     }
 )
+_PLC_FAMILIES = frozenset(
+    {
+        "iq-f",
+        "iq-r",
+        "iq-l",
+        "mx-f",
+        "mx-r",
+        "qcpu",
+        "lcpu",
+        "qnu",
+        "qnudv",
+    }
+)
+
+
+@dataclass(frozen=True)
+class _PlcFamilyDefaults:
+    frame_type: FrameType
+    plc_series: PLCSeries
+    device_family: str
+    range_family: str
+
+
+_PLC_FAMILY_DEFAULTS: dict[str, _PlcFamilyDefaults] = {
+    "iq-f": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "iq-f", "iq-f"),
+    "iq-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
+    "iq-l": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
+    "mx-f": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-f", "mx-f"),
+    "mx-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-r", "mx-r"),
+    "qcpu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qcpu", "qcpu"),
+    "lcpu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "lcpu", "lcpu"),
+    "qnu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnu", "qnu"),
+    "qnudv": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnudv", "qnudv"),
+}
+
+
+def _normalize_plc_family_hint(family: object | None) -> str | None:
+    if family is None:
+        return None
+    raw = getattr(family, "value", family)
+    normalized = str(raw).strip().lower()
+    if not normalized:
+        return None
+    if normalized in _PLC_FAMILIES:
+        return normalized
+    supported = ", ".join(sorted(_PLC_FAMILIES))
+    raise ValueError(f"Unsupported plc_family {family!r}. Supported families: {supported}")
+
+
+def _resolve_plc_family_defaults(family: object | None) -> _PlcFamilyDefaults | None:
+    normalized = _normalize_plc_family_hint(family)
+    if normalized is None:
+        return None
+    return _PLC_FAMILY_DEFAULTS[normalized]
 
 
 def _normalize_device_family_hint(family: object | None) -> str | None:
@@ -121,6 +175,37 @@ def _normalize_device_family_hint(family: object | None) -> str | None:
         return normalized
     supported = ", ".join(sorted(_DEVICE_FAMILIES))
     raise ValueError(f"Unsupported device_family {family!r}. Supported families: {supported}")
+
+
+def _resolve_connection_profile(
+    *,
+    plc_family: object | None,
+    plc_series: PLCSeries | str | None,
+    frame_type: FrameType | str | None,
+    device_family: object | None,
+) -> tuple[str | None, PLCSeries, FrameType, str | None, str | None]:
+    defaults = _resolve_plc_family_defaults(plc_family)
+    if defaults is not None:
+        if plc_series is not None or frame_type is not None or device_family is not None:
+            raise ValueError(
+                "plc_family already determines frame_type, access_profile, and address/range handling. "
+                "Do not also pass plc_series, frame_type, or device_family."
+            )
+        normalized_plc_family = _normalize_plc_family_hint(plc_family)
+        return (
+            normalized_plc_family,
+            defaults.plc_series,
+            defaults.frame_type,
+            defaults.device_family,
+            defaults.range_family,
+        )
+    return (
+        None,
+        PLCSeries(plc_series) if plc_series is not None else PLCSeries.QL,
+        FrameType(frame_type) if frame_type is not None else FrameType.FRAME_4E,
+        _normalize_device_family_hint(device_family),
+        None,
+    )
 
 
 def _resolve_device_radix(code: str, family: object | None = None) -> int:
@@ -155,8 +240,8 @@ def _require_explicit_device_family_for_xy(
     if ref.code not in _IQF_OCTAL_DEVICE_CODES:
         return ref
     raise ValueError(
-        "X/Y string addresses require explicit device_family. "
-        "Use device_family='iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F family, "
+        "X/Y string addresses require explicit plc_family. "
+        "Use plc_family='iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F family, "
         "or pass a numeric DeviceRef."
     )
 

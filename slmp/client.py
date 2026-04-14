@@ -40,10 +40,10 @@ from .core import (
     _encode_label_name,
     _encode_remote_password_payload,
     _label_array_data_bytes,
-    _normalize_device_family_hint,
     _normalize_items,
     _raise_response_error,
     _require_explicit_device_family_for_xy,
+    _resolve_connection_profile,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_direct_read_device,
@@ -92,8 +92,9 @@ class SlmpClient:
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
-        plc_series: PLCSeries | str = PLCSeries.QL,
-        frame_type: FrameType | str = FrameType.FRAME_4E,
+        plc_family: object | None = None,
+        plc_series: PLCSeries | str | None = None,
+        frame_type: FrameType | str | None = None,
         default_target: SlmpTarget | None = None,
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
@@ -107,10 +108,16 @@ class SlmpClient:
             port: PLC port number. Defaults to 5000.
             transport: Transport protocol ('tcp' or 'udp'). Defaults to 'tcp'.
             timeout: Socket timeout in seconds. Defaults to 3.0.
-            plc_series: Target PLC series. Defaults to QL.
-            frame_type: SLMP frame type. Defaults to 4E.
+            plc_family: Canonical high-level PLC family. When set, the client
+                derives frame type, access profile, and address/range handling
+                from that family.
+            plc_series: Low-level target PLC series override. Use only when
+                ``plc_family`` is not provided.
+            frame_type: Low-level SLMP frame type override. Use only when
+                ``plc_family`` is not provided.
             device_family: Canonical address family used for string device parsing,
-                such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``.
+                such as ``"iq-f"``, ``"qcpu"``, or ``"qnudv"``. Use only
+                when ``plc_family`` is not provided.
             default_target: Default target station routing information.
             monitoring_timer: Default monitoring timer value (multiples of 250ms). Defaults to 0x0010 (4s).
             raise_on_error: Whether to raise SlmpError on non-zero end codes. Defaults to True.
@@ -122,13 +129,22 @@ class SlmpClient:
         if self.transport not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
-        self.plc_series = PLCSeries(plc_series)
-        self.frame_type = FrameType(frame_type)
+        (
+            self.plc_family,
+            self.plc_series,
+            self.frame_type,
+            self.device_family,
+            self.device_range_family,
+        ) = _resolve_connection_profile(
+            plc_family=plc_family,
+            plc_series=plc_series,
+            frame_type=frame_type,
+            device_family=device_family,
+        )
         self.default_target = default_target or SlmpTarget()
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
         self.trace_hook = trace_hook
-        self.device_family = _normalize_device_family_hint(device_family)
 
         self._serial = 0
         self._sock: socket.socket | None = None
@@ -1838,6 +1854,12 @@ class SlmpClient:
         from .device_ranges import read_device_range_catalog_for_family_sync
 
         return read_device_range_catalog_for_family_sync(self, family)
+
+    def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
+        """Read the configured device-range catalog for this client's explicit PLC family."""
+        if self.device_range_family is None:
+            raise ValueError("read_device_range_catalog() requires explicit plc_family on the client.")
+        return self.read_device_range_catalog_for_family(self.device_range_family)
 
     def read_cpu_operation_state(self) -> CpuOperationState:
         """Read SD203 and decode the CPU operation state from the lower 4 bits."""

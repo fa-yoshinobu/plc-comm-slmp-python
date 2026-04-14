@@ -6,7 +6,7 @@ For normal application code, start here instead of the low-level protocol method
 
 ## Recommended Entry Points
 
-### Async connection with explicit profile selection
+### Async connection with explicit PLC family selection
 
 ```python
 import asyncio
@@ -17,10 +17,8 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named
 async def main() -> None:
     options = SlmpConnectionOptions(
         host="192.168.250.100",
+        plc_family="iq-f",
         port=1025,
-        plc_series="iqr",
-        frame_type="4e",
-        device_family="iq-f",
     )
     async with await open_and_connect(options) as client:
         snapshot = await read_named(client, ["D100", "D200:F", "D50.3"])
@@ -33,7 +31,7 @@ asyncio.run(main())
 Use this when:
 
 - you are writing an async application
-- you already know the target frame/profile pair
+- you already know the target PLC family
 - you want the shortest path to `read_named`, `write_typed`, and `poll`
 
 ### Async shared connection
@@ -48,8 +46,7 @@ async def main() -> None:
     inner = AsyncSlmpClient(
         "192.168.250.100",
         port=1025,
-        plc_series="iqr",
-        frame_type="4e",
+        plc_family="iq-r",
     )
     async with QueuedAsyncSlmpClient(inner) as client:
         first = await read_named(client, ["D100", "D200:F"])
@@ -70,10 +67,8 @@ from slmp import SlmpConnectionOptions, open_and_connect_sync, read_named_sync, 
 
 options = SlmpConnectionOptions(
     host="192.168.250.100",
+    plc_family="iq-f",
     port=1025,
-    plc_series="iqr",
-    frame_type="4e",
-    device_family="iq-f",
 )
 
 with open_and_connect_sync(options) as client:
@@ -86,26 +81,33 @@ For sync code, the recommended pattern is:
 1. open a `SlmpClient`
 2. use the `*_sync` helper functions
 
-## Meaning of Each Explicit Setting
+## High-Level PLC Selection
 
-| Setting | Where Used | What It Controls | Examples |
-| --- | --- | --- | --- |
-| `frame_type` | client / connection options | SLMP frame envelope on the wire | `3e`, `4e` |
-| `plc_series` | client / connection options | command/access profile used by the library | `ql`, `iqr` |
-| `device_family` | client / connection options | how string device addresses are interpreted | `iq-f`, `qcpu`, `qnudv` |
-| `family` argument | `read_device_range_catalog_for_family(...)` | which SD window and range rules are used for device-range catalog reads | `iq-f`, `qnu`, `qnudv` |
+For the recommended high-level helper layer, `plc_family` is the only PLC selector.
 
-Important separation:
+- the library derives `frame_type`
+- the library derives `access_profile`
+- the library derives the `X` / `Y` text rule
+- the library derives the device-range family
+- the library does not auto-detect them at runtime
 
-- `frame_type` and `plc_series` are communication settings
-- `device_family` and device-range `family` are address/range settings
-- the last two use the same family vocabulary
-- the library does not auto-detect any of them for the public helper layer
+| `plc_family` | `frame_type` | `access_profile` | `X` / `Y` text | range family | Status |
+| --- | --- | --- | --- | --- | --- |
+| `iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
+| `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
+| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated on `L16HCPU` |
+| `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | provisional |
+| `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | provisional |
+| `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
+| `lcpu` | `3e` | `ql` | hexadecimal | `lcpu` | retained path |
+| `qnu` | `3e` | `ql` | hexadecimal | `qnu` | retained path |
+| `qnudv` | `3e` | `ql` | hexadecimal | `qnudv` | retained path |
 
-Only canonical family values are accepted:
+Only canonical `plc_family` values are accepted:
 
 - `iq-f`
 - `iq-r`
+- `iq-l`
 - `mx-f`
 - `mx-r`
 - `qcpu`
@@ -122,12 +124,12 @@ from slmp import normalize_address
 
 assert normalize_address("x20") == "X20"
 assert normalize_address("d200") == "D200"
-assert normalize_address("x100", family="iq-f") == "X100"
+assert normalize_address("x100", plc_family="iq-f") == "X100"
 ```
 
-`X` / `Y` string addresses require explicit `device_family` during communication.
+`X` / `Y` string addresses require explicit `plc_family` during communication.
 The library does not auto-detect the PLC family for `X` / `Y`.
-Device-range catalog reads also require the explicit canonical `family` argument.
+Device-range catalog reads follow the same fixed family mapping derived from `plc_family`.
 
 ## High-Level Helper Set
 
@@ -203,7 +205,7 @@ snapshot = await read_named(
 
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
-For `X` / `Y`, set `device_family` explicitly.
+For `X` / `Y`, set `plc_family` explicitly.
 Use manual octal text such as `X100` / `Y100` for `iQ-F` / FX5, and hexadecimal text such as `X20` / `Y20` for non-`iQ-F` families.
 
 Long-device notes for the high-level helper layer:
@@ -331,7 +333,7 @@ history_dwords = await read_dwords_chunked(client, "D2000", 240)
 ### Example 4: one shared async connection
 
 ```python
-inner = AsyncSlmpClient("192.168.250.100", port=1025, plc_series="iqr", frame_type="4e")
+inner = AsyncSlmpClient("192.168.250.100", port=1025, plc_family="iq-r")
 async with QueuedAsyncSlmpClient(inner) as client:
     a = await read_named(client, ["D100", "D200:F"])
     b = await read_named(client, ["D300", "D50.3"])
@@ -349,8 +351,8 @@ They are designed to be directly runnable and syntax-check clean.
 Run them from the repository root:
 
 ```powershell
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
 ```
 
 See also:

@@ -168,7 +168,7 @@ async def test_async_read_devices() -> None:
 @pytest.mark.asyncio
 async def test_async_read_devices_xy_requires_explicit_device_family_for_string_addresses() -> None:
     cli = FakeAsyncClient()
-    with pytest.raises(ValueError, match="device_family"):
+    with pytest.raises(ValueError, match="plc_family"):
         await cli.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
     assert cli.last_request is None
 
@@ -199,7 +199,7 @@ def test_async_client_rejects_device_family_alias() -> None:
 
 @pytest.mark.asyncio
 async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
-    cli = FakeAsyncClient(device_family="iq-f")
+    cli = FakeAsyncClient(plc_family="iq-f")
     cli.next_response_data = b"\x10"
 
     values = await cli.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
@@ -209,6 +209,21 @@ async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
     assert cli.last_request[0] == int(Command.DEVICE_READ)
     assert cli.last_request[1] == 0x0003
     assert cli.last_request[2] == b"\x8f\x00\x00\x00\x9d\x00\x02\x00"
+
+
+def test_async_client_rejects_invalid_plc_family() -> None:
+    with pytest.raises(ValueError, match="Unsupported plc_family"):
+        FakeAsyncClient(plc_family="iqf")
+
+
+def test_async_client_plc_family_derives_fixed_profile_defaults() -> None:
+    cli = FakeAsyncClient(plc_family="iq-l")
+
+    assert cli.plc_family == "iq-l"
+    assert cli.plc_series == PLCSeries.IQR
+    assert cli.frame_type.value == "4e"
+    assert cli.device_family == "iq-r"
+    assert cli.device_range_family == "iq-r"
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ Run against a real PLC or the GX Works3 simulator.
 
 Usage
 -----
-    python samples/high_level_sync.py --host 192.168.250.100 --port 1025
+    python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
     python samples/high_level_sync.py --host 192.168.250.100 --port 1027 --transport udp
 
 Common port values
@@ -68,10 +68,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--series",
-        choices=("iqr", "ql"),
-        default="iqr",
-        help=("PLC device-encoding family\n  iqr  iQ-R / iQ-F series (default)\n  ql   Q / L series"),
+        "--plc-family",
+        choices=("iq-f", "iq-r", "iq-l", "mx-f", "mx-r", "qcpu", "lcpu", "qnu", "qnudv"),
+        default="iq-r",
+        help="Canonical high-level PLC family (default iq-r)",
     )
     p.add_argument(
         "--timeout",
@@ -104,31 +104,29 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    print(f"[normalize_address] x20 -> {normalize_address('x20')}")
+    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_family=args.plc_family)}")
 
     # SlmpConnectionOptions:
     #   host             - PLC IP / hostname
+    #   plc_family       - canonical high-level PLC family; derives frame,
+    #                      access profile, and X/Y/range handling
     #   port             - SLMP port; depends on PLC hardware and firmware settings
     #   transport        - "tcp" (default) or "udp"
     #   timeout          - socket timeout in seconds; increase on slow networks
-    #   plc_series       - "iqr" (iQ-R/iQ-F, 32-bit device numbers) or
-    #                      "ql"  (Q/L series, 24-bit device numbers)
-    #   frame_type       - "3E" or "4E"; set explicitly when the PLC requires
-    #                      a specific frame/profile pairing
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
     #   trace_hook       - optional callback(SlmpTraceFrame) for protocol tracing
     options = SlmpConnectionOptions(
         host=args.host,
+        plc_family=args.plc_family,
         port=args.port,
         transport="tcp",
         timeout=args.timeout,
-        plc_series=args.series,
         monitoring_timer=args.monitoring_timer,
     )
 
     with open_and_connect_sync(options) as client:
-        print(f"Connected to {args.host}:{args.port} ({args.series})")
+        print(f"Connected to {args.host}:{args.port} ({args.plc_family})")
 
         # ---------------------------------------------------------------
         # 1. read_typed_sync / write_typed_sync

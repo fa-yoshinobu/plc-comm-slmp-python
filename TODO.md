@@ -22,6 +22,10 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 - The local regression suite already covers unit tests, `ruff`, `mypy`, and
   CLI smoke checks. Expand automation only when a concrete live or manual flow
   needs a single-command runner.
+- Re-check the provisional high-level `plc_family` fixed mappings on live
+  hardware:
+  - `mx-f` -> `4e/iqr` with range family `mx-f`
+  - `mx-r` -> `4e/iqr` with range family `mx-r`
 
 ## 3. Known Issues
 - Single-request mixed block write (`1406`) has not yet been accepted on any current live-verified PLC path in this project. Prefer `split_mixed_blocks=True` for the safest operational behavior, or use `retry_mixed_on_error=True` if you still want to probe the one-request form first.
@@ -33,13 +37,6 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 - [ ] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
 - [ ] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
-- [ ] **Keep protocol-specific options explicit**: Preserve explicit frame, compatibility, and target-routing options rather than adding automatic profile selection paths back into the public surface.
+- [ ] **Keep `plc_family` as the only high-level PLC selector**: Raw `frame_type`, access-profile, and range-family knobs should stay low-level only unless new live evidence forces a public exception.
 - [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.
 - [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.
-
-## 4. Cross-Stack API Alignment
-
-- [ ] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
-- [ ] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
-- [ ] **Keep protocol-specific options explicit**: Preserve explicit frame, compatibility, and target-routing options rather than adding automatic profile selection paths back into the public surface.
-

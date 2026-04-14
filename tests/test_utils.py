@@ -96,11 +96,12 @@ class TestParseAddress(unittest.TestCase):
     def test_normalize_address(self):
         self.assertEqual(normalize_address("d100"), "D100")
         self.assertEqual(normalize_address("y220", family="iq-f"), "Y220")
+        self.assertEqual(normalize_address("y220", plc_family="iq-f"), "Y220")
 
     def test_read_named_sync_rejects_xy_without_device_family(self):
         client = MagicMock()
         client.device_family = None
-        with self.assertRaisesRegex(ValueError, "device_family"):
+        with self.assertRaisesRegex(ValueError, "plc_family"):
             read_named_sync(client, ["X40"])
 
 
@@ -539,7 +540,7 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         inner.close.assert_awaited_once()
 
     async def test_open_and_connect_returns_queued_client(self):
-        options = SlmpConnectionOptions("127.0.0.1", port=1025)
+        options = SlmpConnectionOptions("127.0.0.1", plc_family="iq-f", port=1025)
         with patch("slmp.async_client.AsyncSlmpClient") as client_cls:
             inner = MagicMock()
             inner.connect = AsyncMock()
@@ -549,6 +550,17 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(queued, QueuedAsyncSlmpClient)
         inner.connect.assert_awaited_once()
+        client_cls.assert_called_once()
+        self.assertEqual(client_cls.call_args.kwargs["plc_family"], "iq-f")
+
+    def test_connection_options_derive_fixed_profile_from_plc_family(self):
+        options = SlmpConnectionOptions("127.0.0.1", plc_family="iq-l", port=1025)
+
+        self.assertEqual(options.plc_family, "iq-l")
+        self.assertEqual(options.plc_series.value, "iqr")
+        self.assertEqual(options.frame_type.value, "4e")
+        self.assertEqual(options.device_family, "iq-r")
+        self.assertEqual(options.device_range_family, "iq-r")
 
 
 # ---------------------------------------------------------------------------
