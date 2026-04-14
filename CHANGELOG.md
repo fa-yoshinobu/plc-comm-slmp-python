@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.9 - 2026-04-14
+
+### Changed
+- High-level connection setup now centers on explicit `plc_family`, which derives fixed frame, access-profile, and device-range defaults from one canonical family selection.
+- String `X/Y` addresses now require explicit `plc_family`; `iq-f` uses octal `X/Y`, other supported families use hexadecimal, and non-canonical family aliases are rejected across client and device-range helpers.
+
 ## 0.1.8 - 2026-04-14
 
 ### Added
@@ -162,4 +168,3 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-
