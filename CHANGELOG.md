@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.10 - 2026-04-14
+
+### Changed
+- The standard client route now requires explicit `plc_family`. `SlmpClient`, `AsyncSlmpClient`, and the bundled samples derive frame, access-profile, and device-range defaults from that family instead of exposing raw profile selection.
+- The CLI keeps the low-level compatibility path internally, but normal application code now uses `plc_family` as the single explicit PLC selection.
+
 ## 0.1.9 - 2026-04-14
 
 ### Changed
