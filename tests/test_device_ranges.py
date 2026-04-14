@@ -54,7 +54,6 @@ class TestSyncDeviceRanges(unittest.TestCase):
     def test_family_alias_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported PLC family"):
             normalize_device_range_family("iqf")
-
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
         client = _FakeSyncClient()
         client.next_response_data = _build_word_block(
