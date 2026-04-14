@@ -944,7 +944,6 @@ async def read_words_chunked(
     semantics are acceptable to the caller.
     """
 
-    from .core import DeviceRef
 
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
@@ -992,7 +991,6 @@ async def write_words_chunked(
     caller.
     """
 
-    from .core import DeviceRef
 
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
@@ -1019,7 +1017,6 @@ async def write_dwords_chunked(
     intact inside one request.
     """
 
-    from .core import DeviceRef
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
@@ -1141,7 +1138,6 @@ def read_words_chunked_sync(
 ) -> list[int]:
     """Synchronously read contiguous 16-bit values across multiple aligned requests."""
 
-    from .core import DeviceRef
 
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
@@ -1181,7 +1177,6 @@ def write_words_chunked_sync(
 ) -> None:
     """Synchronously write contiguous 16-bit values across multiple aligned requests."""
 
-    from .core import DeviceRef
 
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
@@ -1204,7 +1199,6 @@ def write_dwords_chunked_sync(
 ) -> None:
     """Synchronously write contiguous unsigned 32-bit values across multiple aligned requests."""
 
-    from .core import DeviceRef
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
