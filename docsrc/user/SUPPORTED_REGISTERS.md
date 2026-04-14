@@ -7,8 +7,8 @@ This page is the canonical public register table for the Python high-level API.
 | Family | Kind | Example | Numbering |
 | --- | --- | --- | --- |
 | `SM` | bit | `SM400` | decimal |
-| `X` | bit | `X20` | hexadecimal |
-| `Y` | bit | `Y20` | hexadecimal |
+| `X` | bit | `X20` / `X100` | explicit family required; non-`iQ-F` text is hexadecimal, `iQ-F` text is octal |
+| `Y` | bit | `Y20` / `Y100` | explicit family required; non-`iQ-F` text is hexadecimal, `iQ-F` text is octal |
 | `M` | bit | `M1000` | decimal |
 | `L` | bit | `L100` | decimal |
 | `F` | bit | `F10` | decimal |
@@ -57,7 +57,12 @@ This page is the canonical public register table for the Python high-level API.
 ## Addressing Notes
 
 - Start with `D` for the first smoke test.
-- `X`, `Y`, `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
+- `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
+- `X` and `Y` require explicit `device_family` for communication.
+- device-range catalog reads require the same explicit canonical `family` definition.
+- non-`iQ-F` `X` / `Y` text such as `X20` uses hexadecimal numbering.
+- `iQ-F` / FX5 `X` / `Y` text such as `X100` uses manual octal notation and is converted to the binary numeric value before transmission.
+- canonical family values are `iq-f`, `iq-r`, `mx-f`, `mx-r`, `qcpu`, `lcpu`, `qnu`, and `qnudv`.
 - Most other families use decimal numbers.
 - `.bit` is valid only on word devices such as `D50.3`.
 - `LTN`, `LSTN`, and `LCN` default to 32-bit current-value access in the public high-level helpers.

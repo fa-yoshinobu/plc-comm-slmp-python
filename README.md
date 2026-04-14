@@ -50,6 +50,7 @@ async def main() -> None:
         port=1025,
         plc_series="iqr",
         frame_type="4e",
+        device_family="iq-f",
     )
     async with await open_and_connect(options) as client:
         before = await read_named(client, ["D100", "D200:F", "D50.3"])
@@ -64,10 +65,48 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Choose the connection profile explicitly:
+Choose a validated communication profile explicitly.
+In this library, the communication profile and the address family are separate settings.
 
-- `plc_series="iqr", frame_type="4e"` for iQ-R / iQ-F targets
-- `plc_series="ql", frame_type="3e"` for Q / L targets
+## Meaning of Each Explicit Setting
+
+| Setting | Where Used | What It Controls | Examples |
+| --- | --- | --- | --- |
+| `frame_type` | client / connection options | SLMP frame envelope on the wire | `3e`, `4e` |
+| `plc_series` | client / connection options | command/access profile used by the library | `ql`, `iqr` |
+| `device_family` | client / connection options | how string device addresses are interpreted | `iq-f`, `qcpu`, `qnudv` |
+| `family` argument | `read_device_range_catalog_for_family(...)` | which SD window and range rules are used for device-range catalog reads | `iq-f`, `qnu`, `qnudv` |
+
+Important separation:
+
+- `frame_type` and `plc_series` are communication settings
+- `device_family` and device-range `family` are address/range settings
+- the last two use the same explicit family vocabulary
+- the library does not auto-detect any of them for the public helper layer
+
+When you communicate with `X` / `Y` by string address, set canonical `device_family` explicitly.
+When you read the device-range catalog, pass the matching canonical `family` argument to `read_device_range_catalog_for_family(...)`.
+
+Only these canonical family values are accepted:
+
+| Canonical | Typical target | `X` / `Y` text |
+| --- | --- | --- |
+| `iq-f` | FX5 / iQ-F | octal |
+| `iq-r` | iQ-R | hexadecimal |
+| `mx-f` | MX-F | hexadecimal |
+| `mx-r` | MX-R | hexadecimal |
+| `qcpu` | QCPU | hexadecimal |
+| `lcpu` | LCPU | hexadecimal |
+| `qnu` | QnU | hexadecimal |
+| `qnudv` | QnUDV | hexadecimal |
+
+Practical rules:
+
+- non-`iQ-F` `X` / `Y`: text such as `X20` / `Y20` is interpreted as hexadecimal
+- `iQ-F` / FX5 `X` / `Y`: text such as `X100` / `Y100` is interpreted as manual octal notation and encoded to the binary numeric value
+- example: `X100` on `iQ-F` becomes binary device number `0x40`
+- if you pass a numeric `DeviceRef`, string notation is already resolved, so `device_family` is not needed for that one address
+- short aliases such as `iqf`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected
 
 ## Supported PLC Registers
 
@@ -101,6 +140,7 @@ from slmp import normalize_address
 
 print(normalize_address("x20"))   # X20
 print(normalize_address("d200"))  # D200
+print(normalize_address("x100", family="iq-f"))  # X100
 ```
 
 ### Single Typed Values
@@ -115,6 +155,22 @@ await write_typed(client, "D100", "U", 1234)
 
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
+For communication, `X` / `Y` string addresses require explicit `device_family`.
+
+### Device Range Catalog
+
+Use an explicit PLC family and read the family SD block once.
+
+```python
+from slmp import SlmpClient, SlmpDeviceRangeFamily
+
+with SlmpClient("192.168.250.100", 1025, plc_series="ql", frame_type="3e") as client:
+    catalog = client.read_device_range_catalog_for_family(SlmpDeviceRangeFamily.QnU)
+    for entry in catalog.entries:
+        print(entry.device, entry.point_count, entry.address_range)
+```
+
+This path does not call `read_type_name()`. The caller must choose the range `family` explicitly, using the same family definition as `device_family`.
 
 ### Device Range Catalog
 

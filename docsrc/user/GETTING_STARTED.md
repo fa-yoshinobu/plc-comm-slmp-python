@@ -7,7 +7,9 @@ Use this package when you want the shortest Python path to Mitsubishi SLMP commu
 Recommended first path:
 
 1. Install `slmp-connect-python`.
-2. Set `plc_series` and `frame_type` explicitly.
+2. Set the communication profile explicitly: `frame_type` and `plc_series`.
+3. If you use `X` / `Y` string addresses, set `device_family` explicitly too.
+4. If you read the device-range catalog, choose the explicit range `family`.
 3. Open one connection with `open_and_connect`.
 4. Read one safe `D` word.
 5. Write only to a known-safe test word or bit after the first read is stable.
@@ -38,8 +40,20 @@ options = SlmpConnectionOptions(
     port=1025,
     plc_series="iqr",
     frame_type="4e",
+    device_family="iq-f",
 )
 ```
+
+These settings mean different things:
+
+- `frame_type`: SLMP frame envelope such as `3e` or `4e`
+- `plc_series`: communication/access profile such as `ql` or `iqr`
+- `device_family`: address family for string parsing such as `iq-f`, `qcpu`, or `qnudv`
+
+If you will access `X` / `Y` by string address, set `device_family` explicitly.
+If you will read the device-range catalog, pass the matching explicit `family` to `read_device_range_catalog_for_family(...)`.
+This library does not auto-detect either one.
+Only canonical family values are accepted: `iq-f`, `iq-r`, `mx-f`, `mx-r`, `qcpu`, `lcpu`, `qnu`, `qnudv`.
 
 ## First Successful Run
 

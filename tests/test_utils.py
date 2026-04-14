@@ -95,6 +95,13 @@ class TestParseAddress(unittest.TestCase):
 
     def test_normalize_address(self):
         self.assertEqual(normalize_address("d100"), "D100")
+        self.assertEqual(normalize_address("y220", family="iq-f"), "Y220")
+
+    def test_read_named_sync_rejects_xy_without_device_family(self):
+        client = MagicMock()
+        client.device_family = None
+        with self.assertRaisesRegex(ValueError, "device_family"):
+            read_named_sync(client, ["X40"])
 
 
 # ---------------------------------------------------------------------------

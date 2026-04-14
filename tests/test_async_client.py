@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.constants import Command, PLCSeries
-from slmp.core import SlmpError, SlmpResponse, SlmpTarget
+from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget, pack_bit_values
 
 # --- Mock SLMP Server for Testing ---
 
@@ -101,9 +101,9 @@ class MockSLMPServer:
 class FakeAsyncClient(AsyncSlmpClient):
     """Fake async client for testing."""
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
         """Initialize fake client."""
-        super().__init__("127.0.0.1")
+        super().__init__("127.0.0.1", **kwargs)
         self.last_request = None
         self.next_response_data = b""
         self.next_response_end_code = 0
@@ -163,6 +163,52 @@ async def test_async_read_devices() -> None:
             assert val == [1]
     finally:
         await mock.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_read_devices_xy_requires_explicit_device_family_for_string_addresses() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match="device_family"):
+        await cli.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_devices_xy_allows_numeric_deviceref_without_device_family() -> None:
+    cli = FakeAsyncClient()
+    cli.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
+
+    values = await cli.read_devices(DeviceRef("X", 0x40), 8, bit_unit=True, series=PLCSeries.QL)
+
+    assert values == [True, False, True, False, True, False, True, False]
+    assert cli.last_request is not None
+    assert cli.last_request[0] == int(Command.DEVICE_READ)
+    assert cli.last_request[1] == 0x0001
+    assert cli.last_request[2] == b"\x40\x00\x00\x9c\x08\x00"
+
+
+def test_async_client_rejects_invalid_device_family() -> None:
+    with pytest.raises(ValueError, match="Unsupported device_family"):
+        FakeAsyncClient(device_family="auto")
+
+
+def test_async_client_rejects_device_family_alias() -> None:
+    with pytest.raises(ValueError, match="Unsupported device_family"):
+        FakeAsyncClient(device_family="iqf")
+
+
+@pytest.mark.asyncio
+async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
+    cli = FakeAsyncClient(device_family="iq-f")
+    cli.next_response_data = b"\x10"
+
+    values = await cli.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
+
+    assert values == [True, False]
+    assert cli.last_request is not None
+    assert cli.last_request[0] == int(Command.DEVICE_READ)
+    assert cli.last_request[1] == 0x0003
+    assert cli.last_request[2] == b"\x8f\x00\x00\x00\x9d\x00\x02\x00"
 
 
 @pytest.mark.asyncio

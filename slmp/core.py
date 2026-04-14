@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any
 
@@ -81,12 +81,84 @@ class DeviceRef:
 
     code: str
     number: int
+    radix_override: int | None = field(default=None, compare=False, repr=False)
 
     def __str__(self) -> str:
         """Return the string representation of the device (e.g., 'D100', 'X1F')."""
-        if self.code in DEVICE_CODES and DEVICE_CODES[self.code].radix == 16:
+        radix = self.radix_override
+        if radix is None and self.code in DEVICE_CODES:
+            radix = DEVICE_CODES[self.code].radix
+        if radix == 16:
             return f"{self.code}{self.number:X}"
+        if radix == 8:
+            return f"{self.code}{self.number:o}".upper()
         return f"{self.code}{self.number}"
+
+
+_IQF_OCTAL_DEVICE_CODES = frozenset({"X", "Y"})
+_DEVICE_FAMILIES = frozenset(
+    {
+        "iq-r",
+        "mx-f",
+        "mx-r",
+        "iq-f",
+        "qcpu",
+        "lcpu",
+        "qnu",
+        "qnudv",
+    }
+)
+
+
+def _normalize_device_family_hint(family: object | None) -> str | None:
+    if family is None:
+        return None
+    raw = getattr(family, "value", family)
+    normalized = str(raw).strip().lower()
+    if not normalized:
+        return None
+    if normalized in _DEVICE_FAMILIES:
+        return normalized
+    supported = ", ".join(sorted(_DEVICE_FAMILIES))
+    raise ValueError(f"Unsupported device_family {family!r}. Supported families: {supported}")
+
+
+def _resolve_device_radix(code: str, family: object | None = None) -> int:
+    normalized_family = _normalize_device_family_hint(family)
+    if normalized_family == "iq-f" and code in _IQF_OCTAL_DEVICE_CODES:
+        return 8
+    return DEVICE_CODES[code].radix
+
+
+def _apply_device_family_hint(value: DeviceRef, family: object | None = None) -> DeviceRef:
+    if family is None:
+        return value
+    if value.code not in DEVICE_CODES:
+        return value
+    radix = _resolve_device_radix(value.code, family)
+    if value.radix_override == radix:
+        return value
+    if value.radix_override is None and DEVICE_CODES[value.code].radix == radix:
+        return value
+    return replace(value, radix_override=radix)
+
+
+def _require_explicit_device_family_for_xy(
+    value: str | DeviceRef,
+    family: object | None,
+    ref: DeviceRef,
+) -> DeviceRef:
+    if not isinstance(value, str):
+        return ref
+    if _normalize_device_family_hint(family) is not None:
+        return ref
+    if ref.code not in _IQF_OCTAL_DEVICE_CODES:
+        return ref
+    raise ValueError(
+        "X/Y string addresses require explicit device_family. "
+        "Use device_family='iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F family, "
+        "or pass a numeric DeviceRef."
+    )
 
 
 @dataclass(frozen=True)
@@ -282,7 +354,11 @@ class ExtendedDevice:
     direct_memory_specification: int | None = None
 
 
-def parse_device(value: str | DeviceRef) -> DeviceRef:
+def parse_device(
+    value: str | DeviceRef,
+    *,
+    family: object | None = None,
+) -> DeviceRef:
     """Parse a device string into a `DeviceRef`.
 
     Args:
@@ -295,7 +371,7 @@ def parse_device(value: str | DeviceRef) -> DeviceRef:
         ValueError: If the device format is invalid or the code is unknown.
     """
     if isinstance(value, DeviceRef):
-        return value
+        return _apply_device_family_hint(value, family)
 
     text = value.strip().upper()
     match = re.fullmatch(r"([A-Z]+)([0-9A-F]+)", text)
@@ -312,15 +388,19 @@ def parse_device(value: str | DeviceRef) -> DeviceRef:
         valid_codes = ", ".join(sorted(DEVICE_CODES.keys()))
         raise ValueError(f"Unknown SLMP device code '{code}' in {value!r}. Valid codes: {valid_codes}")
 
-    base = DEVICE_CODES[code].radix
+    base = _resolve_device_radix(code, family)
     number = int(num_txt, base)
-    return DeviceRef(code=code, number=number)
+    return _apply_device_family_hint(DeviceRef(code=code, number=number), family)
 
 
-def parse_extended_device(value: str | DeviceRef) -> ExtendedDevice:
+def parse_extended_device(
+    value: str | DeviceRef,
+    *,
+    family: object | None = None,
+) -> ExtendedDevice:
     r"""Parse an Extended Device string (e.g., 'U01\G10', 'J2\SW10') or return ExtendedDevice as-is."""
     if isinstance(value, DeviceRef):
-        return ExtendedDevice(ref=value)
+        return ExtendedDevice(ref=parse_device(value, family=family))
 
     text = value.strip().upper()
 
@@ -331,7 +411,7 @@ def parse_extended_device(value: str | DeviceRef) -> ExtendedDevice:
         j_network = int(j_net_txt)
         _check_u8(j_network, "extended_device j_network")
         return ExtendedDevice(
-            ref=parse_device(device_txt),
+            ref=parse_device(device_txt, family=family),
             extension_specification=j_network,
             direct_memory_specification=DIRECT_MEMORY_LINK_DIRECT,
         )
@@ -341,7 +421,7 @@ def parse_extended_device(value: str | DeviceRef) -> ExtendedDevice:
         extension_txt, device_txt = qualified.groups()
         extension_specification = int(extension_txt, 16)
         _check_u16(extension_specification, "extended_device extension_specification")
-        dev_ref = parse_device(device_txt)
+        dev_ref = parse_device(device_txt, family=family)
         # G/HG buffer memory devices have a fixed DM by device code (matches GOT pcap-verified format)
         dm: int | None = None
         if dev_ref.code == "G":
@@ -354,15 +434,17 @@ def parse_extended_device(value: str | DeviceRef) -> ExtendedDevice:
             direct_memory_specification=dm,
         )
 
-    return ExtendedDevice(ref=parse_device(value))
+    return ExtendedDevice(ref=parse_device(value, family=family))
 
 
 def resolve_extended_device_and_extension(
     device: str | DeviceRef,
     extension: ExtensionSpec,
+    *,
+    family: object | None = None,
 ) -> tuple[DeviceRef, ExtensionSpec]:
     """Resolve device and extension specification, prioritizing explicit qualification in the device string."""
-    qualified = parse_extended_device(device)
+    qualified = parse_extended_device(device, family=family)
     overrides: dict[str, Any] = {}
     if (
         qualified.extension_specification is not None
@@ -596,9 +678,14 @@ def resolve_device_subcommand(
     return SUBCOMMAND_DEVICE_BIT_IQR if bit_unit else SUBCOMMAND_DEVICE_WORD_IQR
 
 
-def encode_device_spec(device: str | DeviceRef, *, series: PLCSeries) -> bytes:
+def encode_device_spec(
+    device: str | DeviceRef,
+    *,
+    series: PLCSeries,
+    family: object | None = None,
+) -> bytes:
     """Encode a device specification into bytes based on the PLC series."""
-    ref = parse_device(device)
+    ref = parse_device(device, family=family)
     if ref.code == "R" and ref.number > 32767:
         raise ValueError(f"R device number out of supported range (0..32767): {ref.number}")
     dev = DEVICE_CODES[ref.code]
@@ -687,9 +774,10 @@ def encode_extended_device_spec(
     series: PLCSeries,
     extension: ExtensionSpec,
     include_direct_memory_at_end: bool = True,
+    family: object | None = None,
 ) -> bytes:
     """Encode an Extended Device extended device specification into bytes."""
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension)
+    ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=family)
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
         return _encode_link_direct_device_spec(
             ref,

@@ -185,23 +185,7 @@ _ROWS: dict[str, _RangeRow] = {
     "SD": _RangeRow(SlmpDeviceRangeCategory.Word, (("SD", False),), SlmpDeviceRangeNotation.Base10),
 }
 
-_FAMILY_ALIASES = {
-    "iq-r": SlmpDeviceRangeFamily.IqR,
-    "iqr": SlmpDeviceRangeFamily.IqR,
-    "mx-f": SlmpDeviceRangeFamily.MxF,
-    "mxf": SlmpDeviceRangeFamily.MxF,
-    "mx-r": SlmpDeviceRangeFamily.MxR,
-    "mxr": SlmpDeviceRangeFamily.MxR,
-    "iq-f": SlmpDeviceRangeFamily.IqF,
-    "iqf": SlmpDeviceRangeFamily.IqF,
-    "qcpu": SlmpDeviceRangeFamily.QCpu,
-    "q": SlmpDeviceRangeFamily.QCpu,
-    "lcpu": SlmpDeviceRangeFamily.LCpu,
-    "l": SlmpDeviceRangeFamily.LCpu,
-    "qnu": SlmpDeviceRangeFamily.QnU,
-    "qnudv": SlmpDeviceRangeFamily.QnUDV,
-    "qnudvcpu": SlmpDeviceRangeFamily.QnUDV,
-}
+_CANONICAL_FAMILIES = {member.value: member for member in SlmpDeviceRangeFamily}
 
 
 def _fixed(value: int, source: str) -> _RangeValueSpec:
@@ -503,14 +487,15 @@ _PROFILES: dict[SlmpDeviceRangeFamily, _RangeProfile] = {
 
 
 def normalize_device_range_family(value: SlmpDeviceRangeFamily | str) -> SlmpDeviceRangeFamily:
-    """Normalize one family identifier or accepted alias."""
+    """Normalize one canonical family identifier."""
 
     if isinstance(value, SlmpDeviceRangeFamily):
         return value
     normalized = str(value).strip().lower()
-    if normalized in _FAMILY_ALIASES:
-        return _FAMILY_ALIASES[normalized]
-    raise ValueError(f"Unsupported PLC family: {value}")
+    if normalized in _CANONICAL_FAMILIES:
+        return _CANONICAL_FAMILIES[normalized]
+    supported = ", ".join(sorted(_CANONICAL_FAMILIES))
+    raise ValueError(f"Unsupported PLC family {value!r}. Supported families: {supported}")
 
 
 def family_label(family: SlmpDeviceRangeFamily | str) -> str:
@@ -574,7 +559,7 @@ def read_device_range_catalog_for_family_sync(
     client: Any,
     family: SlmpDeviceRangeFamily | str,
 ) -> SlmpDeviceRangeCatalog:
-    """Read one family SD window in a single request and build a catalog."""
+    """Read one canonical family SD window in a single request and build a catalog."""
 
     normalized_family = normalize_device_range_family(family)
     profile = _PROFILES[normalized_family]
@@ -590,7 +575,7 @@ async def read_device_range_catalog_for_family(
     client: Any,
     family: SlmpDeviceRangeFamily | str,
 ) -> SlmpDeviceRangeCatalog:
-    """Async variant of the explicit-family device-range catalog read."""
+    """Async variant of the canonical explicit-family device-range catalog read."""
 
     normalized_family = normalize_device_range_family(family)
     profile = _PROFILES[normalized_family]
@@ -654,4 +639,3 @@ def _format_address_range(
         return f"{device}{0:0{width}o}-{device}{upper_bound:0{width}o}"
     width = max(3, len(f"{upper_bound:X}"))
     return f"{device}{0:0{width}X}-{device}{upper_bound:0{width}X}"
-

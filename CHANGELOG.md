@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.8 - 2026-04-14
+
+### Added
+- Public device-range catalog helpers and regression coverage for device-range lookup and CPU operation-state decoding.
+
+### Changed
+- Expanded the package exports and README guidance for the new device-range helpers and cleaned up lint and typing issues in the new paths.
+
 ## 0.1.7 - 2026-04-13
 
 ### Added
@@ -154,5 +162,4 @@ Initial packaged release for the current repository scope.
 - ASCII protocol is not implemented
 - some paths remain target-specific and unresolved on the validated iQ-R target
 - current unresolved items are tracked in `internal_docsrc/open_items.md`
-
 
