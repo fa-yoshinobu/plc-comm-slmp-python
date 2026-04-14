@@ -6,11 +6,13 @@ import socket
 import struct
 import warnings
 from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, FrameType, PLCSeries
 from .core import (
     _MIXED_BLOCK_RETRY_END_CODES,
     BlockReadResult,
+    CpuOperationState,
     DeviceBlockResult,
     DeviceRef,
     ExtensionSpec,
@@ -48,6 +50,7 @@ from .core import (
     _warn_boundary_behavior,
     _warn_practical_device_path,
     build_device_modification_flags,
+    decode_cpu_operation_state,
     decode_device_dwords,
     decode_device_words,
     decode_response,
@@ -61,6 +64,9 @@ from .core import (
     unpack_bit_values,
 )
 from .errors import SlmpError, SlmpPracticalPathWarning
+
+if TYPE_CHECKING:
+    from .device_ranges import SlmpDeviceRangeCatalog, SlmpDeviceRangeFamily
 
 
 class SlmpClient:
@@ -1805,6 +1811,19 @@ class SlmpClient:
         if len(data) >= 18:
             model_code = int.from_bytes(data[16:18], "little")
         return TypeNameInfo(raw=data, model=model, model_code=model_code)
+
+    def read_device_range_catalog_for_family(
+        self,
+        family: SlmpDeviceRangeFamily | str,
+    ) -> SlmpDeviceRangeCatalog:
+        """Read the configured device-range catalog for one explicit PLC family."""
+        from .device_ranges import read_device_range_catalog_for_family_sync
+
+        return read_device_range_catalog_for_family_sync(self, family)
+
+    def read_cpu_operation_state(self) -> CpuOperationState:
+        """Read SD203 and decode the CPU operation state from the lower 4 bits."""
+        return decode_cpu_operation_state(self.read_devices("SD203", 1, bit_unit=False)[0])
 
     def remote_password_lock_raw(self, payload: bytes = b"") -> None:
         """Low-level wrapper for REMOTE_PASSWORD_LOCK command."""

@@ -116,6 +116,21 @@ await write_typed(client, "D100", "U", 1234)
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
 
+### Device Range Catalog
+
+Use an explicit PLC family and read the family SD block once.
+
+```python
+from slmp import SlmpClient, SlmpDeviceRangeFamily
+
+with SlmpClient("192.168.250.100", 1025, plc_series="ql", frame_type="3e") as client:
+    catalog = client.read_device_range_catalog_for_family(SlmpDeviceRangeFamily.QnU)
+    for entry in catalog.entries:
+        print(entry.device, entry.point_count, entry.address_range)
+```
+
+This path does not call `read_type_name()`. The caller chooses the family such as `IqF`, `QnU`, `QnUDV`, or `LCpu`.
+
 ## Development
 
 ```bash
