@@ -6,6 +6,7 @@ import re
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import Any
 
 from .constants import (
@@ -211,6 +212,39 @@ class TypeNameInfo:
     raw: bytes
     model: str
     model_code: int | None
+
+
+class CpuOperationStatus(str, Enum):
+    """Decoded CPU operation state from the lower 4 bits of SD203."""
+
+    Unknown = "Unknown"
+    Run = "Run"
+    Stop = "Stop"
+    Pause = "Pause"
+
+
+@dataclass(frozen=True)
+class CpuOperationState:
+    """Decoded CPU operation state read from SD203."""
+
+    status: CpuOperationStatus
+    raw_status_word: int
+    raw_code: int
+
+
+def decode_cpu_operation_state(status_word: int) -> CpuOperationState:
+    """Decode the CPU operation state from SD203 lower 4 bits."""
+    raw_status_word = int(status_word) & 0xFFFF
+    raw_code = raw_status_word & 0x000F
+    if raw_code == 0x00:
+        status = CpuOperationStatus.Run
+    elif raw_code == 0x02:
+        status = CpuOperationStatus.Stop
+    elif raw_code == 0x03:
+        status = CpuOperationStatus.Pause
+    else:
+        status = CpuOperationStatus.Unknown
+    return CpuOperationState(status=status, raw_status_word=raw_status_word, raw_code=raw_code)
 
 
 @dataclass(frozen=True)

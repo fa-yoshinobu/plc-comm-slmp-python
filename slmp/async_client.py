@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import struct
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .client import SlmpClient
 from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, FrameType, PLCSeries
 from .core import (
     _MIXED_BLOCK_RETRY_END_CODES,
     BlockReadResult,
+    CpuOperationState,
     DeviceBlockResult,
     DeviceRef,
     ExtensionSpec,
@@ -48,6 +49,7 @@ from .core import (
     _warn_boundary_behavior,
     _warn_practical_device_path,
     build_device_modification_flags,
+    decode_cpu_operation_state,
     decode_device_dwords,
     decode_device_words,
     decode_response,
@@ -61,6 +63,9 @@ from .core import (
     unpack_bit_values,
 )
 from .errors import SlmpError
+
+if TYPE_CHECKING:
+    from .device_ranges import SlmpDeviceRangeCatalog, SlmpDeviceRangeFamily
 
 
 class SLMPDatagramProtocol(asyncio.DatagramProtocol):
@@ -851,6 +856,19 @@ class AsyncSlmpClient:
             model = data[:16].split(b"\x00", 1)[0].decode("ascii", errors="ignore").strip()
         mcode = int.from_bytes(data[16:18], "little") if len(data) >= 18 else None
         return TypeNameInfo(raw=data, model=model, model_code=mcode)
+
+    async def read_device_range_catalog_for_family(
+        self,
+        family: SlmpDeviceRangeFamily | str,
+    ) -> SlmpDeviceRangeCatalog:
+        """Read the configured device-range catalog for one explicit PLC family."""
+        from .device_ranges import read_device_range_catalog_for_family
+
+        return await read_device_range_catalog_for_family(self, family)
+
+    async def read_cpu_operation_state(self) -> CpuOperationState:
+        """Read SD203 and decode the CPU operation state from the lower 4 bits."""
+        return decode_cpu_operation_state((await self.read_devices("SD203", 1, bit_unit=False))[0])
 
     async def remote_run(self, *, force: bool = False, clear_mode: int = 2) -> None:
         """Remote run the PLC."""
