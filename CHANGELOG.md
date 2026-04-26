@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.11 - 2026-04-27
+
+### Changed
+- Tightened long-device route guards so `LTN/LSTN/LCN/LZ` avoid unsupported direct/raw word and dword paths, while supported random/named dword paths remain available.
+- Aligned `LCS/LCC` write validation with the random/named bit route policy.
+
 ## 0.1.10 - 2026-04-14
 
 ### Changed

@@ -1080,34 +1080,109 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
             "Use read_ltc_states/read_lts_states/read_lstc_states/read_lsts_states "
             "or read_long_timer/read_long_retentive_timer."
         )
-    if not bit_unit and ref.code in _LT_LST_CURRENT_CODES and points % 4 != 0:
+    if not bit_unit and ref.code in _LT_LST_CURRENT_BLOCK_CODES and points % 4 != 0:
         raise ValueError(
             f"Direct read of {ref.code} requires 4-word blocks. "
             f"Requested points={points}; use a multiple of 4 or the long timer helpers."
         )
-
-
-def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Sequence[DeviceRef]) -> None:
-    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
+    if not bit_unit and ref.code in _RANDOM_DWORD_ONLY_DIRECT_CODES:
         raise ValueError(
-            "Read Random (0x0403) does not support LCS/LCC. "
-            "Use read_typed/read_named or read_devices('LCN..', 4, bit_unit=False)."
+            f"Direct word read is not supported for {ref.code}. "
+            "Use read_typed/read_named for 32-bit access."
         )
 
 
-def _validate_block_read_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
-    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *bit_refs)):
+def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool) -> None:
+    if bit_unit and ref.code in _LONG_FAMILY_STATE_WRITE_DIRECT_CODES:
+        raise ValueError(
+            f"Direct bit write is not supported for {ref.code}. "
+            "Use write_typed/write_named so random bit write (0x1402) is selected."
+        )
+    if not bit_unit and (ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES):
+        raise ValueError(
+            f"Direct word write is not supported for {ref.code}. "
+            "Use write_typed/write_named for 32-bit access."
+        )
+
+
+def _validate_direct_dword_read_device(ref: DeviceRef) -> None:
+    if ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES:
+        raise ValueError(
+            f"Direct dword read is not supported for {ref.code}. "
+            "Use read_typed/read_named so the supported 32-bit route is selected."
+        )
+
+
+def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LT_LST_DIRECT_CODES for ref in (*word_refs, *dword_refs)):
+        raise ValueError(
+            "Read Random (0x0403) does not support LTS/LTC/LSTS/LSTC. "
+            "Use read_typed/read_named or the long timer status helpers instead."
+        )
+    if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
+        raise ValueError(
+            "Read Random (0x0403) does not support LCS/LCC. "
+            "Use read_typed/read_named so direct bit read is selected."
+        )
+    if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
+        raise ValueError(
+            "Read Random (0x0403) does not support LTN/LSTN/LCN/LZ as word entries. "
+            "Use dword entries or read_typed/read_named with ':D' or ':L' instead."
+        )
+
+
+def _validate_random_write_word_devices(word_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
+        raise ValueError(
+            "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
+            "Use dword entries or write_typed/write_named with ':D' or ':L' instead."
+        )
+
+
+def _validate_block_read_devices(
+    word_blocks: Sequence[tuple[DeviceRef, int]],
+    bit_blocks: Sequence[tuple[DeviceRef, int]],
+) -> None:
+    all_refs = tuple(ref for ref, _ in (*word_blocks, *bit_blocks))
+    invalid_long_block = next(
+        (
+            (ref, points)
+            for ref, points in word_blocks
+            if ref.code in _LT_LST_CURRENT_BLOCK_CODES and points % 4 != 0
+        ),
+        None,
+    )
+    if invalid_long_block is not None:
+        ref, points = invalid_long_block
+        raise ValueError(
+            f"Read Block (0x0406) direct read of {ref.code} requires 4-word blocks. "
+            f"Requested points={points}; use read_typed/read_named for 32-bit current values."
+        )
+    if any(ref.code in _RANDOM_DWORD_ONLY_DIRECT_CODES for ref in all_refs):
+        raise ValueError(
+            "Read Block (0x0406) does not support LCN/LZ as word or bit blocks. "
+            "Use read_typed/read_named so random dword read is selected."
+        )
+    if any(ref.code in _LC_CONTACT_CODES for ref in all_refs):
         raise ValueError(
             "Read Block (0x0406) does not support LCS/LCC. "
-            "Use read_typed/read_named or read_devices('LCN..', 4, bit_unit=False)."
+            "Use read_typed/read_named so direct bit read is selected."
         )
 
 
 def _validate_block_write_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
+    if any(
+        ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES
+        for ref in (*word_refs, *bit_refs)
+    ):
+        raise ValueError(
+            "Write Block (0x1406) does not support LTN/LSTN/LCN/LZ as word or bit blocks. "
+            "Use write_typed/write_named with ':D' or ':L' instead."
+        )
     if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *bit_refs)):
         raise ValueError(
             "Write Block (0x1406) does not support LCS/LCC. "
-            "Use write_devices/write_random_bits or helper-backed writes instead."
+            "Use write_typed/write_named so random bit write (0x1402) is selected."
         )
 
 
@@ -1115,7 +1190,7 @@ def _validate_monitor_register_devices(word_refs: Sequence[DeviceRef], dword_ref
     if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
         raise ValueError(
             "Entry Monitor Device (0x0801) does not support LCS/LCC. "
-            "Use read_typed/read_named or monitor the LCN 4-word status block instead."
+            "Use read_typed/read_named so direct bit read is selected."
         )
 
 
@@ -1175,20 +1250,15 @@ def _warn_boundary_behavior(
             SlmpBoundaryBehaviorWarning,
             stacklevel=3,
         )
-    if write and ref.code == "LZ" and points % 2 != 0:
-        warnings.warn(
-            (
-                "direct LZ write with an odd word count may be rejected with 0xC051 on the validated iQ-R target; "
-                "two-word units were required in live verification."
-            ),
-            SlmpBoundaryBehaviorWarning,
-            stacklevel=3,
-        )
 
 
 _LT_LST_DIRECT_CODES = frozenset({"LTC", "LTS", "LSTC", "LSTS"})
-_LT_LST_CURRENT_CODES = frozenset({"LTN", "LSTN"})
+_LT_LST_CURRENT_BLOCK_CODES = frozenset({"LTN", "LSTN"})
+_LT_LST_CURRENT_CODES = frozenset({"LTN", "LSTN", "LCN"})
 _LC_CONTACT_CODES = frozenset({"LCS", "LCC"})
+_LONG_FAMILY_STATE_WRITE_DIRECT_CODES = _LT_LST_DIRECT_CODES | _LC_CONTACT_CODES
+_DWORD_ONLY_DIRECT_CODES = frozenset({"LZ"})
+_RANDOM_DWORD_ONLY_DIRECT_CODES = frozenset({"LCN", "LZ"})
 _G_HG_CODES = frozenset({"G", "HG"})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})

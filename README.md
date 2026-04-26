@@ -119,6 +119,16 @@ Start with these public high-level families first:
 - typed forms: `D200:F`, `D300:L`, `D100:S`
 - mixed snapshot forms: `D50.3`, `D100`, `D200:F`
 - current-value long families: `LTN`, `LSTN`, `LCN`
+- 32-bit index register: `LZ`
+
+Long-family route notes:
+
+- `LTN`, `LSTN`, `LCN`, and `LZ` default to 32-bit `:D` access in high-level helpers.
+- `LCN` current-value reads and writes use random dword access in the high-level helpers.
+- `LTS`, `LTC`, `LSTS`, and `LSTC` state reads use the long timer 4-word decode helpers.
+- `LCS` and `LCC` state reads use direct bit read.
+- High-level state writes for `LTS`/`LTC`/`LSTS`/`LSTC`/`LCS`/`LCC` use random bit write (`0x1402`).
+- Low-level direct bit writes and direct word writes to these long-family logical forms are guarded before transport.
 
 See the full public table in [Supported PLC Registers](docsrc/user/SUPPORTED_REGISTERS.md).
 

@@ -1808,6 +1808,13 @@ class TestDeviceApi(unittest.TestCase):
             client.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
+    def test_direct_bit_write_rejects_long_family_state_devices(self) -> None:
+        """Direct bit writes for long-family state devices must fail before transport."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct bit write is not supported for LCC"):
+            client.write_devices("LCC0", [True], bit_unit=True, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_direct_word_read_requires_four_word_long_timer_blocks(self) -> None:
         """LTN/LSTN direct reads must use 4-word units."""
         client = FakeClient()
@@ -1819,11 +1826,41 @@ class TestDeviceApi(unittest.TestCase):
         out = client.read_devices("LTN0", 4, bit_unit=False, series=PLCSeries.IQR)
         self.assertEqual(out, [1, 2, 3, 4])
 
+    def test_direct_word_read_rejects_lcn_and_lz_devices(self) -> None:
+        """LCN/LZ direct word reads must use helper-selected random dword routes."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LCN"):
+            client.read_devices("LCN0", 4, bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LZ"):
+            client.read_devices("LZ0", 2, bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_direct_word_write_rejects_long_current_and_lz_devices(self) -> None:
+        """LTN/LSTN/LCN/LZ direct word writes must use helper-selected 32-bit routes."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LCN"):
+            client.write_devices("LCN0", [1], bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
+            client.write_devices("LZ0", [1], bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_read_dwords_rejects_long_timer_direct_dword_path(self) -> None:
         """Helper dword reads must not use 2-word direct LT paths."""
         client = FakeClient()
-        with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
+        with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LTN"):
             client.read_dwords("LTN0", 1, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LCN"):
+            client.read_dwords("LCN0", 1, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LZ"):
+            client.read_dwords("LZ0", 1, series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
     def test_temporarily_unsupported_device_error_for_g_direct_only(self) -> None:
@@ -1924,6 +1961,45 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0082)
         self.assertEqual(payload, b"\x01\x00\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xfa")
 
+    def test_read_devices_ext_rejects_long_counter_current_before_transport(self) -> None:
+        """Extended direct word reads must use the same long-current guards as direct reads."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LCN"):
+            client.read_devices_ext(r"J1\LCN10", 4, extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_write_devices_ext_rejects_long_current_and_lz_before_transport(self) -> None:
+        """Extended direct word writes must reject 32-bit long-family devices before transport."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LTN"):
+            client.write_devices_ext(r"J1\LTN10", [1], extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
+            client.write_devices_ext(r"J1\LZ0", [1], extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_read_random_ext_rejects_long_current_word_entries_before_transport(self) -> None:
+        """Extended random word reads must reject long current values as word entries."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ as word entries"):
+            client.read_random_ext(word_devices=[(r"J1\LCN10", ExtensionSpec())], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_write_random_words_ext_rejects_long_current_word_entries_before_transport(self) -> None:
+        """Extended random word writes must reject long current values as word entries."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ as word entries"):
+            client.write_random_words_ext(word_values=[(r"J1\LZ0", 1, ExtensionSpec())], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_register_monitor_devices_ext_rejects_lcs_lcc_before_transport(self) -> None:
+        """Extended monitor registration must reject long counter state devices."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "Entry Monitor Device"):
+            client.register_monitor_devices_ext(word_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_boundary_warning_for_multi_point_r_family_access(self) -> None:
         """Test test_boundary_warning_for_multi_point_r_family_access."""
         client = FakeClient()
@@ -1933,13 +2009,12 @@ class TestDeviceApi(unittest.TestCase):
             client.read_devices("ZR163839", 2, bit_unit=False, series=PLCSeries.IQR)
         self.assertTrue(any(item.category is SlmpBoundaryBehaviorWarning for item in caught))
 
-    def test_boundary_warning_for_odd_lz_write(self) -> None:
-        """Test test_boundary_warning_for_odd_lz_write."""
+    def test_odd_lz_direct_word_write_is_rejected_before_transport(self) -> None:
+        """LZ is a double-word device and must not use the direct word write path."""
         client = FakeClient()
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
             client.write_devices("LZ1", [0], bit_unit=False, series=PLCSeries.IQR)
-        self.assertTrue(any(item.category is SlmpBoundaryBehaviorWarning for item in caught))
+        self.assertIsNone(client.last_request)
 
     def test_r_device_fixed_upper_limit(self) -> None:
         """Test test_r_device_fixed_upper_limit."""
@@ -2830,6 +2905,21 @@ class TestDeviceApi(unittest.TestCase):
             client.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
+    def test_read_block_rejects_lcn_lz_and_non_block_long_current_routes(self) -> None:
+        """Read Block must not use unsupported long-current word-block routes."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "does not support LCN/LZ"):
+            client.read_block(word_blocks=[("LCN10", 4)], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "does not support LCN/LZ"):
+            client.read_block(word_blocks=[("LZ0", 2)], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
+            client.read_block(word_blocks=[("LTN10", 2)], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
     def test_write_block_multi_point_bit_values_are_packed_words(self) -> None:
         """Test test_write_block_multi_point_bit_values_are_packed_words."""
         client = FakeClient()
@@ -2851,6 +2941,17 @@ class TestDeviceApi(unittest.TestCase):
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Write Block \\(0x1406\\) does not support LCS/LCC"):
             client.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+    def test_write_block_rejects_long_current_and_lz_routes(self) -> None:
+        """Write Block must not use unsupported long-current word-block routes."""
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ"):
+            client.write_block(word_blocks=[("LCN10", [1, 0])], series=PLCSeries.IQR)
+        self.assertIsNone(client.last_request)
+
+        with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ"):
+            client.write_block(word_blocks=[("LZ0", [1, 0])], series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
     def test_register_monitor_devices_rejects_lcs_lcc(self) -> None:

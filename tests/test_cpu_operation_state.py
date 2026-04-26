@@ -11,7 +11,7 @@ from slmp.core import CpuOperationStatus
 
 class _FakeSyncClient(SlmpClient):
     def __init__(self) -> None:
-        super().__init__("127.0.0.1")
+        super().__init__("127.0.0.1", plc_family="iq-r")
         self.calls: list[tuple[str, int, bool]] = []
         self.next_words: list[int] = [0]
 
@@ -23,7 +23,7 @@ class _FakeSyncClient(SlmpClient):
 
 class _FakeAsyncClient(AsyncSlmpClient):
     def __init__(self) -> None:
-        super().__init__("127.0.0.1")
+        super().__init__("127.0.0.1", plc_family="iq-r")
         self.calls: list[tuple[str, int, bool]] = []
         self.next_words: list[int] = [0]
 

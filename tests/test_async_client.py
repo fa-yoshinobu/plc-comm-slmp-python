@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.constants import Command, PLCSeries
-from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget, pack_bit_values
+from slmp.core import DeviceRef, ExtensionSpec, SlmpError, SlmpResponse, SlmpTarget, pack_bit_values
 
 # --- Mock SLMP Server for Testing ---
 
@@ -344,6 +344,30 @@ async def test_async_register_monitor_devices_rejects_lcs_lcc() -> None:
     with pytest.raises(ValueError, match="Entry Monitor Device \\(0x0801\\) does not support LCS/LCC"):
         await cli.register_monitor_devices(word_devices=["LCS10"], series=PLCSeries.IQR)
 
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_devices_ext_rejects_long_counter_current_before_transport() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match="Direct word read is not supported for LCN"):
+        await cli.read_devices_ext(r"J1\LCN10", 4, extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_random_ext_rejects_lcs_lcc_before_transport() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match=r"Read Random \(0x0403\) does not support LCS/LCC"):
+        await cli.read_random_ext(dword_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_register_monitor_devices_ext_rejects_lcs_lcc_before_transport() -> None:
+    cli = FakeAsyncClient()
+    with pytest.raises(ValueError, match=r"Entry Monitor Device \(0x0801\) does not support LCS/LCC"):
+        await cli.register_monitor_devices_ext(word_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
     assert cli.last_request is None
 
 

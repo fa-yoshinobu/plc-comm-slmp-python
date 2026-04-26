@@ -154,7 +154,11 @@ class TestReadTypedSync(unittest.TestCase):
         client.read_long_retentive_timer.return_value = [
             LongTimerResult(20, "LSTN20", 7, False, True, 0x0001, [7, 0, 1, 0])
         ]
-        client.read_devices.return_value = [0x0008, 0x0000, 0x0003, 0x0000]
+        client.read_random.return_value = RandomReadResult(word={}, dword={"LCN30": 8})
+        client.read_devices.side_effect = [
+            [True],
+            [True],
+        ]
 
         self.assertEqual(read_typed_sync(client, "LTN10", "D"), 0x00010002)
         self.assertTrue(read_typed_sync(client, "LTS10", "BIT"))
@@ -167,7 +171,14 @@ class TestReadTypedSync(unittest.TestCase):
 
         client.read_long_timer.assert_called()
         client.read_long_retentive_timer.assert_called()
-        client.read_devices.assert_called_with(DeviceRef("LCN", 30), 4, bit_unit=False)
+        client.read_random.assert_called_once_with(dword_devices=[DeviceRef("LCN", 30)])
+        self.assertEqual(
+            client.read_devices.call_args_list,
+            [
+                unittest.mock.call(DeviceRef("LCS", 30), 1, bit_unit=True),
+                unittest.mock.call(DeviceRef("LCC", 30), 1, bit_unit=True),
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -273,8 +284,10 @@ class TestReadNamedSync(unittest.TestCase):
         client.read_long_retentive_timer.side_effect = [
             [LongTimerResult(20, "LSTN20", 7, False, True, 0x0001, [7, 0, 1, 0])],
         ]
+        client.read_random.return_value = RandomReadResult(word={}, dword={"LCN30": 8})
         client.read_devices.side_effect = [
-            [0x0008, 0x0000, 0x0003, 0x0000],
+            [True],
+            [True],
         ]
 
         result = read_named_sync(
@@ -291,10 +304,16 @@ class TestReadNamedSync(unittest.TestCase):
         self.assertEqual(result["LCN30"], 8)
         self.assertTrue(result["LCS30"])
         self.assertTrue(result["LCC30"])
-        client.read_random.assert_not_called()
+        client.read_random.assert_called_once_with(word_devices=[], dword_devices=[DeviceRef("LCN", 30)])
         client.read_long_timer.assert_called_once_with(head_no=10, points=1)
         client.read_long_retentive_timer.assert_called_once_with(head_no=20, points=1)
-        client.read_devices.assert_called_once_with(DeviceRef("LCN", 30), 4, bit_unit=False)
+        self.assertEqual(
+            client.read_devices.call_args_list,
+            [
+                unittest.mock.call(DeviceRef("LCS", 30), 1, bit_unit=True),
+                unittest.mock.call(DeviceRef("LCC", 30), 1, bit_unit=True),
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -365,9 +384,10 @@ class TestWriteNamedSync(unittest.TestCase):
                 unittest.mock.call({DeviceRef("LSTC", 20): True}, series=client.plc_series),
                 unittest.mock.call({DeviceRef("LSTS", 20): False}, series=client.plc_series),
                 unittest.mock.call({DeviceRef("LCC", 30): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LCS", 30): False}, series=client.plc_series),
             ],
         )
-        client.write_devices.assert_called_once_with(DeviceRef("LCS", 30), [0], bit_unit=False)
+        client.write_devices.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -510,7 +530,7 @@ class TestReadPlan(unittest.TestCase):
         plan = _compile_read_plan(["LTN10", "LTS10", "LTC10", "LSTN20", "LCN30", "LCS30", "LCC30"])
 
         self.assertEqual(plan.word_devices, ())
-        self.assertEqual(plan.dword_devices, ())
+        self.assertEqual(plan.dword_devices, (DeviceRef("LCN", 30),))
         self.assertEqual(
             [(entry.address, entry.dtype, entry.batch_kind) for entry in plan.entries],
             [
@@ -518,7 +538,7 @@ class TestReadPlan(unittest.TestCase):
                 ("LTS10", "BIT", "LONG_TIMER"),
                 ("LTC10", "BIT", "LONG_TIMER"),
                 ("LSTN20", "D", "LONG_TIMER"),
-                ("LCN30", "D", "LONG_TIMER"),
+                ("LCN30", "D", "DWORD"),
                 ("LCS30", "BIT", "LONG_TIMER"),
                 ("LCC30", "BIT", "LONG_TIMER"),
             ],
@@ -615,9 +635,10 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
                 unittest.mock.call({DeviceRef("LSTC", 20): True}, series=client.plc_series),
                 unittest.mock.call({DeviceRef("LSTS", 20): False}, series=client.plc_series),
                 unittest.mock.call({DeviceRef("LCC", 30): True}, series=client.plc_series),
+                unittest.mock.call({DeviceRef("LCS", 30): False}, series=client.plc_series),
             ],
         )
-        client.write_devices.assert_called_once_with(DeviceRef("LCS", 30), [0], bit_unit=False)
+        client.write_devices.assert_not_called()
 
 
 if __name__ == "__main__":

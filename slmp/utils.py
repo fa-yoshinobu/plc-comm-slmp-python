@@ -17,6 +17,7 @@ from .core import (
     _require_explicit_device_family_for_xy,
     _resolve_connection_profile,
     _resolve_plc_family_defaults,
+    _validate_direct_dword_read_device,
     parse_device,
 )
 
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
 _WORD_DTYPES = frozenset({"U", "S"})
 _DWORD_DTYPES = frozenset({"D", "L", "F"})
 _UNBATCHED_DEVICE_CODES = frozenset({"G", "HG"})
-_DEFAULT_DWORD_DEVICE_CODES = frozenset({"LTN", "LSTN", "LCN"})
+_DEFAULT_DWORD_DEVICE_CODES = frozenset({"LTN", "LSTN", "LCN", "LZ"})
+_RANDOM_DWORD_SCALAR_DEVICE_CODES = frozenset({"LCN", "LZ"})
+_LONG_COUNTER_STATE_DEVICE_CODES = frozenset({"LCS", "LCC"})
 _LONG_TIMER_READ_FAMILIES: dict[str, tuple[str, str]] = {
     "LTN": ("LTN", "current"),
     "LTS": ("LTN", "contact"),
@@ -146,6 +149,12 @@ def _parse_device_for_client(
     return _parse_device_for_family(device, _client_device_family(client))
 
 
+def _validate_dword_read_target(client: object, device: str | DeviceRef) -> DeviceRef:
+    ref = _parse_device_for_client(client, device)
+    _validate_direct_dword_read_device(ref)
+    return ref
+
+
 # ---------------------------------------------------------------------------
 # Typed single-device read / write  (async)
 # ---------------------------------------------------------------------------
@@ -172,11 +181,18 @@ async def read_typed(
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
+        _validate_long_timer_entry(str(ref), ref, key)
+        if ref.code == "LCN" and long_read[1] == "current":
+            value = (await client.read_random(dword_devices=[ref])).dword[str(ref)]
+            return _decode_dword_value(value, key)
         return await _read_long_family_value(client, ref, key, long_read)
     if key == "BIT":
         values = await client.read_devices(ref, 1, bit_unit=True)
         return bool(values[0])
     if key in ("D", "L", "F"):
+        if ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+            value = (await client.read_random(dword_devices=[ref])).dword[str(ref)]
+            return _decode_dword_value(value, key)
         words = await client.read_devices(ref, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
         if key == "F":
@@ -210,10 +226,17 @@ async def write_typed(
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
+        _validate_long_timer_entry(str(ref), ref, key)
         await _write_long_family_value(client, ref, key, value, long_read)
         return
     if key == "BIT":
         await client.write_devices(device, [bool(value)], bit_unit=True)
+        return
+    if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+        await client.write_random_words(
+            dword_values={ref: int(value) & 0xFFFFFFFF},
+            series=client.plc_series,
+        )
         return
     if key == "F":
         raw = struct.pack("<f", float(value))
@@ -243,11 +266,18 @@ def read_typed_sync(
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
+        _validate_long_timer_entry(str(ref), ref, key)
+        if ref.code == "LCN" and long_read[1] == "current":
+            value = client.read_random(dword_devices=[ref]).dword[str(ref)]
+            return _decode_dword_value(value, key)
         return _read_long_family_value_sync(client, ref, key, long_read)
     if key == "BIT":
         values = client.read_devices(ref, 1, bit_unit=True)
         return bool(values[0])
     if key in ("D", "L", "F"):
+        if ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+            value = client.read_random(dword_devices=[ref]).dword[str(ref)]
+            return _decode_dword_value(value, key)
         words = client.read_devices(ref, 2, bit_unit=False)
         raw = struct.pack("<HH", words[0], words[1])
         if key == "F":
@@ -274,10 +304,17 @@ def write_typed_sync(
     key = dtype.upper()
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
+        _validate_long_timer_entry(str(ref), ref, key)
         _write_long_family_value_sync(client, ref, key, value, long_read)
         return
     if key == "BIT":
         client.write_devices(device, [bool(value)], bit_unit=True)
+        return
+    if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+        client.write_random_words(
+            dword_values={ref: int(value) & 0xFFFFFFFF},
+            series=client.plc_series,
+        )
         return
     if key == "F":
         raw = struct.pack("<f", float(value))
@@ -574,9 +611,6 @@ async def _write_long_family_value(
             series=client.plc_series,
         )
         return
-    if device.code == "LCS":
-        await client.write_devices(device, [1 if bool(value) else 0], bit_unit=False)
-        return
     await client.write_random_bits({device: bool(value)}, series=client.plc_series)
 
 
@@ -593,9 +627,6 @@ def _write_long_family_value_sync(
             dword_values={device: int(value) & 0xFFFFFFFF},
             series=client.plc_series,
         )
-        return
-    if device.code == "LCS":
-        client.write_devices(device, [1 if bool(value) else 0], bit_unit=False)
         return
     client.write_random_bits({device: bool(value)}, series=client.plc_series)
 
@@ -632,8 +663,7 @@ async def _read_long_family_point(
     if prefix == "LSTN":
         timer = (await client.read_long_retentive_timer(head_no=head_no, points=1))[0]
         return int(timer.current_value), bool(timer.contact), bool(timer.coil)
-    words = await client.read_devices(DeviceRef("LCN", head_no), 4, bit_unit=False)
-    return _decode_long_family_words(list(words))
+    raise ValueError("LCN current values use random dword read; LCS/LCC state reads use direct bit read.")
 
 
 def _read_long_family_point_sync(
@@ -647,8 +677,7 @@ def _read_long_family_point_sync(
     if prefix == "LSTN":
         timer = client.read_long_retentive_timer(head_no=head_no, points=1)[0]
         return int(timer.current_value), bool(timer.contact), bool(timer.coil)
-    words = client.read_devices(DeviceRef("LCN", head_no), 4, bit_unit=False)
-    return _decode_long_family_words(list(words))
+    raise ValueError("LCN current values use random dword read; LCS/LCC state reads use direct bit read.")
 
 
 async def _read_long_family_value(
@@ -658,6 +687,9 @@ async def _read_long_family_value(
     long_read: tuple[str, str],
 ) -> int | bool:
     prefix, role = long_read
+    if device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
+        values = await client.read_devices(device, 1, bit_unit=True)
+        return bool(values[0])
     current_value, contact, coil = await _read_long_family_point(client, prefix, device.number)
     if role == "current":
         return _coerce_long_current_value(current_value, dtype)
@@ -673,6 +705,9 @@ def _read_long_family_value_sync(
     long_read: tuple[str, str],
 ) -> int | bool:
     prefix, role = long_read
+    if device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
+        values = client.read_devices(device, 1, bit_unit=True)
+        return bool(values[0])
     current_value, contact, coil = _read_long_family_point_sync(client, prefix, device.number)
     if role == "current":
         return _coerce_long_current_value(current_value, dtype)
@@ -700,8 +735,13 @@ def _compile_read_plan(
         batch_kind: str | None = None
         long_timer_read = _get_long_timer_read(device)
 
-        if long_timer_read is not None:
+        if long_timer_read is not None and not (device.code == "LCN" and long_timer_read[1] == "current"):
             batch_kind = "LONG_TIMER"
+        elif long_timer_read is not None:
+            batch_kind = "DWORD"
+            if device not in seen_dwords:
+                dword_devices.append(device)
+                seen_dwords.add(device)
         elif dtype == "BIT_IN_WORD":
             _validate_bit_in_word_target(address, device)
             if _is_batchable_word_device(device):
@@ -803,6 +843,10 @@ async def _read_named_with_plan(
     for entry in plan.entries:
         if entry.batch_kind == "LONG_TIMER":
             assert entry.long_timer_read is not None
+            if entry.device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
+                values = await client.read_devices(entry.device, 1, bit_unit=True)
+                result[entry.address] = bool(values[0])
+                continue
             prefix, role = entry.long_timer_read
             cache_key = (prefix, entry.device.number)
             if cache_key not in long_timer_cache:
@@ -845,6 +889,10 @@ def _read_named_with_plan_sync(
     for entry in plan.entries:
         if entry.batch_kind == "LONG_TIMER":
             assert entry.long_timer_read is not None
+            if entry.device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
+                values = client.read_devices(entry.device, 1, bit_unit=True)
+                result[entry.address] = bool(values[0])
+                continue
             prefix, role = entry.long_timer_read
             cache_key = (prefix, entry.device.number)
             if cache_key not in long_timer_cache:
@@ -939,7 +987,8 @@ async def read_dwords_single_request(
     across requests by this helper.
     """
 
-    words = await read_words_single_request(client, device, count * 2)
+    ref = _validate_dword_read_target(client, device)
+    words = await read_words_single_request(client, ref, count * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
 
 
@@ -1016,7 +1065,8 @@ async def read_dwords_chunked(
     is never torn across requests.
     """
 
-    words = await read_words_chunked(client, device, count * 2, max_per_request=max_dwords_per_request * 2)
+    ref = _validate_dword_read_target(client, device)
+    words = await read_words_chunked(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
 
 
@@ -1144,7 +1194,8 @@ def read_dwords_single_request_sync(
 ) -> list[int]:
     """Synchronously read contiguous unsigned 32-bit values using one protocol request."""
 
-    words = read_words_single_request_sync(client, device, count * 2)
+    ref = _validate_dword_read_target(client, device)
+    words = read_words_single_request_sync(client, ref, count * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
 
 
@@ -1206,7 +1257,8 @@ def read_dwords_chunked_sync(
 ) -> list[int]:
     """Synchronously read contiguous unsigned 32-bit values across multiple aligned requests."""
 
-    words = read_words_chunked_sync(client, device, count * 2, max_per_request=max_dwords_per_request * 2)
+    ref = _validate_dword_read_target(client, device)
+    words = read_words_chunked_sync(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
 
 

@@ -210,8 +210,10 @@ Use manual octal text such as `X100` / `Y100` for `iQ-F` / FX5, and hexadecimal 
 
 Long-device notes for the high-level helper layer:
 
-- `LTN`, `LSTN`, and `LCN` default to 32-bit current-value access
+- `LTN`, `LSTN`, `LCN`, and `LZ` default to 32-bit current-value access
+- `LCN` current-value reads and writes use random dword access in the high-level helpers
 - `LTS`, `LTC`, `LSTS`, and `LSTC` are resolved through the corresponding `LTN` / `LSTN` helper-backed 4-word decode instead of direct state reads
+- `LCS` and `LCC` use direct bit read, and high-level state writes use random bit write (`0x1402`)
 
 This is the most useful helper for dashboards, logging, and application polling.
 
@@ -233,7 +235,7 @@ await write_named(
 )
 ```
 
-Plain `LTN`, `LSTN`, and `LCN` addresses are treated as 32-bit current values in the high-level write helper too.
+Plain `LTN`, `LSTN`, `LCN`, and `LZ` addresses are treated as 32-bit values in the high-level write helper too.
 
 ### `read_words_single_request` / `read_words_single_request_sync`
 
