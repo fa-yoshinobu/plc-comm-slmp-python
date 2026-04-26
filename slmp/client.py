@@ -132,12 +132,8 @@ class SlmpClient:
                     "plc_family is required for the standard SlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if plc_family is not None and any(
-                value is not None for value in (plc_series, frame_type, device_family)
-            ):
-                raise ValueError(
-                    "plc_family is the only supported PLC selector for the standard SlmpClient route."
-                )
+            if plc_family is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
+                raise ValueError("plc_family is the only supported PLC selector for the standard SlmpClient route.")
         (
             self.plc_family,
             self.plc_series,

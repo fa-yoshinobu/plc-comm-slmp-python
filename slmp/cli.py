@@ -50,10 +50,40 @@ from .core import (
 from .errors import SlmpPracticalPathWarning
 
 
-def SlmpClient(*args: object, **kwargs: object) -> _StandardSlmpClient:
-    """Internal low-level constructor for CLI probe commands."""
-    kwargs["_allow_manual_profile"] = True
-    return _StandardSlmpClient(*args, **kwargs)
+class SlmpClient(_StandardSlmpClient):
+    """Internal low-level client for CLI probe commands."""
+
+    def __init__(
+        self,
+        host: str,
+        port: int = 5000,
+        *,
+        transport: str = "tcp",
+        timeout: float = 3.0,
+        plc_family: object | None = None,
+        plc_series: PLCSeries | str | None = None,
+        frame_type: FrameType | str | None = None,
+        default_target: SlmpTarget | None = None,
+        monitoring_timer: int = 0x0010,
+        raise_on_error: bool = True,
+        trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
+        device_family: object | None = None,
+    ) -> None:
+        super().__init__(
+            host,
+            port,
+            transport=transport,
+            timeout=timeout,
+            plc_family=plc_family,
+            plc_series=plc_series,
+            frame_type=frame_type,
+            default_target=default_target,
+            monitoring_timer=monitoring_timer,
+            raise_on_error=raise_on_error,
+            trace_hook=trace_hook,
+            device_family=device_family,
+            _allow_manual_profile=True,
+        )
 
 
 def _int_auto(text: str) -> int:
@@ -1698,7 +1728,7 @@ def _resolve_report_output(
 
 
 def _probe_device_read_with_series(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     device: str,
     points: int,
@@ -1796,7 +1826,7 @@ def _compatibility_subprobe(
 
 
 def _compatibility_request_subprobe(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     name: str,
     command: int | Command,
@@ -1812,7 +1842,7 @@ def _compatibility_request_subprobe(
 
 
 def _compatibility_probe_direct_word_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     device: str,
     preferred_write_value: int,
@@ -1831,7 +1861,7 @@ def _compatibility_probe_direct_word_write_restore(
 
 
 def _compatibility_probe_direct_bit_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     device: str,
     series: PLCSeries,
@@ -1846,7 +1876,7 @@ def _compatibility_probe_direct_bit_write_restore(
 
 
 def _compatibility_probe_random_word_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     devices: Sequence[str],
     preferred_write_value: int,
@@ -1868,7 +1898,7 @@ def _compatibility_probe_random_word_write_restore(
 
 
 def _compatibility_probe_random_bit_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     devices: Sequence[str],
     series: PLCSeries,
@@ -1890,7 +1920,7 @@ def _compatibility_probe_random_bit_write_restore(
 
 
 def _compatibility_probe_block_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     word_device: str | None,
     bit_device: str | None,
@@ -1943,7 +1973,7 @@ def _compatibility_probe_block_write_restore(
 
 
 def _compatibility_probe_memory_write_restore(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     head_address: int,
     preferred_write_value: int,
@@ -1962,7 +1992,7 @@ def _compatibility_probe_memory_write_restore(
 
 def _compatibility_run_command(
     spec: CompatibilityCommandSpec,
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     series: PLCSeries,
     args: argparse.Namespace,
@@ -2246,7 +2276,7 @@ def _compatibility_run_command(
     raise ValueError(f"unsupported compatibility command code: {spec.code}")
 
 
-def _probe_sm400_series(client: SlmpClient) -> tuple[PLCSeries, list[bool]]:
+def _probe_sm400_series(client: _StandardSlmpClient) -> tuple[PLCSeries, list[bool]]:
     series, values = _probe_device_read_with_series(
         client,
         device="SM400",
@@ -2435,7 +2465,7 @@ def _format_manual_value(kind: str, value: int | bool) -> str:
     return f"0x{int(value):04X} ({int(value)})"
 
 
-def _read_manual_row_value(client: SlmpClient, row: DeviceMatrixRow, *, series: str) -> int | bool:
+def _read_manual_row_value(client: _StandardSlmpClient, row: DeviceMatrixRow, *, series: str) -> int | bool:
     code = row.device_code.upper()
     number = parse_device(row.device).number
     if code == "LTC":
@@ -2458,7 +2488,7 @@ def _read_manual_row_value(client: SlmpClient, row: DeviceMatrixRow, *, series: 
 
 
 def _write_manual_row_value(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     row: DeviceMatrixRow,
     value: int | bool,
     *,
@@ -2826,7 +2856,7 @@ def _make_frame_dump_trace_hook(
 
 
 def _run_extended_device_word_probe(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     item_name: str,
     device: str,
@@ -2872,7 +2902,7 @@ def _run_extended_device_word_probe(
 
 
 def _run_extended_device_word_span_probe(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     item_name: str,
     device: str,
@@ -2983,7 +3013,7 @@ def _format_counter(counter: dict[str, int] | Sequence[tuple[str, int]]) -> str:
 
 
 def _raw_device_read(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     device: str,
     points: int,
@@ -3002,7 +3032,7 @@ def _raw_device_read(
 
 
 def _raw_device_write(
-    client: SlmpClient,
+    client: _StandardSlmpClient,
     *,
     device: str,
     values: Sequence[int | bool],

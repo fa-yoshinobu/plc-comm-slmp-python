@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager
 try:
     import pytest
 except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import this module without pytest
+
     class _RaisesContext(AbstractContextManager):
         def __init__(self, expected_exception: type[BaseException], match: str | None = None) -> None:
             self._expected_exception = expected_exception

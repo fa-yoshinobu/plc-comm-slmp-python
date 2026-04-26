@@ -11,9 +11,7 @@ from slmp.client import SlmpClient
 from slmp.constants import PLCSeries
 from slmp.utils import _parse_address, normalize_address
 
-_SHARED_SPEC_DIR = (
-    Path(__file__).resolve().parents[2] / "plc-comm-slmp-cross-verify" / "specs" / "shared"
-)
+_SHARED_SPEC_DIR = Path(__file__).resolve().parents[2] / "plc-comm-slmp-cross-verify" / "specs" / "shared"
 
 
 def _load_json(name: str) -> dict[str, Any]:
@@ -23,7 +21,7 @@ def _load_json(name: str) -> dict[str, Any]:
 def _build_4e_response(request: bytes, response_data: bytes, end_code: int = 0) -> bytes:
     payload = end_code.to_bytes(2, "little") + response_data
     header = bytearray()
-    header += b"\xD4\x00"
+    header += b"\xd4\x00"
     header += request[2:4]
     header += b"\x00\x00"
     header += request[6:11]

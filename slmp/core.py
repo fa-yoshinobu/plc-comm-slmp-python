@@ -1087,8 +1087,7 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
         )
     if not bit_unit and ref.code in _RANDOM_DWORD_ONLY_DIRECT_CODES:
         raise ValueError(
-            f"Direct word read is not supported for {ref.code}. "
-            "Use read_typed/read_named for 32-bit access."
+            f"Direct word read is not supported for {ref.code}. Use read_typed/read_named for 32-bit access."
         )
 
 
@@ -1100,8 +1099,7 @@ def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool) -> None:
         )
     if not bit_unit and (ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES):
         raise ValueError(
-            f"Direct word write is not supported for {ref.code}. "
-            "Use write_typed/write_named for 32-bit access."
+            f"Direct word write is not supported for {ref.code}. Use write_typed/write_named for 32-bit access."
         )
 
 
@@ -1121,8 +1119,7 @@ def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Se
         )
     if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
         raise ValueError(
-            "Read Random (0x0403) does not support LCS/LCC. "
-            "Use read_typed/read_named so direct bit read is selected."
+            "Read Random (0x0403) does not support LCS/LCC. Use read_typed/read_named so direct bit read is selected."
         )
     if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
         raise ValueError(
@@ -1145,11 +1142,7 @@ def _validate_block_read_devices(
 ) -> None:
     all_refs = tuple(ref for ref, _ in (*word_blocks, *bit_blocks))
     invalid_long_block = next(
-        (
-            (ref, points)
-            for ref, points in word_blocks
-            if ref.code in _LT_LST_CURRENT_BLOCK_CODES and points % 4 != 0
-        ),
+        ((ref, points) for ref, points in word_blocks if ref.code in _LT_LST_CURRENT_BLOCK_CODES and points % 4 != 0),
         None,
     )
     if invalid_long_block is not None:
@@ -1165,15 +1158,13 @@ def _validate_block_read_devices(
         )
     if any(ref.code in _LC_CONTACT_CODES for ref in all_refs):
         raise ValueError(
-            "Read Block (0x0406) does not support LCS/LCC. "
-            "Use read_typed/read_named so direct bit read is selected."
+            "Read Block (0x0406) does not support LCS/LCC. Use read_typed/read_named so direct bit read is selected."
         )
 
 
 def _validate_block_write_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
     if any(
-        ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES
-        for ref in (*word_refs, *bit_refs)
+        ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in (*word_refs, *bit_refs)
     ):
         raise ValueError(
             "Write Block (0x1406) does not support LTN/LSTN/LCN/LZ as word or bit blocks. "

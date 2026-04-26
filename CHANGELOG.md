@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.12 - 2026-04-27
+
+### Changed
+- Bumped the library revision for the cross-library SLMP parity release. The Python route guards from `0.1.11` are unchanged and remain aligned with the updated shared verification suite.
+- Kept the CLI's internal manual-profile client type-checkable under the repository mypy settings.
+
 ## 0.1.11 - 2026-04-27
 
 ### Changed

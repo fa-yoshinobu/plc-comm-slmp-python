@@ -1034,7 +1034,6 @@ async def read_words_chunked(
     semantics are acceptable to the caller.
     """
 
-
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
@@ -1082,7 +1081,6 @@ async def write_words_chunked(
     caller.
     """
 
-
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
@@ -1107,7 +1105,6 @@ async def write_dwords_chunked(
     Each chunk boundary is aligned to full dwords so one logical value remains
     intact inside one request.
     """
-
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
@@ -1230,7 +1227,6 @@ def read_words_chunked_sync(
 ) -> list[int]:
     """Synchronously read contiguous 16-bit values across multiple aligned requests."""
 
-
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
@@ -1270,7 +1266,6 @@ def write_words_chunked_sync(
 ) -> None:
     """Synchronously write contiguous 16-bit values across multiple aligned requests."""
 
-
     effective_max = (max_per_request // 2) * 2
     if effective_max <= 0:
         raise ValueError("max_per_request must be at least 2")
@@ -1291,7 +1286,6 @@ def write_dwords_chunked_sync(
     max_dwords_per_request: int = 480,
 ) -> None:
     """Synchronously write contiguous unsigned 32-bit values across multiple aligned requests."""
-
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
