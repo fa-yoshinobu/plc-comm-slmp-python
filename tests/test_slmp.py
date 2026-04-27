@@ -261,6 +261,8 @@ class TestCodec(unittest.TestCase):
         """Test test_device_and_bit_helpers."""
         self.assertEqual(str(parse_device("D100")), "D100")
         self.assertEqual(str(parse_device("X20")), "X20")
+        self.assertEqual(str(parse_device("XFF")), "XFF")
+        self.assertEqual(str(parse_device("SWFF")), "SWFF")
         self.assertEqual(str(parse_device("Y220", family="iq-f")), "Y220")
         self.assertEqual(parse_device("Y220", family="iq-f").number - parse_device("Y217", family="iq-f").number, 1)
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
@@ -272,6 +274,8 @@ class TestCodec(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
             parse_device("Y220", family="iqf")
+        with self.assertRaisesRegex(ValueError, "device code 'D'"):
+            parse_device("DFFFF")
         with self.assertRaises(ValueError):
             encode_device_spec("R32768", series=PLCSeries.QL)
         with self.assertRaises(ValueError):

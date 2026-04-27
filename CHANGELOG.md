@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.13 - 2026-04-27
+
+### Fixed
+- Tightened SLMP device-name parsing to split by known device code instead of a greedy letter regex, so hexadecimal addresses such as `XFF` and `SWFF` parse correctly.
+- Matched-device invalid numbers now fail as that device code instead of being treated as another unknown code shape.
+
 ## 0.1.12 - 2026-04-27
 
 ### Changed

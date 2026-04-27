@@ -96,6 +96,7 @@ class DeviceRef:
 
 
 _IQF_OCTAL_DEVICE_CODES = frozenset({"X", "Y"})
+_DEVICE_CODE_CANDIDATES = tuple(sorted(DEVICE_CODES.keys(), key=lambda code: (-len(code), code)))
 _DEVICE_FAMILIES = frozenset(
     {
         "iq-r",
@@ -244,6 +245,24 @@ def _require_explicit_device_family_for_xy(
         "Use plc_family='iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F family, "
         "or pass a numeric DeviceRef."
     )
+
+
+def _split_device_text(value: str, text: str) -> tuple[str, str]:
+    valid_codes = ", ".join(sorted(DEVICE_CODES.keys()))
+    if not re.fullmatch(r"[A-Z]+[0-9A-F]+", text):
+        raise ValueError(
+            f"Invalid SLMP device string {value!r}. "
+            f"Expected format: <DeviceCode><Number> (e.g. 'D100', 'X1F'). "
+            f"Valid device codes: {valid_codes}"
+        )
+
+    for code in _DEVICE_CODE_CANDIDATES:
+        if text.startswith(code):
+            return code, text[len(code) :]
+
+    match = re.fullmatch(r"([A-Z]+)([0-9A-F]+)", text)
+    unknown_code = match.group(1) if match else text
+    raise ValueError(f"Unknown SLMP device code '{unknown_code}' in {value!r}. Valid codes: {valid_codes}")
 
 
 @dataclass(frozen=True)
@@ -459,22 +478,15 @@ def parse_device(
         return _apply_device_family_hint(value, family)
 
     text = value.strip().upper()
-    match = re.fullmatch(r"([A-Z]+)([0-9A-F]+)", text)
-    if not match:
-        valid_codes = ", ".join(sorted(DEVICE_CODES.keys()))
-        raise ValueError(
-            f"Invalid SLMP device string {value!r}. "
-            f"Expected format: <DeviceCode><Number> (e.g. 'D100', 'X1F'). "
-            f"Valid device codes: {valid_codes}"
-        )
-
-    code, num_txt = match.groups()
-    if code not in DEVICE_CODES:
-        valid_codes = ", ".join(sorted(DEVICE_CODES.keys()))
-        raise ValueError(f"Unknown SLMP device code '{code}' in {value!r}. Valid codes: {valid_codes}")
+    code, num_txt = _split_device_text(value, text)
 
     base = _resolve_device_radix(code, family)
-    number = int(num_txt, base)
+    try:
+        number = int(num_txt, base)
+    except ValueError:
+        raise ValueError(
+            f"Invalid SLMP device number {num_txt!r} for device code '{code}' in {value!r}."
+        ) from None
     return _apply_device_family_hint(DeviceRef(code=code, number=number), family)
 
 
