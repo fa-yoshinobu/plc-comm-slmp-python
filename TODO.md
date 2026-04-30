@@ -4,18 +4,18 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 ## 1. Protocol Implementation Gaps
 
-- **`G/HG` Extended Specification live coverage expansion**
+- **Extended Specification live coverage expansion**
   The capture-aligned implementation is working on validated paths, but broader
-  address-range, transport, and PLC-family coverage is still open.
+  address-range, transport, and PLC-family coverage is still open. QnUDV has no
+  `HG`; `U0\G10` read-only on the current QnUDV target returned `0xC070` with
+  command `0x0401` subcommand `0x0080`.
 
 - **Mixed block write root cause**
   The practical fallback is implemented, but the reason some validated PLC
   paths reject the first one-request mixed `1406` write with `0xC05B` is still
-  not fully explained.
-
-- **`1617` Clear Error operator-visible effect**
-  Transport-level acceptance is confirmed, but the operator-visible behavior on
-  real hardware still needs better evidence.
+  not fully explained. On the current QnUDV target, word-only, bit-only, and
+  mixed `1406` block writes returned `0xC059`, so this appears to be block-write
+  command support rather than a mixed-only rejection on that target.
 
 ## 2. Testing & Validation
 
