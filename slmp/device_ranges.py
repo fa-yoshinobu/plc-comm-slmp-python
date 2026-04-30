@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, cast
 
@@ -132,6 +132,14 @@ _ORDERED_ITEMS = (
     "SM",
     "SD",
 )
+
+_MAX_RUNTIME_RANGE_PROBE_COUNT = 1_048_576
+_ZR_RUNTIME_FAMILIES = {
+    SlmpDeviceRangeFamily.QCpu,
+    SlmpDeviceRangeFamily.LCpu,
+    SlmpDeviceRangeFamily.QnU,
+    SlmpDeviceRangeFamily.QnUDV,
+}
 
 _ROWS: dict[str, _RangeRow] = {
     "X": _RangeRow(SlmpDeviceRangeCategory.Bit, (("X", True),), SlmpDeviceRangeNotation.Base16),
@@ -411,7 +419,7 @@ _PROFILES: dict[SlmpDeviceRangeFamily, _RangeProfile] = {
             "LT": _unsupported("Not supported on LCPU."),
             "LST": _unsupported("Not supported on LCPU."),
             "LC": _unsupported("Not supported on LCPU."),
-            "Z": _word(305, "SD305", "Requires ZZ = FFFFh for the reported upper bound."),
+            "Z": _fixed(20, "Fixed family limit"),
             "LZ": _unsupported("Not supported on LCPU."),
             "ZR": _dword(306, "SD306-SD307 (32-bit)"),
             "RD": _unsupported("Not supported on LCPU."),
@@ -443,7 +451,7 @@ _PROFILES: dict[SlmpDeviceRangeFamily, _RangeProfile] = {
             "LT": _unsupported("Not supported on QnU."),
             "LST": _unsupported("Not supported on QnU."),
             "LC": _unsupported("Not supported on QnU."),
-            "Z": _word(305, "SD305", "Requires ZZ = FFFFh for the reported upper bound."),
+            "Z": _fixed(20, "Fixed family limit"),
             "LZ": _unsupported("Not supported on QnU."),
             "ZR": _dword(306, "SD306-SD307 (32-bit)"),
             "RD": _unsupported("Not supported on QnU."),
@@ -475,7 +483,7 @@ _PROFILES: dict[SlmpDeviceRangeFamily, _RangeProfile] = {
             "LT": _unsupported("Not supported on QnUDV."),
             "LST": _unsupported("Not supported on QnUDV."),
             "LC": _unsupported("Not supported on QnUDV."),
-            "Z": _word(305, "SD305", "Requires ZZ = FFFFh for the reported upper bound."),
+            "Z": _fixed(20, "Fixed family limit"),
             "LZ": _unsupported("Not supported on QnUDV."),
             "ZR": _dword(306, "SD306-SD307 (32-bit)"),
             "RD": _unsupported("Not supported on QnUDV."),
@@ -568,7 +576,8 @@ def read_device_range_catalog_for_family_sync(
         client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
-    return build_device_range_catalog_for_family(normalized_family, registers)
+    catalog = build_device_range_catalog_for_family(normalized_family, registers)
+    return _resolve_runtime_limits_sync(client, catalog)
 
 
 async def read_device_range_catalog_for_family(
@@ -584,7 +593,164 @@ async def read_device_range_catalog_for_family(
         await client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
-    return build_device_range_catalog_for_family(normalized_family, registers)
+    catalog = build_device_range_catalog_for_family(normalized_family, registers)
+    return await _resolve_runtime_limits_async(client, catalog)
+
+
+def _resolve_runtime_limits_sync(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
+    if catalog.family not in _ZR_RUNTIME_FAMILIES:
+        return catalog
+
+    if catalog.family is SlmpDeviceRangeFamily.QCpu:
+        z_count = 16 if _can_read_one_word_sync(client, "Z15") else 10
+        catalog = _replace_fixed_point_count(
+            catalog,
+            "Z",
+            z_count,
+            "Runtime access check",
+            "QCPU Z register count is selected by probing Z15.",
+        )
+
+    zr_count = _resolve_readable_point_count_sync(client, "ZR")
+    catalog = _replace_fixed_point_count(
+        catalog,
+        "ZR",
+        zr_count,
+        "Runtime access check",
+        "ZR register count is selected by probing readable ZR addresses.",
+    )
+    return _replace_fixed_point_count(
+        catalog,
+        "R",
+        min(zr_count, 32768),
+        "Runtime access check",
+        "R register count follows the probed ZR count and is capped at R32767.",
+    )
+
+
+async def _resolve_runtime_limits_async(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
+    if catalog.family not in _ZR_RUNTIME_FAMILIES:
+        return catalog
+
+    if catalog.family is SlmpDeviceRangeFamily.QCpu:
+        z_count = 16 if await _can_read_one_word_async(client, "Z15") else 10
+        catalog = _replace_fixed_point_count(
+            catalog,
+            "Z",
+            z_count,
+            "Runtime access check",
+            "QCPU Z register count is selected by probing Z15.",
+        )
+
+    zr_count = await _resolve_readable_point_count_async(client, "ZR")
+    catalog = _replace_fixed_point_count(
+        catalog,
+        "ZR",
+        zr_count,
+        "Runtime access check",
+        "ZR register count is selected by probing readable ZR addresses.",
+    )
+    return _replace_fixed_point_count(
+        catalog,
+        "R",
+        min(zr_count, 32768),
+        "Runtime access check",
+        "R register count follows the probed ZR count and is capped at R32767.",
+    )
+
+
+def _resolve_readable_point_count_sync(client: Any, device: str) -> int:
+    if not _can_read_one_word_sync(client, f"{device}0"):
+        return 0
+
+    upper_limit = _MAX_RUNTIME_RANGE_PROBE_COUNT - 1
+    low = 0
+    high = 1
+    while high < upper_limit and _can_read_one_word_sync(client, f"{device}{high}"):
+        low = high
+        high = min(upper_limit, (high * 2) + 1)
+
+    if high == upper_limit and _can_read_one_word_sync(client, f"{device}{high}"):
+        return _MAX_RUNTIME_RANGE_PROBE_COUNT
+
+    left = low + 1
+    right = high - 1
+    while left <= right:
+        mid = left + ((right - left) // 2)
+        if _can_read_one_word_sync(client, f"{device}{mid}"):
+            low = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return low + 1
+
+
+async def _resolve_readable_point_count_async(client: Any, device: str) -> int:
+    if not await _can_read_one_word_async(client, f"{device}0"):
+        return 0
+
+    upper_limit = _MAX_RUNTIME_RANGE_PROBE_COUNT - 1
+    low = 0
+    high = 1
+    while high < upper_limit and await _can_read_one_word_async(client, f"{device}{high}"):
+        low = high
+        high = min(upper_limit, (high * 2) + 1)
+
+    if high == upper_limit and await _can_read_one_word_async(client, f"{device}{high}"):
+        return _MAX_RUNTIME_RANGE_PROBE_COUNT
+
+    left = low + 1
+    right = high - 1
+    while left <= right:
+        mid = left + ((right - left) // 2)
+        if await _can_read_one_word_async(client, f"{device}{mid}"):
+            low = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return low + 1
+
+
+def _can_read_one_word_sync(client: Any, address: str) -> bool:
+    try:
+        client.read_devices(address, 1, bit_unit=False)
+        return True
+    except SlmpError:
+        return False
+
+
+async def _can_read_one_word_async(client: Any, address: str) -> bool:
+    try:
+        await client.read_devices(address, 1, bit_unit=False)
+        return True
+    except SlmpError:
+        return False
+
+
+def _replace_fixed_point_count(
+    catalog: SlmpDeviceRangeCatalog,
+    device: str,
+    point_count: int,
+    source: str,
+    note: str,
+) -> SlmpDeviceRangeCatalog:
+    upper_bound = None if point_count <= 0 else point_count - 1
+    entries = [
+        replace(
+            entry,
+            upper_bound=upper_bound,
+            point_count=point_count,
+            address_range=_format_address_range(entry.device, entry.notation, upper_bound),
+            source=source,
+            notes=note if not entry.notes else f"{entry.notes} {note}",
+        )
+        if entry.device == device
+        else entry
+        for entry in catalog.entries
+    ]
+    return replace(catalog, entries=entries)
 
 
 def _evaluate_point_count(spec: _RangeValueSpec, registers: Mapping[int, int]) -> int | None:

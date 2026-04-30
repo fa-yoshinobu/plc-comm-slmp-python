@@ -9,6 +9,7 @@ from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
 from slmp.core import SlmpResponse, SlmpTarget, encode_device_spec
 from slmp.device_ranges import SlmpDeviceRangeFamily, SlmpDeviceRangeNotation, normalize_device_range_family
+from slmp.errors import SlmpError
 
 
 def _pack_words(values: list[int]) -> bytes:
@@ -28,10 +29,17 @@ class _FakeSyncClient(SlmpClient):
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
+        self.rejected_prefixes: tuple[str, ...] = ()
 
     def request(self, command: int | Command, subcommand: int = 0x0000, data: bytes = b"", **_: object) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
         return SlmpResponse(serial=0, target=SlmpTarget(), end_code=0, data=self.next_response_data, raw=b"")
+
+    def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
+        text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
+        if text.startswith(self.rejected_prefixes):
+            raise SlmpError("rejected by test")
+        return super().read_devices(device, points, bit_unit=bit_unit, series=series)
 
 
 class _FakeAsyncClient(AsyncSlmpClient):
@@ -40,6 +48,7 @@ class _FakeAsyncClient(AsyncSlmpClient):
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
+        self.rejected_prefixes: tuple[str, ...] = ()
 
     async def request(
         self,
@@ -50,6 +59,12 @@ class _FakeAsyncClient(AsyncSlmpClient):
     ) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
         return SlmpResponse(serial=0, target=SlmpTarget(), end_code=0, data=self.next_response_data, raw=b"")
+
+    async def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
+        text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
+        if text.startswith(self.rejected_prefixes):
+            raise SlmpError("rejected by test")
+        return await super().read_devices(device, points, bit_unit=bit_unit, series=series)
 
 
 class TestSyncDeviceRanges(unittest.TestCase):
@@ -138,8 +153,9 @@ class TestSyncDeviceRanges(unittest.TestCase):
 
 
 class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
-    async def test_qnu_uses_sd300_for_st_and_sd305_for_z(self) -> None:
+    async def test_qnu_uses_sd300_for_st_and_fixed_z_range(self) -> None:
         client = _FakeAsyncClient()
+        client.rejected_prefixes = ("ZR",)
         client.next_response_data = _build_word_block(
             286,
             26,
@@ -157,7 +173,7 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
                 300: 16,
                 301: 1024,
                 304: 2048,
-                305: 20,
+                305: 65535,
                 308: 12288,
                 310: 8192,
             },
