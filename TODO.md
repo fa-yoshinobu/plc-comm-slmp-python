@@ -35,8 +35,8 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 ## 4. Cross-Stack API Alignment
 
+- [x] **Resolve Q-series runtime device ranges**: QCPU/LCPU/QnU/QnUDV `ZR` ranges are selected by probing readable addresses, `R` follows the probed `ZR` count capped at `R32767`, QCPU `Z` is selected by probing `Z15`, and LCPU/QnU/QnUDV `Z` is fixed at 20 points.
 - [ ] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
 - [ ] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
 - [ ] **Keep `plc_family` as the only high-level PLC selector**: Raw `frame_type`, access-profile, and range-family knobs should stay low-level only unless new live evidence forces a public exception.
-- [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.
 - [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.
