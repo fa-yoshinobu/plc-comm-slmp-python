@@ -95,7 +95,7 @@ For the recommended high-level helper layer, `plc_family` is the only PLC select
 | --- | --- | --- | --- | --- | --- |
 | `iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
 | `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
-| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated on `L16HCPU` |
+| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
 | `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | provisional |
 | `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | provisional |
 | `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |

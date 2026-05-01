@@ -225,7 +225,7 @@ def test_async_client_plc_family_derives_fixed_profile_defaults() -> None:
     assert cli.plc_series == PLCSeries.IQR
     assert cli.frame_type.value == "4e"
     assert cli.device_family == "iq-r"
-    assert cli.device_range_family == "iq-r"
+    assert cli.device_range_family == "iq-l"
 
 
 @pytest.mark.asyncio

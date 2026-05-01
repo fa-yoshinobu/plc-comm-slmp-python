@@ -78,7 +78,7 @@ For normal application code:
 | --- | --- | --- | --- | --- | --- |
 | `iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
 | `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
-| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated on `L16HCPU` |
+| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
 | `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | provisional; review in `TODO.md` |
 | `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | provisional; review in `TODO.md` |
 | `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
@@ -94,7 +94,7 @@ High-level accepted `plc_family` values:
 | --- | --- | --- |
 | `iq-f` | FX5 / iQ-F | `X` / `Y` use manual octal text |
 | `iq-r` | iQ-R | `X` / `Y` use hexadecimal text |
-| `iq-l` | iQ-L | mapped to the `iq-r` range rules; live-validated on `L16HCPU` |
+| `iq-l` | iQ-L | independent iQ-L range rules; live-validated on `L16HCPU` |
 | `mx-f` | MX-F | pending live validation |
 | `mx-r` | MX-R | pending live validation |
 | `qcpu` | QCPU | `3e/ql` fixed profile |

@@ -15,6 +15,7 @@ class SlmpDeviceRangeFamily(str, Enum):
     """Explicit PLC family used to read device-range configuration."""
 
     IqR = "iq-r"
+    IqL = "iq-l"
     MxF = "mx-f"
     MxR = "mx-r"
     IqF = "iq-f"
@@ -493,6 +494,11 @@ _PROFILES: dict[SlmpDeviceRangeFamily, _RangeProfile] = {
     ),
 }
 
+_PROFILES[SlmpDeviceRangeFamily.IqL] = replace(
+    _PROFILES[SlmpDeviceRangeFamily.IqR],
+    family=SlmpDeviceRangeFamily.IqL,
+)
+
 
 def normalize_device_range_family(value: SlmpDeviceRangeFamily | str) -> SlmpDeviceRangeFamily:
     """Normalize one canonical family identifier."""
@@ -512,6 +518,7 @@ def family_label(family: SlmpDeviceRangeFamily | str) -> str:
     normalized = normalize_device_range_family(family)
     return {
         SlmpDeviceRangeFamily.IqR: "IQ-R",
+        SlmpDeviceRangeFamily.IqL: "iQ-L",
         SlmpDeviceRangeFamily.MxF: "MX-F",
         SlmpDeviceRangeFamily.MxR: "MX-R",
         SlmpDeviceRangeFamily.IqF: "IQ-F",

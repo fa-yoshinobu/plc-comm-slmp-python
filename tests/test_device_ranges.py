@@ -140,7 +140,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
 
         catalog = client.read_device_range_catalog()
 
-        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqR)
+        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqL)
         self.assertEqual(client.plc_family, "iq-l")
         self.assertEqual(
             client.last_request,

@@ -580,7 +580,7 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(options.plc_series.value, "iqr")
         self.assertEqual(options.frame_type.value, "4e")
         self.assertEqual(options.device_family, "iq-r")
-        self.assertEqual(options.device_range_family, "iq-r")
+        self.assertEqual(options.device_range_family, "iq-l")
 
 
 # ---------------------------------------------------------------------------

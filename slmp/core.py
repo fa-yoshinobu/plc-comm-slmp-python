@@ -135,7 +135,7 @@ class _PlcFamilyDefaults:
 _PLC_FAMILY_DEFAULTS: dict[str, _PlcFamilyDefaults] = {
     "iq-f": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "iq-f", "iq-f"),
     "iq-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
-    "iq-l": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
+    "iq-l": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-l"),
     "mx-f": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-f", "mx-f"),
     "mx-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-r", "mx-r"),
     "qcpu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qcpu", "qcpu"),
