@@ -35,6 +35,7 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 ## 4. Cross-Stack API Alignment
 
+- [x] **Validate iQ-F X/Y octal handling on FX5 hardware**: FX5UC-32MT/D returned `X0000-X1777` and `Y0000-Y1777` as `Base8`; `X100` and `Y100` read successfully through iQ-F octal address parsing.
 - [x] **Resolve Q-series runtime device ranges**: QCPU/LCPU/QnU/QnUDV `ZR` ranges are selected by probing readable addresses, `R` follows the probed `ZR` count capped at `R32767`, QCPU `Z` is selected by probing `Z15`, and LCPU/QnU/QnUDV `Z` is fixed at 20 points.
 - [ ] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
 - [ ] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
