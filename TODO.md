@@ -4,18 +4,18 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 ## 1. Protocol Implementation Gaps
 
-- **`G/HG` Extended Specification live coverage expansion**
+- **Extended Specification live coverage expansion**
   The capture-aligned implementation is working on validated paths, but broader
-  address-range, transport, and PLC-family coverage is still open.
+  address-range, transport, and PLC-family coverage is still open. QnUDV has no
+  `HG`; `U0\G10` read-only on the current QnUDV target returned `0xC070` with
+  command `0x0401` subcommand `0x0080`.
 
 - **Mixed block write root cause**
   The practical fallback is implemented, but the reason some validated PLC
   paths reject the first one-request mixed `1406` write with `0xC05B` is still
-  not fully explained.
-
-- **`1617` Clear Error operator-visible effect**
-  Transport-level acceptance is confirmed, but the operator-visible behavior on
-  real hardware still needs better evidence.
+  not fully explained. On the current QnUDV target, word-only, bit-only, and
+  mixed `1406` block writes returned `0xC059`, so this appears to be block-write
+  command support rather than a mixed-only rejection on that target.
 
 ## 2. Testing & Validation
 
@@ -35,8 +35,10 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 ## 4. Cross-Stack API Alignment
 
+- [x] **Validate iQ-F X/Y octal handling on FX5 hardware**: FX5UC-32MT/D returned `X0000-X1777` and `Y0000-Y1777` as `Base8`; `X100` and `Y100` read successfully through iQ-F octal address parsing.
+- [x] **Split iQ-L from iQ-R range rules**: `iq-l` now resolves to its own range family while keeping 4E/iQR communication and iQ-R-style address parsing. `L16HCPU` was live-validated with `SM0-SM4095`, `SD0-SD4095`, `D0-D18431`, `LZ0-LZ1`, `LTN0-LTN1023`, `LSTN0-LSTN31`, and `LCN0-LCN511`.
+- [x] **Resolve Q-series runtime device ranges**: QCPU/LCPU/QnU/QnUDV `ZR` ranges are selected by probing readable addresses, `R` follows the probed `ZR` count capped at `R32767`, QCPU `Z` is selected by probing `Z15`, and LCPU/QnU/QnUDV `Z` is fixed at 20 points.
 - [ ] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
 - [ ] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
 - [ ] **Keep `plc_family` as the only high-level PLC selector**: Raw `frame_type`, access-profile, and range-family knobs should stay low-level only unless new live evidence forces a public exception.
-- [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.
 - [ ] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.

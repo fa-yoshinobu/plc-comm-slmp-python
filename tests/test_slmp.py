@@ -1792,7 +1792,7 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(client.plc_series, PLCSeries.IQR)
         self.assertEqual(client.frame_type, FrameType.FRAME_4E)
         self.assertEqual(client.device_family, "iq-r")
-        self.assertEqual(client.device_range_family, "iq-r")
+        self.assertEqual(client.device_range_family, "iq-l")
 
     def test_plc_family_rejects_manual_profile_override(self) -> None:
         with self.assertRaisesRegex(ValueError, "plc_family already determines"):

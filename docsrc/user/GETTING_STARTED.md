@@ -54,7 +54,7 @@ Current fixed mapping:
 | --- | --- | --- | --- | --- |
 | `iq-f` | `3e` | `ql` | octal | `iq-f` |
 | `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` |
-| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-r` |
+| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` |
 | `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` |
 | `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` |
 | `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` |
