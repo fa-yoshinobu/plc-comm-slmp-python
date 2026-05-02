@@ -10,8 +10,10 @@ from slmp.utils import (
     SlmpConnectionOptions,
     _compile_read_plan,
     _parse_address,
+    format_address,
     normalize_address,
     open_and_connect,
+    parse_address,
     poll_sync,
     read_bits_sync,
     read_dwords_chunked_sync,
@@ -22,6 +24,7 @@ from slmp.utils import (
     read_words_chunked_sync,
     read_words_single_request_sync,
     read_words_sync,
+    try_parse_address,
     write_bit_in_word_sync,
     write_bits_sync,
     write_dwords_chunked_sync,
@@ -97,6 +100,33 @@ class TestParseAddress(unittest.TestCase):
         self.assertEqual(normalize_address("d100"), "D100")
         self.assertEqual(normalize_address("y220", family="iq-f"), "Y220")
         self.assertEqual(normalize_address("y220", plc_family="iq-f"), "Y220")
+
+    def test_public_parse_try_format_address(self):
+        typed = parse_address("d200:f")
+        bit = parse_address("d50.a")
+        direct_bit = parse_address("m100")
+
+        self.assertEqual(typed.text, "D200:F")
+        self.assertEqual(typed.base_device, "D200")
+        self.assertEqual(typed.dtype, "F")
+        self.assertTrue(typed.explicit_dtype)
+        self.assertEqual(format_address(typed), "D200:F")
+        self.assertEqual(bit.text, "D50.A")
+        self.assertEqual(bit.dtype, "BIT_IN_WORD")
+        self.assertEqual(bit.bit_index, 10)
+        self.assertEqual(format_address(bit), "D50.A")
+        self.assertEqual(direct_bit.text, "M100")
+        self.assertEqual(direct_bit.dtype, "BIT")
+        self.assertEqual(format_address("d100:s"), "D100:S")
+
+    def test_public_parse_address_uses_plc_family(self):
+        parsed = parse_address("x100", plc_family="iq-f")
+
+        self.assertEqual(parsed.text, "X100")
+        self.assertEqual(parsed.base_device, "X100")
+        self.assertEqual(parsed.dtype, "BIT")
+        self.assertIsNone(try_parse_address("x100"))
+        self.assertIsNone(try_parse_address("m100.0"))
 
     def test_read_named_sync_rejects_xy_without_device_family(self):
         client = MagicMock()

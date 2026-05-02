@@ -117,14 +117,26 @@ Only canonical `plc_family` values are accepted:
 
 Short aliases such as `iqf`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected.
 
-### Address normalization
+### Address parse, normalize, and format
 
 ```python
-from slmp import normalize_address
+from slmp import format_address, normalize_address, parse_address, try_parse_address
 
 assert normalize_address("x20") == "X20"
 assert normalize_address("d200") == "D200"
 assert normalize_address("x100", plc_family="iq-f") == "X100"
+
+typed = parse_address("d200:f")
+assert typed.text == "D200:F"
+assert typed.base_device == "D200"
+assert typed.dtype == "F"
+assert format_address(typed) == "D200:F"
+
+bit = parse_address("d50.a")
+assert bit.text == "D50.A"
+assert bit.bit_index == 10
+
+assert try_parse_address("m100.0") is None
 ```
 
 `X` / `Y` string addresses require explicit `plc_family` during communication.

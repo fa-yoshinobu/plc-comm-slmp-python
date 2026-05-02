@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.1.14 - 2026-05-02
+
+### Added
+- Added public `SlmpAddress`, `parse_address()`, `try_parse_address()`, and `format_address()` helpers for the same helper-layer notation accepted by `read_named()` and `write_named()`.
+
+### Changed
+- Updated the API unification policy, README, user guide, and samples to make the high-level address helper surface explicit.
+
 ## 0.1.13 - 2026-04-27
 
 ### Fixed

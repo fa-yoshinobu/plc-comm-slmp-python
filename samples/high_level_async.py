@@ -29,8 +29,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     SlmpConnectionOptions,
+    format_address,
     normalize_address,
     open_and_connect,
+    parse_address,
     poll,
     read_dwords_chunked,
     read_dwords_single_request,
@@ -272,7 +274,10 @@ async def demo_queued_client(host: str, port: int, timeout: float, plc_family: s
 
 
 async def run(args: argparse.Namespace) -> None:
+    parsed = parse_address("d200:f")
     print(f"[normalize_address] x20 -> {normalize_address('x20', plc_family=args.plc_family)}")
+    print(f"[parse_address] d200:f -> {parsed}")
+    print(f"[format_address] parsed -> {format_address(parsed)}")
 
     # 1. Connect once with explicit stable settings
     await demo_explicit_connect(args.host, args.port, args.timeout, args.plc_family)

@@ -122,6 +122,17 @@ class SlmpConnectionOptions:
         object.__setattr__(self, "device_range_family", device_range_family)
 
 
+@dataclass(frozen=True)
+class SlmpAddress:
+    """Parsed public SLMP helper-layer address notation."""
+
+    text: str
+    base_device: str
+    dtype: str
+    bit_index: int | None = None
+    explicit_dtype: bool = False
+
+
 def _client_device_family(client: object) -> str | None:
     family = getattr(client, "device_family", None)
     if family is None:
@@ -515,6 +526,106 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
     return address.strip(), "U", None
 
 
+def _effective_device_family(
+    *,
+    plc_family: object | None = None,
+    family: object | None = None,
+) -> object | None:
+    if plc_family is not None and family is not None:
+        raise ValueError("Pass either plc_family or family, not both.")
+    if plc_family is not None:
+        defaults = _resolve_plc_family_defaults(plc_family)
+        return None if defaults is None else defaults.device_family
+    if family is not None:
+        return _normalize_device_family_hint(family)
+    return None
+
+
+def parse_address(
+    address: str | DeviceRef,
+    *,
+    plc_family: object | None = None,
+    family: object | None = None,
+) -> SlmpAddress:
+    """Parse public SLMP helper-layer address notation.
+
+    Supported forms match :func:`read_named`: ``"D100"``, ``"D200:F"``,
+    ``"D50.A"``, and direct bit devices such as ``"M100"``.
+    """
+
+    if not isinstance(address, str):
+        text = str(address)
+        return SlmpAddress(text=text, base_device=text, dtype="U")
+
+    effective_family = _effective_device_family(plc_family=plc_family, family=family)
+    raw_text = address.strip()
+    base, dtype, bit_index = _parse_address(raw_text)
+    device = _parse_device_for_family(base, effective_family)
+    canonical_base = str(device)
+
+    if bit_index is not None:
+        if not 0 <= bit_index <= 15:
+            raise ValueError(f"bit-in-word index must be 0-F: {address!r}")
+        _validate_bit_in_word_target(raw_text, device)
+        return SlmpAddress(
+            text=f"{canonical_base}.{bit_index:X}",
+            base_device=canonical_base,
+            dtype="BIT_IN_WORD",
+            bit_index=bit_index,
+            explicit_dtype=False,
+        )
+
+    resolved_dtype = _resolve_dtype_for_address(raw_text, device, dtype, bit_index)
+    if resolved_dtype not in {"BIT", "U", "S", "D", "L", "F"}:
+        raise ValueError(f"Unsupported dtype {resolved_dtype!r}; expected BIT/U/S/D/L/F")
+    explicit_dtype = ":" in raw_text
+    suffix = f":{resolved_dtype}" if explicit_dtype else ""
+    return SlmpAddress(
+        text=f"{canonical_base}{suffix}",
+        base_device=canonical_base,
+        dtype=resolved_dtype,
+        bit_index=None,
+        explicit_dtype=explicit_dtype,
+    )
+
+
+def try_parse_address(
+    address: str | DeviceRef,
+    *,
+    plc_family: object | None = None,
+    family: object | None = None,
+) -> SlmpAddress | None:
+    """Return parsed address information, or ``None`` when parsing fails."""
+
+    try:
+        return parse_address(address, plc_family=plc_family, family=family)
+    except Exception:
+        return None
+
+
+def format_address(
+    address: SlmpAddress | str | DeviceRef,
+    *,
+    plc_family: object | None = None,
+    family: object | None = None,
+) -> str:
+    """Return canonical public SLMP address text."""
+
+    if not isinstance(address, SlmpAddress):
+        return parse_address(address, plc_family=plc_family, family=family).text
+
+    canonical_base = normalize_address(address.base_device, plc_family=plc_family, family=family)
+    if address.dtype == "BIT_IN_WORD":
+        if address.bit_index is None or not 0 <= address.bit_index <= 15:
+            raise ValueError("bit-in-word address requires bit_index 0-F")
+        return f"{canonical_base}.{address.bit_index:X}"
+    if address.explicit_dtype:
+        if address.dtype not in {"BIT", "U", "S", "D", "L", "F"}:
+            raise ValueError(f"Unsupported dtype {address.dtype!r}; expected BIT/U/S/D/L/F")
+        return f"{canonical_base}:{address.dtype}"
+    return canonical_base
+
+
 def normalize_address(
     address: str | DeviceRef,
     *,
@@ -531,14 +642,7 @@ def normalize_address(
     if not isinstance(address, str):
         return str(address)
 
-    if plc_family is not None and family is not None:
-        raise ValueError("Pass either plc_family or family to normalize_address(), not both.")
-    effective_family = family
-    if plc_family is not None:
-        defaults = _resolve_plc_family_defaults(plc_family)
-        effective_family = None if defaults is None else defaults.device_family
-    elif family is not None:
-        effective_family = _normalize_device_family_hint(family)
+    effective_family = _effective_device_family(plc_family=plc_family, family=family)
 
     text = address.strip()
     if ":" not in text and "." not in text:

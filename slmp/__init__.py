@@ -10,7 +10,7 @@ The primary user-facing entry points are:
 - ``poll``
 """
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 
 from .async_client import AsyncSlmpClient
 from .client import SlmpClient
@@ -59,10 +59,13 @@ from .errors import (
 )
 from .utils import (
     QueuedAsyncSlmpClient,
+    SlmpAddress,
     SlmpConnectionOptions,
+    format_address,
     normalize_address,
     open_and_connect,
     open_and_connect_sync,
+    parse_address,
     poll,
     poll_sync,
     read_bits,
@@ -83,6 +86,7 @@ from .utils import (
     read_words_single_request,
     read_words_single_request_sync,
     read_words_sync,
+    try_parse_address,
     write_bit_in_word,
     write_bit_in_word_sync,
     write_bits,
@@ -123,6 +127,7 @@ __all__ = [
     "PLCSeries",
     "QueuedAsyncSlmpClient",
     "SlmpConnectionOptions",
+    "SlmpAddress",
     "RandomReadResult",
     "SlmpClient",
     "SlmpBoundaryBehaviorWarning",
@@ -134,6 +139,7 @@ __all__ = [
     "SlmpTraceFrame",
     "TypeNameInfo",
     "decode_cpu_operation_state",
+    "format_address",
     "SlmpDeviceRangeCatalog",
     "SlmpDeviceRangeCategory",
     "SlmpDeviceRangeEntry",
@@ -143,6 +149,7 @@ __all__ = [
     "normalize_device_range_family",
     "open_and_connect",
     "open_and_connect_sync",
+    "parse_address",
     "parse_extended_device",
     "parse_device",
     "poll",
@@ -183,6 +190,7 @@ __all__ = [
     "write_words_chunked_sync",
     "write_words_single_request",
     "write_words_single_request_sync",
+    "try_parse_address",
     "build_device_range_catalog_for_family",
     "family_label",
 ]

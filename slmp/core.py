@@ -484,9 +484,7 @@ def parse_device(
     try:
         number = int(num_txt, base)
     except ValueError:
-        raise ValueError(
-            f"Invalid SLMP device number {num_txt!r} for device code '{code}' in {value!r}."
-        ) from None
+        raise ValueError(f"Invalid SLMP device number {num_txt!r} for device code '{code}' in {value!r}.") from None
     return _apply_device_family_hint(DeviceRef(code=code, number=number), family)
 
 

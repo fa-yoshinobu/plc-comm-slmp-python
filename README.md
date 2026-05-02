@@ -19,6 +19,7 @@ This repository treats the high-level helper layer as the recommended user surfa
 - `QueuedAsyncSlmpClient`
 - `SlmpClient`
 - `normalize_address`
+- `parse_address` / `try_parse_address` / `format_address`
 - `read_typed` / `write_typed`
 - `read_words_single_request` / `read_dwords_single_request`
 - `read_words_chunked` / `read_dwords_chunked`
@@ -148,11 +149,15 @@ Maintainer-only notes and retained evidence live under `internal_docs/`.
 ### Address Normalization
 
 ```python
-from slmp import normalize_address
+from slmp import format_address, normalize_address, parse_address
 
 print(normalize_address("x20"))   # X20
 print(normalize_address("d200"))  # D200
 print(normalize_address("x100", plc_family="iq-f"))  # X100
+
+parsed = parse_address("d200:f")
+print(parsed.base_device, parsed.dtype)  # D200 F
+print(format_address(parsed))            # D200:F
 ```
 
 ### Single Typed Values

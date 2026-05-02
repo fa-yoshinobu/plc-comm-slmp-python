@@ -30,8 +30,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     SlmpConnectionOptions,
+    format_address,
     normalize_address,
     open_and_connect_sync,
+    parse_address,
     poll_sync,
     read_dwords_chunked_sync,
     read_dwords_single_request_sync,
@@ -104,7 +106,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    parsed = parse_address("d200:f")
     print(f"[normalize_address] x20 -> {normalize_address('x20', plc_family=args.plc_family)}")
+    print(f"[parse_address] d200:f -> {parsed}")
+    print(f"[format_address] parsed -> {format_address(parsed)}")
 
     # SlmpConnectionOptions:
     #   host             - PLC IP / hostname

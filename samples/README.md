@@ -44,6 +44,7 @@ They use the same helper set described in the user guide:
 - `open_and_connect` / `open_and_connect_sync`
 - `QueuedAsyncSlmpClient`
 - `normalize_address`
+- `parse_address` / `try_parse_address` / `format_address`
 - `read_typed` / `write_typed`
 - `read_words_single_request` / `read_dwords_single_request`
 - `read_words_chunked` / `read_dwords_chunked`

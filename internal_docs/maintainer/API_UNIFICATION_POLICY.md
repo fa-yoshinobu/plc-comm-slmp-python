@@ -1,7 +1,7 @@
 # API Unification Policy
 
-This document defines the planned public API rules for the SLMP Python library.
-It is a design policy document. It does not claim that every rule is implemented yet.
+This document defines the public API rules for the SLMP Python library.
+The high-level helper surface follows these rules as of 0.1.14.
 
 ## Purpose
 
@@ -23,6 +23,20 @@ If a separate string-address facade is ever introduced, reserve these names for 
 
 - `SlmpDeviceClient`
 - `AsyncSlmpDeviceClient`
+
+The top-level helper surface for normal application code is:
+
+- `SlmpConnectionOptions`
+- `open_and_connect` / `open_and_connect_sync`
+- `QueuedAsyncSlmpClient`
+- `normalize_address`
+- `parse_address` / `try_parse_address` / `format_address`
+- `read_typed` / `write_typed`
+- `read_named` / `write_named`
+- `write_bit_in_word`
+- `read_words_single_request` / `read_dwords_single_request`
+- `read_words_chunked` / `read_dwords_chunked`
+- `poll`
 
 Canonical direct device names:
 
@@ -101,6 +115,20 @@ Examples:
 - `client.read_block(...)`
 - `await async_client.read_block(...)`
 
+## Address Helper Rules
+
+Public helper-layer address utilities must accept the same notation as
+`read_named` and `write_named`.
+
+Rules:
+
+- `normalize_address(...)` returns canonical text only.
+- `parse_address(...)` returns `SlmpAddress` with `base_device`, `dtype`, bit index, and explicit dtype state.
+- `try_parse_address(...)` is the non-throwing UI/config validation path.
+- `format_address(...)` renders stored address metadata back to canonical helper-layer text.
+- `X` / `Y` string notation still requires `plc_family` or an explicit device-family hint.
+- `plc_family` remains the only normal high-level PLC selector. Raw `frame_type`, access profile, and range-family knobs stay in low-level/client tooling unless live evidence creates a concrete public need.
+
 ## Cross-Language Parity Rules
 
 When an equivalent operation exists in the C++ SLMP library, semantic names should stay aligned.
@@ -162,6 +190,17 @@ Default 32-bit word-pair interpretation:
 - The default contract is protocol-native low-word-first ordering.
 - If alternate word order must be supported, use an explicit keyword such as `word_order`.
 - Avoid public names such as `read_float_swapped`.
+
+## Semantic Atomicity Rules
+
+High-level helpers must keep one user-visible logical value intact unless the
+caller chooses an explicit chunked helper.
+
+Rules:
+
+- `*_single_request` helpers keep one logical operation on one protocol request.
+- `*_chunked` helpers are opt-in and must keep 32-bit values aligned.
+- Fallbacks that change mixed-block write semantics must stay opt-in, for example `split_mixed_blocks=True` or `retry_mixed_on_error=True`.
 
 ## Non-Goals
 
