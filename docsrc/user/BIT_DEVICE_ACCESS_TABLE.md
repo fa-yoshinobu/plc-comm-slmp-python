@@ -118,8 +118,8 @@ Commonly addressed through `read_named`, `write_named`, `read_typed`, and `write
 | V | Edge relay | Decimal | |
 | B | Link relay | Hex | |
 | SB | Link special relay | Hex | |
-| DX | Direct input | Hex | |
-| DY | Direct output | Hex | |
+| DX | Direct input | Hex | rejected for `plc_family="iq-f"` |
+| DY | Direct output | Hex | rejected for `plc_family="iq-f"` |
 | TS | Timer contact | Decimal | |
 | TC | Timer coil | Decimal | |
 | STS | Retentive timer contact | Decimal | |

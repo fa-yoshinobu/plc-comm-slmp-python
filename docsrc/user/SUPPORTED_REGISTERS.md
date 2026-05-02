@@ -27,8 +27,8 @@ This page is the canonical public register table for the Python high-level API.
 | `LCS` | bit | `LCS10` | decimal |
 | `LCC` | bit | `LCC10` | decimal |
 | `SB` | bit | `SB20` | hexadecimal |
-| `DX` | bit | `DX20` | hexadecimal |
-| `DY` | bit | `DY20` | hexadecimal |
+| `DX` | bit | `DX20` | hexadecimal; not accepted for `plc_family="iq-f"` |
+| `DY` | bit | `DY20` | hexadecimal; not accepted for `plc_family="iq-f"` |
 
 ## Supported Word Devices
 
@@ -65,6 +65,7 @@ This page is the canonical public register table for the Python high-level API.
 
 - Start with `D` for the first smoke test.
 - `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
+- `DX` and `DY` are rejected before transport when `plc_family="iq-f"`.
 - `X` and `Y` require explicit `plc_family` for communication.
 - device-range catalog reads follow the fixed family rule derived from `plc_family`.
 - non-`iQ-F` `X` / `Y` text such as `X20` uses hexadecimal numbering.

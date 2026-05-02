@@ -265,6 +265,10 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(str(parse_device("SWFF")), "SWFF")
         self.assertEqual(str(parse_device("Y220", family="iq-f")), "Y220")
         self.assertEqual(parse_device("Y220", family="iq-f").number - parse_device("Y217", family="iq-f").number, 1)
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
+            parse_device("DX10", family="iq-f")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
+            parse_device("DY10", family="iq-f")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.IQR), b"\x64\x00\x00\x00\xa8\x00")
         self.assertEqual(encode_device_spec("R32767", series=PLCSeries.IQR), b"\xff\x7f\x00\x00\xaf\x00")

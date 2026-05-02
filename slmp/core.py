@@ -216,11 +216,18 @@ def _resolve_device_radix(code: str, family: object | None = None) -> int:
     return DEVICE_CODES[code].radix
 
 
+def _ensure_device_supported_for_family(code: str, family: object | None = None) -> None:
+    normalized_family = _normalize_device_family_hint(family)
+    if normalized_family == "iq-f" and code in {"DX", "DY"}:
+        raise SlmpUnsupportedDeviceError(f"SLMP device code '{code}' is not supported for plc_family 'iq-f'.")
+
+
 def _apply_device_family_hint(value: DeviceRef, family: object | None = None) -> DeviceRef:
     if family is None:
         return value
     if value.code not in DEVICE_CODES:
         return value
+    _ensure_device_supported_for_family(value.code, family)
     radix = _resolve_device_radix(value.code, family)
     if value.radix_override == radix:
         return value
@@ -479,6 +486,7 @@ def parse_device(
 
     text = value.strip().upper()
     code, num_txt = _split_device_text(value, text)
+    _ensure_device_supported_for_family(code, family)
 
     base = _resolve_device_radix(code, family)
     try:
