@@ -73,7 +73,7 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
 - **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
-- **Unstable CLI auto profile flags**: Removed `--series auto` and `--frame-type auto` from the current CLI entry points, including `connection-check`, `other-station-check`, `compatibility-probe`, and `ExtendedDevice-device-recheck`.
+- **Unstable CLI auto profile flags**: Removed `--series auto` and `--frame-type auto` from the current CLI entry points, including `connection-check`, `other-station-check`, and `ExtendedDevice-device-recheck`.
 - **Auto profile helpers**: Removed `SlmpClient.resolve_profile()`, `AsyncSlmpClient.resolve_profile()`, `recommend_profile()`, `open_and_connect()`, and `open_and_connect_queued()`. Connection setup is now explicit.
 
 ### Added
