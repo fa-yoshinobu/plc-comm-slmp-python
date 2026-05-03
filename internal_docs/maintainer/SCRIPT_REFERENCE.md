@@ -32,8 +32,6 @@ Human-in-the-loop verification:
 ### Setup and housekeeping
 
 - `slmp_regression_suite.py`
-- `slmp_compatibility_probe.py`
-- `slmp_compatibility_matrix_render.py`
 - `slmp_init_model_docs.py`
 - `slmp_device_access_matrix_sync.py`
 

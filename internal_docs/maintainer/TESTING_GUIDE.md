@@ -54,8 +54,6 @@ Use these when changing `slmp.cli`, script wrappers, or packaging:
 ```powershell
 python scripts/slmp_regression_suite.py --help
 python scripts/slmp_connection_check.py --help
-python scripts/slmp_compatibility_probe.py --help
-python scripts/slmp_compatibility_matrix_render.py --help
 python scripts/slmp_device_range_probe.py --help
 python scripts/slmp_register_boundary_probe.py --help
 python scripts/slmp_device_access_matrix_sync.py --help
@@ -163,44 +161,6 @@ python scripts/slmp_register_boundary_probe.py --host 192.168.250.100 --port 102
 Report:
 
 - `internal_docsrc/<series>_<model>/register_boundary_probe_latest.md`
-
-### Compatibility Probe and Matrix Render
-
-Use this when you want to rebuild `PLC_COMPATIBILITY.md` from structured probe output rather than hand-maintained notes:
-
-```powershell
-python scripts/slmp_compatibility_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series ql --frame-type 3e --plc-label R08CPU_Main
-```
-
-Default behavior is read-only. The probe emits:
-
-- `internal_docsrc/compatibility_<plc_label>/compatibility_probe_latest.md`
-- `internal_docsrc/compatibility_<plc_label>/compatibility_probe_latest.json`
-
-Higher-risk families remain opt-in:
-
-- `--include-write-restore`
-- `--include-remote-control`
-- `--include-maintenance`
-
-Render the matrix after collecting one JSON file per PLC path you want represented:
-
-```powershell
-python scripts/slmp_compatibility_matrix_render.py --input internal_docsrc/compatibility_r08cpu_main/compatibility_probe_latest.json --output internal_docs/validation/reports/PLC_COMPATIBILITY.md
-```
-
-Useful renderer behavior:
-
-- rows are ordered by product family, then by PLC label
-- `--omit-pending-columns` hides command columns that are still `PENDING` for every PLC row
-- the same render pass also emits `internal_docs/validation/reports/compatibility_policy.json`
-
-Interpretation rules:
-
-- treat each `frame/access_profile` combination independently
-- treat `YES` as "at least one executed combination succeeded and none failed"
-- treat `PARTIAL` as mixed outcomes across combinations or subprobes
-- treat `PENDING` as "not executed"
 
 ### Other-Station Check
 

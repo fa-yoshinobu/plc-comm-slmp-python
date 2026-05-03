@@ -46,8 +46,6 @@ dev = [
 
 [project.scripts]
 slmp-connection-check = "slmp.cli:connection_check_main"
-slmp-compatibility-probe = "slmp.cli:compatibility_probe_main"
-slmp-compatibility-matrix-render = "slmp.cli:compatibility_matrix_render_main"
 slmp-device-range-probe = "slmp.cli:device_range_probe_main"
 slmp-register-boundary-probe = "slmp.cli:register_boundary_probe_main"
 slmp-other-station-check = "slmp.cli:other_station_check_main"
