@@ -9,6 +9,13 @@
 
 ![Illustration](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-slmp-python/main/docsrc/assets/melsec.png)
 
+[![Automated Release](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/automated-release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/automated-release.yml)
+[![Release](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/release.yml)
+
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![MkDocs](https://img.shields.io/badge/MkDocs-526CFE?logo=materialformkdocs&logoColor=white)](https://www.mkdocs.org/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)](https://pages.github.com/)
+
 High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E frames.
 
 This repository treats the high-level helper layer as the recommended user surface:
