@@ -2125,25 +2125,19 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(len(client.requests), 1)
         self.assertEqual(client.requests[0][0], Command.DEVICE_WRITE_BLOCK)
 
-    def test_write_block_retry_mixed_on_c05b_splits_after_failed_combined_request(self) -> None:
-        """Test test_write_block_retry_mixed_on_c05b_splits_after_failed_combined_request."""
+    def test_write_block_retry_mixed_on_c05b_does_not_split(self) -> None:
+        """Test test_write_block_retry_mixed_on_c05b_does_not_split."""
         client = FakeClient()
-        client.response_queue = [(0xC05B, b""), (0x0000, b""), (0x0000, b"")]
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        client.response_queue = [(0xC05B, b"")]
+        with self.assertRaises(SlmpError) as ctx:
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
                 series=PLCSeries.IQR,
                 retry_mixed_on_error=True,
             )
-        self.assertEqual(len(client.requests), 3)
-        self.assertEqual([request[0] for request in client.requests], [Command.DEVICE_WRITE_BLOCK] * 3)
-        self.assertEqual([request[2][:2] for request in client.requests], [b"\x01\x01", b"\x01\x00", b"\x00\x01"])
-        self.assertTrue(all(request[3]["raise_on_error"] is False for request in client.requests))
-        self.assertTrue(
-            any(isinstance(item.message, SlmpPracticalPathWarning) and "0xC05B" in str(item.message) for item in caught)
-        )
+        self.assertEqual(ctx.exception.end_code, 0xC05B)
+        self.assertEqual(len(client.requests), 1)
 
     def test_write_block_retry_mixed_on_c056_splits_after_failed_combined_request(self) -> None:
         """Test test_write_block_retry_mixed_on_c056_splits_after_failed_combined_request."""

@@ -1271,7 +1271,7 @@ _RANDOM_DWORD_ONLY_DIRECT_CODES = frozenset({"LCN", "LZ"})
 _G_HG_CODES = frozenset({"G", "HG"})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})
-_MIXED_BLOCK_RETRY_END_CODES = frozenset({0xC056, 0xC05B, 0xC061})
+_MIXED_BLOCK_RETRY_END_CODES = frozenset({0xC056, 0xC061})
 
 
 def _encode_label_name(label: str) -> bytes:
