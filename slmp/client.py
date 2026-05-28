@@ -1387,7 +1387,7 @@ class SlmpClient:
         """Write one 32-bit CPU buffer value via the verified extend-unit path."""
         self.extend_unit_write_dword(head_address, module_no, value)
 
-    def remote_run(self, *, force: bool = False, clear_mode: int = 2) -> None:
+    def remote_run(self, *, force: bool = False, clear_mode: int = 0) -> None:
         """Remote RUN.
 
         Args:

@@ -936,7 +936,7 @@ class AsyncSlmpClient:
         """Read SD203 and decode the CPU operation state from the lower 4 bits."""
         return decode_cpu_operation_state((await self.read_devices("SD203", 1, bit_unit=False))[0])
 
-    async def remote_run(self, *, force: bool = False, clear_mode: int = 2) -> None:
+    async def remote_run(self, *, force: bool = False, clear_mode: int = 0) -> None:
         """Remote run the PLC."""
         if clear_mode not in {0, 1, 2}:
             raise ValueError(f"clear_mode must be one of 0,1,2: {clear_mode}")

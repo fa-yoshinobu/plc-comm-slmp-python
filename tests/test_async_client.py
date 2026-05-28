@@ -189,6 +189,18 @@ async def test_async_read_devices_xy_allows_numeric_deviceref_without_device_fam
     assert cli.last_request[2] == b"\x40\x00\x00\x9c\x08\x00"
 
 
+@pytest.mark.asyncio
+async def test_async_remote_run_default_clear_mode_does_not_clear_devices() -> None:
+    cli = FakeAsyncClient()
+
+    await cli.remote_run()
+
+    assert cli.last_request is not None
+    assert cli.last_request[0] == int(Command.REMOTE_RUN)
+    assert cli.last_request[1] == 0x0000
+    assert cli.last_request[2] == b"\x01\x00\x00\x00"
+
+
 def test_async_client_rejects_invalid_device_family() -> None:
     with pytest.raises(ValueError, match="Unsupported device_family"):
         FakeAsyncClient(device_family="auto")
