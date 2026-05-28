@@ -2055,11 +2055,11 @@ class TestDeviceApi(unittest.TestCase):
     def test_remote_run(self) -> None:
         """Test test_remote_run."""
         client = FakeClient()
-        client.remote_run(force=False, clear_mode=2)
+        client.remote_run()
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.REMOTE_RUN)
         self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x01\x00\x02\x00")
+        self.assertEqual(payload, b"\x01\x00\x00\x00")
 
     def test_self_test_loopback(self) -> None:
         """Test test_self_test_loopback."""

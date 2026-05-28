@@ -4409,7 +4409,7 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
 
         remote_cmds = [
             ("1002 remote stop", Command.REMOTE_STOP, 0x0000, b"\x01\x00"),
-            ("1001 remote run", Command.REMOTE_RUN, 0x0000, b"\x01\x00\x02\x00"),
+            ("1001 remote run", Command.REMOTE_RUN, 0x0000, b"\x01\x00\x00\x00"),
             ("1003 remote pause", Command.REMOTE_PAUSE, 0x0000, b"\x01\x00"),
             ("1005 remote latch clear", Command.REMOTE_LATCH_CLEAR, 0x0000, b"\x01\x00"),
             ("1002 remote stop (restore)", Command.REMOTE_STOP, 0x0000, b"\x01\x00"),
