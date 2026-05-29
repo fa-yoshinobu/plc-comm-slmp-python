@@ -38,6 +38,14 @@ def test_end_code_names_and_messages() -> None:
 
     assert get_end_code_name(0xCFBF) == "slmp_end_code_cfbf"
     assert get_end_code_message(0xCFBF) == "The simple CPU communication cannot be executed."
+    assert get_end_code_name(0xD913) == "slmp_end_code_d913"
+    assert get_end_code_message(0xD913) == "An error was detected in the network module."
+    assert get_end_code_message(0xD913, "ja") == "ネットワークユニットの異常を検出した。"
+    assert (
+        get_end_code_message(0xE504)
+        == "Transient transmission (dedicated instruction, engineering tool connection) was executed while the own "
+        "station did not perform baton pass."
+    )
 
 
 def test_unknown_and_remote_password_codes() -> None:
