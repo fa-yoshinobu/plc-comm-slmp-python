@@ -1401,9 +1401,15 @@ class SlmpClient:
         payload = mode.to_bytes(2, "little") + clear_mode.to_bytes(2, "little")
         self.request(Command.REMOTE_RUN, 0x0000, payload)
 
-    def remote_stop(self) -> None:
-        """Remote STOP."""
-        self.request(Command.REMOTE_STOP, 0x0000, b"\x01\x00")
+    def remote_stop(self, *, force: bool = False) -> None:
+        """Remote STOP.
+
+        Args:
+            force: Force STOP.
+
+        """
+        mode = 0x0003 if force else 0x0001
+        self.request(Command.REMOTE_STOP, 0x0000, mode.to_bytes(2, "little"))
 
     def remote_pause(self, *, force: bool = False) -> None:
         """Remote PAUSE.

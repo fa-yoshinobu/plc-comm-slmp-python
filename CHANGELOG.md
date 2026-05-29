@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
+- Added forced remote STOP support through `remote_stop(force=True)` on both sync and async clients.
 
 ## 0.1.14 - 2026-05-02
 

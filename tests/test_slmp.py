@@ -2061,6 +2061,15 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x01\x00\x00\x00")
 
+    def test_remote_stop_force_uses_forced_mode(self) -> None:
+        """Test test_remote_stop_force_uses_forced_mode."""
+        client = FakeClient()
+        client.remote_stop(force=True)
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.REMOTE_STOP)
+        self.assertEqual(subcommand, 0x0000)
+        self.assertEqual(payload, b"\x03\x00")
+
     def test_self_test_loopback(self) -> None:
         """Test test_self_test_loopback."""
         client = FakeClient()

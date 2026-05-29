@@ -944,9 +944,10 @@ class AsyncSlmpClient:
         payload = mode.to_bytes(2, "little") + clear_mode.to_bytes(2, "little")
         await self.request(Command.REMOTE_RUN, 0x0000, payload)
 
-    async def remote_stop(self) -> None:
+    async def remote_stop(self, *, force: bool = False) -> None:
         """Remote stop the PLC."""
-        await self.request(Command.REMOTE_STOP, 0x0000, b"\x01\x00")
+        mode = 0x0003 if force else 0x0001
+        await self.request(Command.REMOTE_STOP, 0x0000, mode.to_bytes(2, "little"))
 
     async def remote_pause(self, *, force: bool = False) -> None:
         """Remote pause the PLC."""
