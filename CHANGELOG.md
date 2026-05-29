@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
+
 ## 0.1.14 - 2026-05-02
 
 ### Added

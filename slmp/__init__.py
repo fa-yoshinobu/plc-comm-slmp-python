@@ -51,6 +51,12 @@ from .device_ranges import (
     read_device_range_catalog_for_family,
     read_device_range_catalog_for_family_sync,
 )
+from .error_codes import (
+    SlmpEndCodeLanguage,
+    get_end_code_message,
+    get_end_code_name,
+    is_remote_password_end_code,
+)
 from .errors import (
     SlmpBoundaryBehaviorWarning,
     SlmpError,
@@ -127,6 +133,7 @@ __all__ = [
     "PLCSeries",
     "QueuedAsyncSlmpClient",
     "SlmpConnectionOptions",
+    "SlmpEndCodeLanguage",
     "SlmpAddress",
     "RandomReadResult",
     "SlmpClient",
@@ -140,6 +147,9 @@ __all__ = [
     "TypeNameInfo",
     "decode_cpu_operation_state",
     "format_address",
+    "get_end_code_message",
+    "get_end_code_name",
+    "is_remote_password_end_code",
     "SlmpDeviceRangeCatalog",
     "SlmpDeviceRangeCategory",
     "SlmpDeviceRangeEntry",
