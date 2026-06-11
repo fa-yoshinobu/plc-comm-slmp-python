@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import socket
-import struct
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
-from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, FrameType, PLCSeries
+from . import _operations
+from .constants import Command, FrameType, PLCSeries
 from .core import (
     _MIXED_BLOCK_RETRY_END_CODES,
     BlockReadResult,
     CpuOperationState,
-    DeviceBlockResult,
     DeviceRef,
     ExtensionSpec,
     LabelArrayReadPoint,
@@ -28,45 +27,16 @@ from .core import (
     SlmpTarget,
     SlmpTraceFrame,
     TypeNameInfo,
-    _check_block_request_limits,
-    _check_label_unit_specification,
     _check_points_u16,
-    _check_random_bit_write_count,
-    _check_random_read_like_counts,
-    _check_temporarily_unsupported_device,
-    _check_temporarily_unsupported_devices,
-    _check_u16,
-    _check_u32,
-    _encode_label_name,
-    _encode_remote_password_payload,
-    _label_array_data_bytes,
-    _normalize_items,
     _raise_response_error,
     _require_explicit_device_family_for_xy,
     _resolve_connection_profile,
-    _validate_block_read_devices,
-    _validate_block_write_devices,
-    _validate_direct_dword_read_device,
-    _validate_direct_read_device,
-    _validate_direct_write_device,
-    _validate_monitor_register_devices,
-    _validate_random_read_devices,
-    _validate_random_write_word_devices,
-    _warn_boundary_behavior,
-    _warn_practical_device_path,
     build_device_modification_flags,
     decode_cpu_operation_state,
-    decode_device_dwords,
-    decode_device_words,
     decode_response,
-    encode_device_spec,
-    encode_extended_device_spec,
     encode_request,
-    pack_bit_values,
     parse_device,
-    resolve_device_subcommand,
     resolve_extended_device_and_extension,
-    unpack_bit_values,
 )
 from .errors import SlmpError, SlmpPracticalPathWarning
 
@@ -352,29 +322,16 @@ class SlmpClient:
             SlmpError: If the PLC returns an error code.
             ValueError: If `points` is out of valid range (0-65535).
         """
-        _check_points_u16(points, "points")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        ref = self._parse_device(device)
-        _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
-        _check_temporarily_unsupported_device(ref)
-        _warn_practical_device_path(ref, series=s, access_kind="direct")
-        _warn_boundary_behavior(
-            ref,
-            series=s,
-            points=points,
-            write=False,
+        request = _operations.build_read_devices_request(
+            device,
+            points,
             bit_unit=bit_unit,
-            access_kind="direct",
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
-        sub = resolve_device_subcommand(bit_unit=bit_unit, series=s, extension=False)
-        payload = encode_device_spec(ref, series=s) + points.to_bytes(2, "little")
-        resp = self.request(Command.DEVICE_READ, subcommand=sub, data=payload)
-        if bit_unit:
-            return unpack_bit_values(resp.data, points)
-        words = decode_device_words(resp.data)
-        if len(words) != points:
-            raise SlmpError(f"word count mismatch: expected={points}, actual={len(words)}")
-        return words
+        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
 
     def write_devices(
         self,
@@ -397,32 +354,15 @@ class SlmpClient:
             SlmpError: If the PLC returns an error code.
             ValueError: If `values` is empty or exceeds valid protocol limits.
         """
-        if not values:
-            raise ValueError("values must not be empty")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        ref = self._parse_device(device)
-        _validate_direct_write_device(ref, bit_unit=bit_unit)
-        _check_temporarily_unsupported_device(ref)
-        _warn_practical_device_path(ref, series=s, access_kind="direct")
-        _warn_boundary_behavior(
-            ref,
-            series=s,
-            points=len(values),
-            write=True,
+        request = _operations.build_write_devices_request(
+            device,
+            values,
             bit_unit=bit_unit,
-            access_kind="direct",
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
-        sub = resolve_device_subcommand(bit_unit=bit_unit, series=s, extension=False)
-
-        payload = bytearray()
-        payload += encode_device_spec(ref, series=s)
-        payload += len(values).to_bytes(2, "little")
-        if bit_unit:
-            payload += pack_bit_values(values)
-        else:
-            for value in values:
-                payload += int(value).to_bytes(2, "little", signed=False)
-        self.request(Command.DEVICE_WRITE, subcommand=sub, data=bytes(payload))
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_dword(
         self,
@@ -451,15 +391,15 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[int]:
         """Read one or more 32-bit values from consecutive word devices."""
-        if count < 1:
-            raise ValueError("count must be >= 1")
-        ref = self._parse_device(device)
-        _validate_direct_dword_read_device(ref)
-        words = [int(value) for value in self.read_devices(ref, count * 2, series=series)]
-        values: list[int] = []
-        for offset in range(0, len(words), 2):
-            values.append(words[offset] | (words[offset + 1] << 16))
-        return values
+        request = _operations.build_read_dwords_request(
+            device,
+            count,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_read_dwords_response(resp, count=count)
 
     def write_dwords(
         self,
@@ -469,14 +409,14 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write one or more 32-bit values to two consecutive word devices."""
-        if not values:
-            raise ValueError("values must not be empty")
-        words: list[int] = []
-        for value in values:
-            bits = int(value) & 0xFFFFFFFF
-            words.append(bits & 0xFFFF)
-            words.append((bits >> 16) & 0xFFFF)
-        self.write_devices(device, words, series=series)
+        request = _operations.build_write_dwords_request(
+            device,
+            values,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_float32(
         self,
@@ -505,10 +445,15 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[float]:
         """Read one or more IEEE-754 float32 values from consecutive word devices."""
-        values: list[float] = []
-        for bits in self.read_dwords(device, count, series=series):
-            values.append(struct.unpack("<f", struct.pack("<I", bits))[0])
-        return values
+        request = _operations.build_read_dwords_request(
+            device,
+            count,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_read_float32s_response(resp, count=count)
 
     def write_float32s(
         self,
@@ -518,10 +463,14 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write one or more IEEE-754 float32 values to two consecutive word devices."""
-        dwords: list[int] = []
-        for value in values:
-            dwords.append(struct.unpack("<I", struct.pack("<f", float(value)))[0])
-        self.write_dwords(device, dwords, series=series)
+        request = _operations.build_write_float32s_request(
+            device,
+            values,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_devices_ext(
         self,
@@ -533,25 +482,17 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[int] | list[bool]:
         """Extended Device extension read (subcommand 0081/0080 or 0083/0082)."""
-        _check_points_u16(points, "points")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
-        _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
-        _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-        _warn_practical_device_path(ref, series=s, access_kind="extended_device")
-        if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
-            s = PLCSeries.QL
-        sub = resolve_device_subcommand(bit_unit=bit_unit, series=s, extension=True)
-        payload = bytearray()
-        payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        payload += points.to_bytes(2, "little")
-        resp = self.request(Command.DEVICE_READ, subcommand=sub, data=bytes(payload))
-        if bit_unit:
-            return unpack_bit_values(resp.data, points)
-        words = decode_device_words(resp.data)
-        if len(words) != points:
-            raise SlmpError(f"word count mismatch: expected={points}, actual={len(words)}")
-        return words
+        request = _operations.build_read_devices_ext_request(
+            device,
+            points,
+            extension=extension,
+            bit_unit=bit_unit,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
 
     def write_devices_ext(
         self,
@@ -563,25 +504,16 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Extended Device extension write (subcommand 0081/0080 or 0083/0082)."""
-        if not values:
-            raise ValueError("values must not be empty")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
-        _validate_direct_write_device(ref, bit_unit=bit_unit)
-        _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-        _warn_practical_device_path(ref, series=s, access_kind="extended_device")
-        if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
-            s = PLCSeries.QL
-        sub = resolve_device_subcommand(bit_unit=bit_unit, series=s, extension=True)
-        payload = bytearray()
-        payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        payload += len(values).to_bytes(2, "little")
-        if bit_unit:
-            payload += pack_bit_values(values)
-        else:
-            for value in values:
-                payload += int(value).to_bytes(2, "little", signed=False)
-        self.request(Command.DEVICE_WRITE, subcommand=sub, data=bytes(payload))
+        request = _operations.build_write_devices_ext_request(
+            device,
+            values,
+            extension=extension,
+            bit_unit=bit_unit,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_random(
         self,
@@ -598,39 +530,19 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not word_devices and not dword_devices:
-            raise ValueError("word_devices and dword_devices must not both be empty")
-        if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-            raise ValueError("word_devices and dword_devices must be <= 255 each")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_read_like_counts(len(word_devices), len(dword_devices), series=s, name="read_random")
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
-
-        words = [self._parse_device(d) for d in word_devices]
-        dwords = [self._parse_device(d) for d in dword_devices]
-        _validate_random_read_devices(words, dwords)
-        _check_temporarily_unsupported_devices(words)
-        _check_temporarily_unsupported_devices(dwords)
-
-        payload = bytearray([len(words), len(dwords)])
-        for dev in words:
-            payload += encode_device_spec(dev, series=s)
-        for dev in dwords:
-            payload += encode_device_spec(dev, series=s)
-
-        resp = self.request(Command.DEVICE_READ_RANDOM, subcommand=sub, data=bytes(payload))
-        expected = len(words) * 2 + len(dwords) * 4
-        if len(resp.data) != expected:
-            raise SlmpError(f"random read response size mismatch: expected={expected}, actual={len(resp.data)}")
-
-        offset = 0
-        word_values = decode_device_words(resp.data[offset : offset + (len(words) * 2)])
-        offset += len(words) * 2
-        dword_values = decode_device_dwords(resp.data[offset:])
-        return RandomReadResult(
-            word={str(dev): value for dev, value in zip(words, word_values, strict=True)},
-            dword={str(dev): value for dev, value in zip(dwords, dword_values, strict=True)},
+        operation = _operations.build_read_random_request(
+            word_devices=word_devices,
+            dword_devices=dword_devices,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
+        resp = self.request(
+            operation.request.command,
+            subcommand=operation.request.subcommand,
+            data=operation.request.payload,
+        )
+        return _operations.decode_read_random_response(resp, operation)
 
     def read_random_ext(
         self,
@@ -647,41 +559,19 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not word_devices and not dword_devices:
-            raise ValueError("word_devices and dword_devices must not both be empty")
-        if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-            raise ValueError("word_devices and dword_devices must be <= 255 each")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_read_like_counts(len(word_devices), len(dword_devices), series=s, name="read_random_ext")
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=True)
-        payload = bytearray([len(word_devices), len(dword_devices)])
-        words: list[tuple[DeviceRef, ExtensionSpec]] = []
-        dwords: list[tuple[DeviceRef, ExtensionSpec]] = []
-        for dev, ext in word_devices:
-            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            words.append((ref, effective_extension))
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        for dev, ext in dword_devices:
-            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            dwords.append((ref, effective_extension))
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        _validate_random_read_devices([ref for ref, _ in words], [ref for ref, _ in dwords])
-
-        resp = self.request(Command.DEVICE_READ_RANDOM, subcommand=sub, data=bytes(payload))
-        expected = len(words) * 2 + len(dwords) * 4
-        if len(resp.data) != expected:
-            raise SlmpError(f"random read response size mismatch: expected={expected}, actual={len(resp.data)}")
-
-        offset = 0
-        word_values = decode_device_words(resp.data[offset : offset + (len(words) * 2)])
-        offset += len(words) * 2
-        dword_values = decode_device_dwords(resp.data[offset:])
-        return RandomReadResult(
-            word={str(dev): value for (dev, _), value in zip(words, word_values, strict=True)},
-            dword={str(dev): value for (dev, _), value in zip(dwords, dword_values, strict=True)},
+        operation = _operations.build_read_random_ext_request(
+            word_devices=word_devices,
+            dword_devices=dword_devices,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
+        resp = self.request(
+            operation.request.command,
+            subcommand=operation.request.subcommand,
+            data=operation.request.payload,
+        )
+        return _operations.decode_read_random_response(resp, operation)
 
     def write_random_words(
         self,
@@ -698,26 +588,13 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        word_items = _normalize_items(word_values)
-        dword_items = _normalize_items(dword_values)
-        if not word_items and not dword_items:
-            raise ValueError("word_values and dword_values must not both be empty")
-        if len(word_items) > 0xFF or len(dword_items) > 0xFF:
-            raise ValueError("word_values and dword_values must be <= 255 each")
-
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _validate_random_write_word_devices([device for device, _ in word_items])
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
-        payload = bytearray([len(word_items), len(dword_items)])
-        for device, value in word_items:
-            _check_temporarily_unsupported_device(device)
-            payload += encode_device_spec(device, series=s)
-            payload += int(value).to_bytes(2, "little", signed=False)
-        for device, value in dword_items:
-            _check_temporarily_unsupported_device(device)
-            payload += encode_device_spec(device, series=s)
-            payload += int(value).to_bytes(4, "little", signed=False)
-        self.request(Command.DEVICE_WRITE_RANDOM, subcommand=sub, data=bytes(payload))
+        request = _operations.build_write_random_words_request(
+            word_values=word_values,
+            dword_values=dword_values,
+            series=series,
+            default_series=self.plc_series,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_words_ext(
         self,
@@ -734,27 +611,14 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not word_values and not dword_values:
-            raise ValueError("word_values and dword_values must not both be empty")
-        if len(word_values) > 0xFF or len(dword_values) > 0xFF:
-            raise ValueError("word_values and dword_values must be <= 255 each")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=True)
-        payload = bytearray([len(word_values), len(dword_values)])
-        word_refs: list[DeviceRef] = []
-        for device, value, ext in word_values:
-            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            word_refs.append(ref)
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-            payload += int(value).to_bytes(2, "little", signed=False)
-        for device, value, ext in dword_values:
-            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-            payload += int(value).to_bytes(4, "little", signed=False)
-        _validate_random_write_word_devices(word_refs)
-        self.request(Command.DEVICE_WRITE_RANDOM, subcommand=sub, data=bytes(payload))
+        request = _operations.build_write_random_words_ext_request(
+            word_values=word_values,
+            dword_values=dword_values,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_bits(
         self,
@@ -769,25 +633,12 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        items = _normalize_items(bit_values)
-        if not items:
-            raise ValueError("bit_values must not be empty")
-        if len(items) > 0xFF:
-            raise ValueError("bit_values must be <= 255")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_bit_write_count(len(items), series=s, name="write_random_bits")
-        sub = resolve_device_subcommand(bit_unit=True, series=s, extension=False)
-        payload = bytearray([len(items)])
-        for device, state in items:
-            _check_temporarily_unsupported_device(device)
-            payload += encode_device_spec(device, series=s)
-            if s == PLCSeries.IQR:
-                # iQ-R/iQ-L random bit write uses 2-byte set/reset field.
-                # ON must be encoded as 0x0001 (01 00 in little-endian).
-                payload += b"\x01\x00" if bool(state) else b"\x00\x00"
-            else:
-                payload += b"\x01" if bool(state) else b"\x00"
-        self.request(Command.DEVICE_WRITE_RANDOM, subcommand=sub, data=bytes(payload))
+        request = _operations.build_write_random_bits_request(
+            bit_values,
+            series=series,
+            default_series=self.plc_series,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_bits_ext(
         self,
@@ -802,23 +653,13 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not bit_values:
-            raise ValueError("bit_values must not be empty")
-        if len(bit_values) > 0xFF:
-            raise ValueError("bit_values must be <= 255")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_bit_write_count(len(bit_values), series=s, name="write_random_bits_ext")
-        sub = resolve_device_subcommand(bit_unit=True, series=s, extension=True)
-        payload = bytearray([len(bit_values)])
-        for device, state, ext in bit_values:
-            ref, effective_extension = self._resolve_extended_device_and_extension(device, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-            if s == PLCSeries.IQR:
-                payload += b"\x01\x00" if bool(state) else b"\x00\x00"
-            else:
-                payload += b"\x01" if bool(state) else b"\x00"
-        self.request(Command.DEVICE_WRITE_RANDOM, subcommand=sub, data=bytes(payload))
+        request = _operations.build_write_random_bits_ext_request(
+            bit_values,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def register_monitor_devices(
         self,
@@ -835,34 +676,14 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not word_devices and not dword_devices:
-            raise ValueError("word_devices and dword_devices must not both be empty")
-        if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-            raise ValueError("word_devices and dword_devices must be <= 255 each")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_read_like_counts(
-            len(word_devices),
-            len(dword_devices),
-            series=s,
-            name="register_monitor_devices",
+        request = _operations.build_register_monitor_devices_request(
+            word_devices=word_devices,
+            dword_devices=dword_devices,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
-
-        payload = bytearray([len(word_devices), len(dword_devices)])
-        word_refs: list[DeviceRef] = []
-        dword_refs: list[DeviceRef] = []
-        for dev in word_devices:
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            payload += encode_device_spec(ref, series=s)
-            word_refs.append(ref)
-        for dev in dword_devices:
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            payload += encode_device_spec(ref, series=s)
-            dword_refs.append(ref)
-        _validate_monitor_register_devices(word_refs, dword_refs)
-        self.request(Command.DEVICE_ENTRY_MONITOR, subcommand=sub, data=bytes(payload))
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def register_monitor_devices_ext(
         self,
@@ -879,33 +700,14 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        if not word_devices and not dword_devices:
-            raise ValueError("word_devices and dword_devices must not both be empty")
-        if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-            raise ValueError("word_devices and dword_devices must be <= 255 each")
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_random_read_like_counts(
-            len(word_devices),
-            len(dword_devices),
-            series=s,
-            name="register_monitor_devices_ext",
+        request = _operations.build_register_monitor_devices_ext_request(
+            word_devices=word_devices,
+            dword_devices=dword_devices,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
         )
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=True)
-        payload = bytearray([len(word_devices), len(dword_devices)])
-        word_refs: list[DeviceRef] = []
-        dword_refs: list[DeviceRef] = []
-        for dev, ext in word_devices:
-            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            word_refs.append(ref)
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        for dev, ext in dword_devices:
-            ref, effective_extension = self._resolve_extended_device_and_extension(dev, ext)
-            _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-            dword_refs.append(ref)
-            payload += encode_extended_device_spec(ref, series=s, extension=effective_extension)
-        _validate_monitor_register_devices(word_refs, dword_refs)
-        self.request(Command.DEVICE_ENTRY_MONITOR, subcommand=sub, data=bytes(payload))
+        self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
         """Execute a monitoring cycle for previously registered devices.
@@ -918,17 +720,9 @@ class SlmpClient:
             MonitorResult containing the read values.
 
         """
-        if word_points < 0 or dword_points < 0:
-            raise ValueError("word_points and dword_points must be >= 0")
-        resp = self.request(Command.DEVICE_EXECUTE_MONITOR, subcommand=0x0000, data=b"")
-        expected = word_points * 2 + dword_points * 4
-        if len(resp.data) != expected:
-            raise SlmpError(f"monitor response size mismatch: expected={expected}, actual={len(resp.data)}")
-        offset = 0
-        words = decode_device_words(resp.data[offset : offset + word_points * 2])
-        offset += word_points * 2
-        dwords = decode_device_dwords(resp.data[offset:])
-        return MonitorResult(word=words, dword=dwords)
+        request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
+        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
 
     def read_block(
         self,
@@ -957,56 +751,19 @@ class SlmpClient:
                 split_mixed_blocks=False,
             )
             return BlockReadResult(word_blocks=w.word_blocks, bit_blocks=b.bit_blocks)
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_block_request_limits(word_blocks, bit_blocks, series=s, name="read_block")
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
-
-        payload = bytearray([len(word_blocks), len(bit_blocks)])
-        norm_word: list[tuple[DeviceRef, int]] = []
-        norm_bit: list[tuple[DeviceRef, int]] = []
-
-        for dev, points in word_blocks:
-            _check_points_u16(points, "word_block points")
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            _warn_practical_device_path(ref, series=s, access_kind="direct")
-            norm_word.append((ref, points))
-            payload += encode_device_spec(ref, series=s)
-            payload += points.to_bytes(2, "little")
-        for dev, points in bit_blocks:
-            _check_points_u16(points, "bit_block points")
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            _warn_practical_device_path(ref, series=s, access_kind="direct")
-            norm_bit.append((ref, points))
-            payload += encode_device_spec(ref, series=s)
-            payload += points.to_bytes(2, "little")
-        _validate_block_read_devices(norm_word, norm_bit)
-
-        resp = self.request(Command.DEVICE_READ_BLOCK, subcommand=sub, data=bytes(payload))
-
-        offset = 0
-        word_result: list[DeviceBlockResult] = []
-        for ref, points in norm_word:
-            size = points * 2
-            words = decode_device_words(resp.data[offset : offset + size])
-            if len(words) != points:
-                raise SlmpError(f"word block response mismatch for {ref}")
-            word_result.append(DeviceBlockResult(device=str(ref), values=words))
-            offset += size
-
-        bit_result: list[DeviceBlockResult] = []
-        for ref, points in norm_bit:
-            size = points * 2
-            words = decode_device_words(resp.data[offset : offset + size])
-            if len(words) != points:
-                raise SlmpError(f"bit block response mismatch for {ref}")
-            bit_result.append(DeviceBlockResult(device=str(ref), values=words))
-            offset += size
-
-        if offset != len(resp.data):
-            raise SlmpError(f"read block response trailing data: {len(resp.data) - offset} bytes")
-        return BlockReadResult(word_blocks=word_result, bit_blocks=bit_result)
+        operation = _operations.build_read_block_request(
+            word_blocks=word_blocks,
+            bit_blocks=bit_blocks,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
+        resp = self.request(
+            operation.request.command,
+            subcommand=operation.request.subcommand,
+            data=operation.request.payload,
+        )
+        return _operations.decode_read_block_response(resp, operation)
 
     def write_block(
         self,
@@ -1038,41 +795,17 @@ class SlmpClient:
                 retry_mixed_on_error=False,
             )
             return
-        s = PLCSeries(series) if series is not None else self.plc_series
-        _check_block_request_limits(word_blocks, bit_blocks, series=s, name="write_block")
-        sub = resolve_device_subcommand(bit_unit=False, series=s, extension=False)
-
-        payload = bytearray([len(word_blocks), len(bit_blocks)])
-        word_refs: list[DeviceRef] = []
-        bit_refs: list[DeviceRef] = []
-        for dev, values in word_blocks:
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            _warn_practical_device_path(ref, series=s, access_kind="direct")
-            _check_points_u16(len(values), "word block size")
-            payload += encode_device_spec(ref, series=s)
-            payload += len(values).to_bytes(2, "little")
-            word_refs.append(ref)
-        for dev, values in bit_blocks:
-            ref = self._parse_device(dev)
-            _check_temporarily_unsupported_device(ref)
-            _warn_practical_device_path(ref, series=s, access_kind="direct")
-            _check_points_u16(len(values), "bit block size")
-            payload += encode_device_spec(ref, series=s)
-            payload += len(values).to_bytes(2, "little")
-            bit_refs.append(ref)
-        _validate_block_write_devices(word_refs, bit_refs)
-
-        for _, values in word_blocks:
-            for value in values:
-                payload += int(value).to_bytes(2, "little", signed=False)
-        for _, values in bit_blocks:
-            for value in values:
-                payload += int(value).to_bytes(2, "little", signed=False)
+        request = _operations.build_write_block_request(
+            word_blocks=word_blocks,
+            bit_blocks=bit_blocks,
+            series=series,
+            default_series=self.plc_series,
+            device_family=self.device_family,
+        )
         resp = self.request(
-            Command.DEVICE_WRITE_BLOCK,
-            subcommand=sub,
-            data=bytes(payload),
+            request.command,
+            subcommand=request.subcommand,
+            data=request.payload,
             raise_on_error=False,
         )
         if resp.end_code == 0:
@@ -1102,7 +835,7 @@ class SlmpClient:
             )
             return
         if self.raise_on_error:
-            _raise_response_error(resp, command=Command.DEVICE_WRITE_BLOCK, subcommand=sub)
+            _raise_response_error(resp, command=request.command, subcommand=request.subcommand)
 
     def read_long_timer(
         self,
@@ -1222,15 +955,9 @@ class SlmpClient:
             List of 16-bit word values.
 
         """
-        _check_u32(head_address, "head_address")
-        if word_length < 1 or word_length > 0x01E0:
-            raise ValueError(f"word_length out of range (1..480): {word_length}")
-        payload = head_address.to_bytes(4, "little") + word_length.to_bytes(2, "little")
-        data = self.request(Command.MEMORY_READ, 0x0000, payload).data
-        words = decode_device_words(data)
-        if len(words) != word_length:
-            raise SlmpError(f"memory read size mismatch: expected={word_length}, actual={len(words)}")
-        return words
+        request = _operations.build_memory_read_words_request(head_address, word_length)
+        resp = self.request(request.command, request.subcommand, request.payload)
+        return _operations.decode_memory_read_words_response(resp, word_length=word_length)
 
     def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
         """Write 16-bit words to intelligent function module/special function module buffer memory.
@@ -1240,17 +967,8 @@ class SlmpClient:
             values: Sequence of 16-bit word values to write.
 
         """
-        _check_u32(head_address, "head_address")
-        if not values:
-            raise ValueError("values must not be empty")
-        if len(values) > 0x01E0:
-            raise ValueError(f"word length out of range (1..480): {len(values)}")
-        payload = bytearray()
-        payload += head_address.to_bytes(4, "little")
-        payload += len(values).to_bytes(2, "little")
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
-        self.request(Command.MEMORY_WRITE, 0x0000, bytes(payload))
+        request = _operations.build_memory_write_words_request(head_address, values)
+        self.request(request.command, request.subcommand, request.payload)
 
     def extend_unit_read_bytes(self, head_address: int, byte_length: int, module_no: int) -> bytes:
         """Read bytes from multiple-CPU shared memory or other extended units.
@@ -1264,17 +982,9 @@ class SlmpClient:
             Read data as bytes.
 
         """
-        _check_u32(head_address, "head_address")
-        _check_u16(module_no, "module_no")
-        if byte_length < 2 or byte_length > 0x0780:
-            raise ValueError(f"byte_length out of range (2..1920): {byte_length}")
-        payload = (
-            head_address.to_bytes(4, "little") + byte_length.to_bytes(2, "little") + module_no.to_bytes(2, "little")
-        )
-        data = self.request(Command.EXTEND_UNIT_READ, 0x0000, payload).data
-        if len(data) != byte_length:
-            raise SlmpError(f"extend unit read size mismatch: expected={byte_length}, actual={len(data)}")
-        return data
+        request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
+        resp = self.request(request.command, request.subcommand, request.payload)
+        return _operations.decode_extend_unit_read_bytes_response(resp, byte_length=byte_length)
 
     def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
         """Read 16-bit words from multiple-CPU shared memory or other extended units.
@@ -1288,14 +998,9 @@ class SlmpClient:
             List of 16-bit word values.
 
         """
-        _check_u32(head_address, "head_address")
-        if word_length < 1 or word_length > 0x03C0:
-            raise ValueError(f"word_length out of range (1..960): {word_length}")
-        data = self.extend_unit_read_bytes(head_address, word_length * 2, module_no)
-        words = decode_device_words(data)
-        if len(words) != word_length:
-            raise SlmpError(f"extend unit read word size mismatch: expected={word_length}, actual={len(words)}")
-        return words
+        request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
+        resp = self.request(request.command, request.subcommand, request.payload)
+        return _operations.decode_extend_unit_read_words_response(resp, word_length=word_length)
 
     def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
         """Read one 16-bit word from an extend-unit buffer."""
@@ -1314,17 +1019,8 @@ class SlmpClient:
             data: Bytes to write.
 
         """
-        _check_u32(head_address, "head_address")
-        _check_u16(module_no, "module_no")
-        if len(data) < 2 or len(data) > 0x0780:
-            raise ValueError(f"data length out of range (2..1920): {len(data)}")
-        payload = (
-            head_address.to_bytes(4, "little")
-            + len(data).to_bytes(2, "little")
-            + module_no.to_bytes(2, "little")
-            + data
-        )
-        self.request(Command.EXTEND_UNIT_WRITE, 0x0000, payload)
+        request = _operations.build_extend_unit_write_bytes_request(head_address, module_no, data)
+        self.request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_words(self, head_address: int, module_no: int, values: Sequence[int]) -> None:
         """Write 16-bit words to multiple-CPU shared memory or other extended units.
@@ -1335,25 +1031,18 @@ class SlmpClient:
             values: Sequence of 16-bit word values to write.
 
         """
-        _check_u32(head_address, "head_address")
-        if not values:
-            raise ValueError("values must not be empty")
-        if len(values) > 0x03C0:
-            raise ValueError(f"word_length out of range (1..960): {len(values)}")
-        payload = bytearray()
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
-        self.extend_unit_write_bytes(head_address, module_no, bytes(payload))
+        request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
+        self.request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_word(self, head_address: int, module_no: int, value: int) -> None:
         """Write one 16-bit word to an extend-unit buffer."""
-        _check_u16(value, "value")
-        self.extend_unit_write_words(head_address, module_no, [value])
+        request = _operations.build_extend_unit_write_word_request(head_address, module_no, value)
+        self.request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_dword(self, head_address: int, module_no: int, value: int) -> None:
         """Write one 32-bit value to an extend-unit buffer."""
-        _check_u32(value, "value")
-        self.extend_unit_write_bytes(head_address, module_no, int(value).to_bytes(4, "little", signed=False))
+        request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
+        self.request(request.command, request.subcommand, request.payload)
 
     def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int = 0x03E0) -> bytes:
         """Read CPU buffer memory by extend-unit command using the CPU start I/O number."""
@@ -1395,11 +1084,8 @@ class SlmpClient:
             clear_mode: Clear mode (0: No clear, 1: Clear except latch, 2: Clear all).
 
         """
-        if clear_mode not in {0, 1, 2}:
-            raise ValueError(f"clear_mode must be one of 0,1,2: {clear_mode}")
-        mode = 0x0003 if force else 0x0001
-        payload = mode.to_bytes(2, "little") + clear_mode.to_bytes(2, "little")
-        self.request(Command.REMOTE_RUN, 0x0000, payload)
+        request = _operations.build_remote_run_request(force=force, clear_mode=clear_mode)
+        self.request(request.command, request.subcommand, request.payload)
 
     def remote_stop(self, *, force: bool = False) -> None:
         """Remote STOP.
@@ -1408,8 +1094,8 @@ class SlmpClient:
             force: Force STOP.
 
         """
-        mode = 0x0003 if force else 0x0001
-        self.request(Command.REMOTE_STOP, 0x0000, mode.to_bytes(2, "little"))
+        request = _operations.build_remote_stop_request(force=force)
+        self.request(request.command, request.subcommand, request.payload)
 
     def remote_pause(self, *, force: bool = False) -> None:
         """Remote PAUSE.
@@ -1418,12 +1104,13 @@ class SlmpClient:
             force: Force PAUSE.
 
         """
-        mode = 0x0003 if force else 0x0001
-        self.request(Command.REMOTE_PAUSE, 0x0000, mode.to_bytes(2, "little"))
+        request = _operations.build_remote_pause_request(force=force)
+        self.request(request.command, request.subcommand, request.payload)
 
     def remote_latch_clear(self) -> None:
         """Remote latch clear."""
-        self.request(Command.REMOTE_LATCH_CLEAR, 0x0000, b"\x01\x00")
+        request = _operations.build_remote_latch_clear_request()
+        self.request(request.command, request.subcommand, request.payload)
 
     def remote_reset(self, *, subcommand: int = 0x0000, expect_response: bool | None = None) -> None:
         """Remote RESET.
@@ -1433,13 +1120,12 @@ class SlmpClient:
             expect_response: Whether to wait for a response.
 
         """
-        if subcommand not in {0x0000, 0x0001}:
-            raise ValueError(f"remote reset subcommand must be 0x0000 or 0x0001: 0x{subcommand:04X}")
+        request = _operations.build_remote_reset_request(subcommand=subcommand)
         should_wait = (subcommand != 0x0000) if expect_response is None else expect_response
         if should_wait:
-            self.request(Command.REMOTE_RESET, subcommand, b"")
+            self.request(request.command, request.subcommand, request.payload)
             return
-        self._send_no_response(Command.REMOTE_RESET, subcommand, b"")
+        self._send_no_response(request.command, request.subcommand, request.payload)
 
     def remote_password_lock(self, password: str, *, series: PLCSeries | str | None = None) -> None:
         """Remote password lock.
@@ -1449,9 +1135,12 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        s = PLCSeries(series) if series is not None else self.plc_series
-        payload = _encode_remote_password_payload(password, series=s)
-        self.request(Command.REMOTE_PASSWORD_LOCK, 0x0000, payload)
+        request = _operations.build_remote_password_lock_request(
+            password,
+            series=series,
+            default_series=self.plc_series,
+        )
+        self.request(request.command, request.subcommand, request.payload)
 
     def remote_password_unlock(self, password: str, *, series: PLCSeries | str | None = None) -> None:
         """Remote password unlock.
@@ -1461,9 +1150,12 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
-        s = PLCSeries(series) if series is not None else self.plc_series
-        payload = _encode_remote_password_payload(password, series=s)
-        self.request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, payload)
+        request = _operations.build_remote_password_unlock_request(
+            password,
+            series=series,
+            default_series=self.plc_series,
+        )
+        self.request(request.command, request.subcommand, request.payload)
 
     def self_test_loopback(self, data: bytes | str) -> bytes:
         """Self-test (loopback).
@@ -1475,18 +1167,9 @@ class SlmpClient:
             Received loopback data.
 
         """
-        loopback = data.encode("ascii") if isinstance(data, str) else bytes(data)
-        if len(loopback) < 1 or len(loopback) > 960:
-            raise ValueError(f"loopback data size out of range (1..960): {len(loopback)}")
-        payload = len(loopback).to_bytes(2, "little") + loopback
-        resp = self.request(Command.SELF_TEST, 0x0000, payload).data
-        if len(resp) < 2:
-            raise SlmpError(f"self test response too short: {len(resp)}")
-        size = int.from_bytes(resp[:2], "little")
-        body = resp[2:]
-        if size != len(body):
-            raise SlmpError(f"self test response size mismatch: size={size}, actual={len(body)}")
-        return body
+        request = _operations.build_self_test_loopback_request(data)
+        resp = self.request(request.command, request.subcommand, request.payload)
+        return _operations.decode_self_test_loopback_response(resp)
 
     # --------------------
     # Label command helpers (typed)
@@ -1508,9 +1191,9 @@ class SlmpClient:
             List of LabelArrayReadResult.
 
         """
-        payload = self.build_array_label_read_payload(points, abbreviation_labels=abbreviation_labels)
-        data = self.request(Command.LABEL_ARRAY_READ, 0x0000, payload).data
-        return self.parse_array_label_read_response(data, expected_points=len(points))
+        request = _operations.build_read_array_labels_request(points, abbreviation_labels=abbreviation_labels)
+        data = self.request(request.command, request.subcommand, request.payload).data
+        return _operations.parse_array_label_read_response(data, expected_points=len(points))
 
     def write_array_labels(
         self,
@@ -1525,8 +1208,8 @@ class SlmpClient:
             abbreviation_labels: Optional list of abbreviation labels.
 
         """
-        payload = self.build_array_label_write_payload(points, abbreviation_labels=abbreviation_labels)
-        self.request(Command.LABEL_ARRAY_WRITE, 0x0000, payload)
+        request = _operations.build_write_array_labels_request(points, abbreviation_labels=abbreviation_labels)
+        self.request(request.command, request.subcommand, request.payload)
 
     def read_random_labels(
         self,
@@ -1544,9 +1227,9 @@ class SlmpClient:
             List of LabelRandomReadResult.
 
         """
-        payload = self.build_label_read_random_payload(labels, abbreviation_labels=abbreviation_labels)
-        data = self.request(Command.LABEL_READ_RANDOM, 0x0000, payload).data
-        return self.parse_label_read_random_response(data, expected_points=len(labels))
+        request = _operations.build_read_random_labels_request(labels, abbreviation_labels=abbreviation_labels)
+        data = self.request(request.command, request.subcommand, request.payload).data
+        return _operations.parse_label_read_random_response(data, expected_points=len(labels))
 
     def write_random_labels(
         self,
@@ -1561,8 +1244,8 @@ class SlmpClient:
             abbreviation_labels: Optional list of abbreviation labels.
 
         """
-        payload = self.build_label_write_random_payload(points, abbreviation_labels=abbreviation_labels)
-        self.request(Command.LABEL_WRITE_RANDOM, 0x0000, payload)
+        request = _operations.build_write_random_labels_request(points, abbreviation_labels=abbreviation_labels)
+        self.request(request.command, request.subcommand, request.payload)
 
     @staticmethod
     def build_array_label_read_payload(
@@ -1580,23 +1263,7 @@ class SlmpClient:
             Binary payload.
 
         """
-        if not points:
-            raise ValueError("points must not be empty")
-        _check_u16(len(points), "number of array points")
-        _check_u16(len(abbreviation_labels), "number of abbreviation points")
-        payload = bytearray()
-        payload += len(points).to_bytes(2, "little")
-        payload += len(abbreviation_labels).to_bytes(2, "little")
-        for name in abbreviation_labels:
-            payload += _encode_label_name(name)
-        for point in points:
-            _check_label_unit_specification(point.unit_specification, "unit_specification")
-            _check_u16(point.array_data_length, "array_data_length")
-            payload += _encode_label_name(point.label)
-            payload += point.unit_specification.to_bytes(1, "little")
-            payload += b"\x00"
-            payload += point.array_data_length.to_bytes(2, "little")
-        return bytes(payload)
+        return _operations.build_array_label_read_payload(points, abbreviation_labels=abbreviation_labels)
 
     @staticmethod
     def build_array_label_write_payload(
@@ -1614,32 +1281,7 @@ class SlmpClient:
             Binary payload.
 
         """
-        if not points:
-            raise ValueError("points must not be empty")
-        _check_u16(len(points), "number of array points")
-        _check_u16(len(abbreviation_labels), "number of abbreviation points")
-        payload = bytearray()
-        payload += len(points).to_bytes(2, "little")
-        payload += len(abbreviation_labels).to_bytes(2, "little")
-        for name in abbreviation_labels:
-            payload += _encode_label_name(name)
-        for point in points:
-            _check_label_unit_specification(point.unit_specification, "unit_specification")
-            _check_u16(point.array_data_length, "array_data_length")
-            raw = bytes(point.data)
-            expected = _label_array_data_bytes(point.unit_specification, point.array_data_length)
-            if len(raw) != expected:
-                raise ValueError(
-                    "array label write data size mismatch: "
-                    f"expected={expected}, actual={len(raw)}, unit_specification={point.unit_specification}, "
-                    f"array_data_length={point.array_data_length}"
-                )
-            payload += _encode_label_name(point.label)
-            payload += point.unit_specification.to_bytes(1, "little")
-            payload += b"\x00"
-            payload += point.array_data_length.to_bytes(2, "little")
-            payload += raw
-        return bytes(payload)
+        return _operations.build_array_label_write_payload(points, abbreviation_labels=abbreviation_labels)
 
     @staticmethod
     def build_label_read_random_payload(
@@ -1657,18 +1299,7 @@ class SlmpClient:
             Binary payload.
 
         """
-        if not labels:
-            raise ValueError("labels must not be empty")
-        _check_u16(len(labels), "number of read data points")
-        _check_u16(len(abbreviation_labels), "number of abbreviation points")
-        payload = bytearray()
-        payload += len(labels).to_bytes(2, "little")
-        payload += len(abbreviation_labels).to_bytes(2, "little")
-        for name in abbreviation_labels:
-            payload += _encode_label_name(name)
-        for label in labels:
-            payload += _encode_label_name(label)
-        return bytes(payload)
+        return _operations.build_label_read_random_payload(labels, abbreviation_labels=abbreviation_labels)
 
     @staticmethod
     def build_label_write_random_payload(
@@ -1686,22 +1317,7 @@ class SlmpClient:
             Binary payload.
 
         """
-        if not points:
-            raise ValueError("points must not be empty")
-        _check_u16(len(points), "number of write data points")
-        _check_u16(len(abbreviation_labels), "number of abbreviation points")
-        payload = bytearray()
-        payload += len(points).to_bytes(2, "little")
-        payload += len(abbreviation_labels).to_bytes(2, "little")
-        for name in abbreviation_labels:
-            payload += _encode_label_name(name)
-        for point in points:
-            raw = bytes(point.data)
-            _check_u16(len(raw), "write data length")
-            payload += _encode_label_name(point.label)
-            payload += len(raw).to_bytes(2, "little")
-            payload += raw
-        return bytes(payload)
+        return _operations.build_label_write_random_payload(points, abbreviation_labels=abbreviation_labels)
 
     @staticmethod
     def parse_array_label_read_response(
@@ -1719,40 +1335,7 @@ class SlmpClient:
             List of LabelArrayReadResult.
 
         """
-        if len(data) < 2:
-            raise SlmpError(f"array label read response too short: {len(data)}")
-        points = int.from_bytes(data[:2], "little")
-        if expected_points is not None and points != expected_points:
-            raise SlmpError(f"array label read point count mismatch: expected={expected_points}, actual={points}")
-        offset = 2
-        out: list[LabelArrayReadResult] = []
-        for _ in range(points):
-            if offset + 4 > len(data):
-                raise SlmpError("array label read response truncated before metadata")
-            data_type_id = data[offset]
-            unit_specification = data[offset + 1]
-            _check_label_unit_specification(unit_specification, "response unit_specification")
-            array_data_length = int.from_bytes(data[offset + 2 : offset + 4], "little")
-            offset += 4
-            data_size = _label_array_data_bytes(unit_specification, array_data_length)
-            if offset + data_size > len(data):
-                raise SlmpError(
-                    "array label read response truncated in data payload: "
-                    f"needed={data_size}, remaining={len(data) - offset}"
-                )
-            raw = data[offset : offset + data_size]
-            offset += data_size
-            out.append(
-                LabelArrayReadResult(
-                    data_type_id=data_type_id,
-                    unit_specification=unit_specification,
-                    array_data_length=array_data_length,
-                    data=raw,
-                )
-            )
-        if offset != len(data):
-            raise SlmpError(f"array label read response has trailing bytes: {len(data) - offset}")
-        return out
+        return _operations.parse_array_label_read_response(data, expected_points=expected_points)
 
     @staticmethod
     def parse_label_read_random_response(
@@ -1770,38 +1353,7 @@ class SlmpClient:
             List of LabelRandomReadResult.
 
         """
-        if len(data) < 2:
-            raise SlmpError(f"label random read response too short: {len(data)}")
-        points = int.from_bytes(data[:2], "little")
-        if expected_points is not None and points != expected_points:
-            raise SlmpError(f"label random read point count mismatch: expected={expected_points}, actual={points}")
-        offset = 2
-        out: list[LabelRandomReadResult] = []
-        for _ in range(points):
-            if offset + 4 > len(data):
-                raise SlmpError("label random read response truncated before metadata")
-            data_type_id = data[offset]
-            spare = data[offset + 1]
-            read_data_length = int.from_bytes(data[offset + 2 : offset + 4], "little")
-            offset += 4
-            if offset + read_data_length > len(data):
-                raise SlmpError(
-                    "label random read response truncated in data payload: "
-                    f"needed={read_data_length}, remaining={len(data) - offset}"
-                )
-            raw = data[offset : offset + read_data_length]
-            offset += read_data_length
-            out.append(
-                LabelRandomReadResult(
-                    data_type_id=data_type_id,
-                    spare=spare,
-                    read_data_length=read_data_length,
-                    data=raw,
-                )
-            )
-        if offset != len(data):
-            raise SlmpError(f"label random read response has trailing bytes: {len(data) - offset}")
-        return out
+        return _operations.parse_label_read_random_response(data, expected_points=expected_points)
 
     # --------------------
     # Full command wrappers (raw payload)
@@ -1863,14 +1415,9 @@ class SlmpClient:
 
     def read_type_name(self) -> TypeNameInfo:
         """Read the PLC model name and code."""
-        data = self.request(Command.READ_TYPE_NAME, 0x0000, b"").data
-        model = ""
-        model_code = None
-        if len(data) >= 16:
-            model = data[:16].split(b"\x00", 1)[0].decode("ascii", errors="ignore").strip()
-        if len(data) >= 18:
-            model_code = int.from_bytes(data[16:18], "little")
-        return TypeNameInfo(raw=data, model=model, model_code=model_code)
+        request = _operations.build_read_type_name_request()
+        resp = self.request(request.command, request.subcommand, request.payload)
+        return _operations.decode_read_type_name_response(resp)
 
     def read_device_range_catalog_for_family(
         self,

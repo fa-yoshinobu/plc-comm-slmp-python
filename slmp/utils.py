@@ -205,13 +205,7 @@ async def read_typed(
             value = (await client.read_random(dword_devices=[ref])).dword[str(ref)]
             return _decode_dword_value(value, key)
         words = await client.read_devices(ref, 2, bit_unit=False)
-        raw = struct.pack("<HH", words[0], words[1])
-        if key == "F":
-            return cast(float, struct.unpack("<f", raw)[0])
-        elif key == "L":
-            return cast(int, struct.unpack("<i", raw)[0])
-        else:
-            return cast(int, struct.unpack("<I", raw)[0])
+        return _decode_word_pair_value(words, key)
     else:
         words = await client.read_devices(ref, 1, bit_unit=False)
         if key == "S":
@@ -249,17 +243,10 @@ async def write_typed(
             series=client.plc_series,
         )
         return
-    if key == "F":
-        raw = struct.pack("<f", float(value))
-    elif key == "L":
-        raw = struct.pack("<i", int(value))
-    elif key == "D":
-        raw = struct.pack("<I", int(value))
-    else:
+    if key not in {"D", "L", "F"}:
         await client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
         return
-    words = list(struct.unpack("<HH", raw))
-    await client.write_devices(device, words, bit_unit=False)
+    await client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -290,13 +277,7 @@ def read_typed_sync(
             value = client.read_random(dword_devices=[ref]).dword[str(ref)]
             return _decode_dword_value(value, key)
         words = client.read_devices(ref, 2, bit_unit=False)
-        raw = struct.pack("<HH", words[0], words[1])
-        if key == "F":
-            return cast(float, struct.unpack("<f", raw)[0])
-        elif key == "L":
-            return cast(int, struct.unpack("<i", raw)[0])
-        else:
-            return cast(int, struct.unpack("<I", raw)[0])
+        return _decode_word_pair_value(words, key)
     else:
         words = client.read_devices(ref, 1, bit_unit=False)
         if key == "S":
@@ -327,17 +308,10 @@ def write_typed_sync(
             series=client.plc_series,
         )
         return
-    if key == "F":
-        raw = struct.pack("<f", float(value))
-    elif key == "L":
-        raw = struct.pack("<i", int(value))
-    elif key == "D":
-        raw = struct.pack("<I", int(value))
-    else:
+    if key not in {"D", "L", "F"}:
         client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
         return
-    words = list(struct.unpack("<HH", raw))
-    client.write_devices(device, words, bit_unit=False)
+    client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -357,15 +331,8 @@ async def write_bit_in_word(
     such as ``M1000`` should be written with :func:`write_typed` using
     ``"BIT"``.
     """
-    if not 0 <= bit_index <= 15:
-        raise ValueError(f"bit_index must be 0-15, got {bit_index}")
     words = await client.read_devices(device, 1, bit_unit=False)
-    current = int(words[0])
-    if value:
-        current |= 1 << bit_index
-    else:
-        current &= ~(1 << bit_index)
-    await client.write_devices(device, [current & 0xFFFF], bit_unit=False)
+    await client.write_devices(device, [_update_bit_in_word_value(int(words[0]), bit_index, value)], bit_unit=False)
 
 
 def write_bit_in_word_sync(
@@ -375,15 +342,8 @@ def write_bit_in_word_sync(
     value: bool,
 ) -> None:
     """Synchronously set or clear one bit inside one word device."""
-    if not 0 <= bit_index <= 15:
-        raise ValueError(f"bit_index must be 0-15, got {bit_index}")
     words = client.read_devices(device, 1, bit_unit=False)
-    current = int(words[0])
-    if value:
-        current |= 1 << bit_index
-    else:
-        current &= ~(1 << bit_index)
-    client.write_devices(device, [current & 0xFFFF], bit_unit=False)
+    client.write_devices(device, [_update_bit_in_word_value(int(words[0]), bit_index, value)], bit_unit=False)
 
 
 async def read_bits(
@@ -392,7 +352,7 @@ async def read_bits(
     count: int,
 ) -> list[bool]:
     """Read a contiguous bit-device range as booleans."""
-    return [bool(v) for v in await client.read_devices(device, count, bit_unit=True)]
+    return _bool_values(await client.read_devices(device, count, bit_unit=True))
 
 
 def read_bits_sync(
@@ -401,7 +361,7 @@ def read_bits_sync(
     count: int,
 ) -> list[bool]:
     """Synchronously read a contiguous bit-device range as booleans."""
-    return [bool(v) for v in client.read_devices(device, count, bit_unit=True)]
+    return _bool_values(client.read_devices(device, count, bit_unit=True))
 
 
 async def write_bits(
@@ -410,7 +370,7 @@ async def write_bits(
     values: list[bool],
 ) -> None:
     """Write a contiguous bit-device range from booleans."""
-    await client.write_devices(device, [bool(v) for v in values], bit_unit=True)
+    await client.write_devices(device, _bool_values(values), bit_unit=True)
 
 
 def write_bits_sync(
@@ -419,7 +379,7 @@ def write_bits_sync(
     values: list[bool],
 ) -> None:
     """Synchronously write a contiguous bit-device range from booleans."""
-    client.write_devices(device, [bool(v) for v in values], bit_unit=True)
+    client.write_devices(device, _bool_values(values), bit_unit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -886,6 +846,101 @@ def _decode_dword_value(value: int, dtype: str) -> int | float:
     return int(value)
 
 
+def _decode_word_pair_value(words: list[int] | list[bool], dtype: str) -> int | float:
+    raw = struct.pack("<HH", int(words[0]), int(words[1]))
+    if dtype == "F":
+        return cast(float, struct.unpack("<f", raw)[0])
+    if dtype == "L":
+        return cast(int, struct.unpack("<i", raw)[0])
+    return cast(int, struct.unpack("<I", raw)[0])
+
+
+def _encode_dword_words(value: int | float, dtype: str) -> list[int]:
+    if dtype == "F":
+        raw = struct.pack("<f", float(value))
+    elif dtype == "L":
+        raw = struct.pack("<i", int(value))
+    else:
+        raw = struct.pack("<I", int(value))
+    return list(struct.unpack("<HH", raw))
+
+
+def _update_bit_in_word_value(current: int, bit_index: int, value: bool) -> int:
+    if not 0 <= bit_index <= 15:
+        raise ValueError(f"bit_index must be 0-15, got {bit_index}")
+    if value:
+        current |= 1 << bit_index
+    else:
+        current &= ~(1 << bit_index)
+    return current & 0xFFFF
+
+
+def _bool_values(values: list[int] | list[bool]) -> list[bool]:
+    return [bool(value) for value in values]
+
+
+def _pack_dword_words(values: list[int]) -> list[int]:
+    words: list[int] = []
+    for value in values:
+        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
+    return words
+
+
+def _unpack_dword_words(words: list[int], count: int) -> list[int]:
+    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+
+
+def _effective_word_chunk_size(max_per_request: int) -> int:
+    effective_max = (max_per_request // 2) * 2
+    if effective_max <= 0:
+        raise ValueError("max_per_request must be at least 2")
+    return effective_max
+
+
+def _validate_unsplit_word_count(count: int, max_per_request: int) -> int:
+    effective_max = _effective_word_chunk_size(max_per_request)
+    if count > effective_max:
+        raise ValueError(
+            f"count {count} exceeds max_per_request {effective_max};"
+            " pass allow_split=True to split the read across multiple requests"
+        )
+    return effective_max
+
+
+def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> int:
+    if max_dwords_per_request <= 0:
+        raise ValueError("max_dwords_per_request must be at least 1")
+    if count > max_dwords_per_request:
+        raise ValueError(
+            f"count {count} exceeds max_dwords_per_request {max_dwords_per_request};"
+            " pass allow_split=True to split the read across multiple requests"
+        )
+    return max_dwords_per_request
+
+
+def _word_chunks(ref: DeviceRef, total_count: int, max_per_request: int) -> Iterator[tuple[DeviceRef, int, int]]:
+    effective_max = _effective_word_chunk_size(max_per_request)
+    remaining = total_count
+    offset = 0
+    while remaining > 0:
+        chunk = min(remaining, effective_max)
+        yield replace(ref, number=ref.number + offset), offset, chunk
+        offset += chunk
+        remaining -= chunk
+
+
+def _dword_chunks(
+    ref: DeviceRef, total_count: int, max_dwords_per_request: int
+) -> Iterator[tuple[DeviceRef, int, int]]:
+    if max_dwords_per_request <= 0:
+        raise ValueError("max_dwords_per_request must be at least 1")
+    offset = 0
+    while offset < total_count:
+        chunk = min(total_count - offset, max_dwords_per_request)
+        yield replace(ref, number=ref.number + (offset * 2)), offset, chunk
+        offset += chunk
+
+
 async def _read_random_maps(
     client: AsyncSlmpClient,
     plan: _ReadPlan,
@@ -1093,7 +1148,7 @@ async def read_dwords_single_request(
 
     ref = _validate_dword_read_target(client, device)
     words = await read_words_single_request(client, ref, count * 2)
-    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+    return _unpack_dword_words(words, count)
 
 
 async def write_words_single_request(
@@ -1120,10 +1175,7 @@ async def write_dwords_single_request(
     Each Python ``int`` is encoded as two PLC words in little-endian order.
     """
 
-    words: list[int] = []
-    for value in values:
-        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
-    await write_words_single_request(client, device, words)
+    await write_words_single_request(client, device, _pack_dword_words(values))
 
 
 async def read_words_chunked(
@@ -1138,21 +1190,12 @@ async def read_words_chunked(
     semantics are acceptable to the caller.
     """
 
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
+    _effective_word_chunk_size(max_per_request)
     ref = _parse_device_for_client(client, device)
     result: list[int] = []
-    remaining = count
-    offset = 0
-    while remaining > 0:
-        chunk = min(remaining, effective_max)
-        chunk_ref = replace(ref, number=ref.number + offset)
+    for chunk_ref, _, chunk in _word_chunks(ref, count, max_per_request):
         words = await read_words_single_request(client, chunk_ref, chunk)
         result.extend(words)
-        offset += chunk
-        remaining -= chunk
     return result
 
 
@@ -1170,7 +1213,7 @@ async def read_dwords_chunked(
 
     ref = _validate_dword_read_target(client, device)
     words = await read_words_chunked(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
-    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+    return _unpack_dword_words(words, count)
 
 
 async def write_words_chunked(
@@ -1185,17 +1228,10 @@ async def write_words_chunked(
     caller.
     """
 
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
+    _effective_word_chunk_size(max_per_request)
     ref = _parse_device_for_client(client, device)
-    offset = 0
-    while offset < len(values):
-        chunk = min(len(values) - offset, effective_max)
-        chunk_ref = replace(ref, number=ref.number + offset)
+    for chunk_ref, offset, chunk in _word_chunks(ref, len(values), max_per_request):
         await write_words_single_request(client, chunk_ref, values[offset : offset + chunk])
-        offset += chunk
 
 
 async def write_dwords_chunked(
@@ -1212,14 +1248,9 @@ async def write_dwords_chunked(
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
-
     ref = _parse_device_for_client(client, device)
-    offset = 0
-    while offset < len(values):
-        chunk = min(len(values) - offset, max_dwords_per_request)
-        chunk_ref = replace(ref, number=ref.number + (offset * 2))
+    for chunk_ref, offset, chunk in _dword_chunks(ref, len(values), max_dwords_per_request):
         await write_dwords_single_request(client, chunk_ref, values[offset : offset + chunk])
-        offset += chunk
 
 
 async def read_words(
@@ -1236,14 +1267,7 @@ async def read_words(
     not torn across split requests.
     """
     if not allow_split:
-        effective_max = (max_per_request // 2) * 2
-        if effective_max <= 0:
-            raise ValueError("max_per_request must be at least 2")
-        if count > effective_max:
-            raise ValueError(
-                f"count {count} exceeds max_per_request {effective_max};"
-                " pass allow_split=True to split the read across multiple requests"
-            )
+        _validate_unsplit_word_count(count, max_per_request)
         return await read_words_single_request(client, device, count)
 
     return await read_words_chunked(client, device, count, max_per_request=max_per_request)
@@ -1259,14 +1283,7 @@ async def read_dwords(
 ) -> list[int]:
     """Read a contiguous DWord range as unsigned 32-bit integers."""
     if not allow_split:
-        effective_max = max_dwords_per_request
-        if effective_max <= 0:
-            raise ValueError("max_dwords_per_request must be at least 1")
-        if count > effective_max:
-            raise ValueError(
-                f"count {count} exceeds max_dwords_per_request {effective_max};"
-                " pass allow_split=True to split the read across multiple requests"
-            )
+        _validate_unsplit_dword_count(count, max_dwords_per_request)
         return await read_dwords_single_request(client, device, count)
 
     return await read_dwords_chunked(client, device, count, max_dwords_per_request=max_dwords_per_request)
@@ -1297,7 +1314,7 @@ def read_dwords_single_request_sync(
 
     ref = _validate_dword_read_target(client, device)
     words = read_words_single_request_sync(client, ref, count * 2)
-    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+    return _unpack_dword_words(words, count)
 
 
 def write_words_single_request_sync(
@@ -1317,10 +1334,7 @@ def write_dwords_single_request_sync(
 ) -> None:
     """Synchronously write contiguous unsigned 32-bit values using one protocol request."""
 
-    words: list[int] = []
-    for value in values:
-        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
-    write_words_single_request_sync(client, device, words)
+    write_words_single_request_sync(client, device, _pack_dword_words(values))
 
 
 def read_words_chunked_sync(
@@ -1331,21 +1345,12 @@ def read_words_chunked_sync(
 ) -> list[int]:
     """Synchronously read contiguous 16-bit values across multiple aligned requests."""
 
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
+    _effective_word_chunk_size(max_per_request)
     ref = _parse_device_for_client(client, device)
     result: list[int] = []
-    remaining = count
-    offset = 0
-    while remaining > 0:
-        chunk = min(remaining, effective_max)
-        chunk_ref = replace(ref, number=ref.number + offset)
+    for chunk_ref, _, chunk in _word_chunks(ref, count, max_per_request):
         words = read_words_single_request_sync(client, chunk_ref, chunk)
         result.extend(words)
-        offset += chunk
-        remaining -= chunk
     return result
 
 
@@ -1359,7 +1364,7 @@ def read_dwords_chunked_sync(
 
     ref = _validate_dword_read_target(client, device)
     words = read_words_chunked_sync(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
-    return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
+    return _unpack_dword_words(words, count)
 
 
 def write_words_chunked_sync(
@@ -1370,17 +1375,10 @@ def write_words_chunked_sync(
 ) -> None:
     """Synchronously write contiguous 16-bit values across multiple aligned requests."""
 
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-
+    _effective_word_chunk_size(max_per_request)
     ref = _parse_device_for_client(client, device)
-    offset = 0
-    while offset < len(values):
-        chunk = min(len(values) - offset, effective_max)
-        chunk_ref = replace(ref, number=ref.number + offset)
+    for chunk_ref, offset, chunk in _word_chunks(ref, len(values), max_per_request):
         write_words_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
-        offset += chunk
 
 
 def write_dwords_chunked_sync(
@@ -1393,14 +1391,9 @@ def write_dwords_chunked_sync(
 
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
-
     ref = _parse_device_for_client(client, device)
-    offset = 0
-    while offset < len(values):
-        chunk = min(len(values) - offset, max_dwords_per_request)
-        chunk_ref = replace(ref, number=ref.number + (offset * 2))
+    for chunk_ref, offset, chunk in _dword_chunks(ref, len(values), max_dwords_per_request):
         write_dwords_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
-        offset += chunk
 
 
 def read_words_sync(
@@ -1413,14 +1406,7 @@ def read_words_sync(
 ) -> list[int]:
     """Synchronously read a contiguous word-device range."""
     if not allow_split:
-        effective_max = (max_per_request // 2) * 2
-        if effective_max <= 0:
-            raise ValueError("max_per_request must be at least 2")
-        if count > effective_max:
-            raise ValueError(
-                f"count {count} exceeds max_per_request {effective_max};"
-                " pass allow_split=True to split the read across multiple requests"
-            )
+        _validate_unsplit_word_count(count, max_per_request)
         return read_words_single_request_sync(client, device, count)
 
     return read_words_chunked_sync(client, device, count, max_per_request=max_per_request)
@@ -1436,14 +1422,7 @@ def read_dwords_sync(
 ) -> list[int]:
     """Synchronously read a contiguous DWord range."""
     if not allow_split:
-        effective_max = max_dwords_per_request
-        if effective_max <= 0:
-            raise ValueError("max_dwords_per_request must be at least 1")
-        if count > effective_max:
-            raise ValueError(
-                f"count {count} exceeds max_dwords_per_request {effective_max};"
-                " pass allow_split=True to split the read across multiple requests"
-            )
+        _validate_unsplit_dword_count(count, max_dwords_per_request)
         return read_dwords_single_request_sync(client, device, count)
 
     return read_dwords_chunked_sync(client, device, count, max_dwords_per_request=max_dwords_per_request)
