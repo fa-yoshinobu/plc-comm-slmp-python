@@ -123,13 +123,16 @@ def main() -> int:
             checks = []
             if expect_d300 is not None:
                 got = read_d(300, 2)
-                checks.append(f"D300={fmt(got)} {'MATCH' if got == expect_d300 else 'MISMATCH(exp ' + fmt(expect_d300) + ')'}")
+                status = "MATCH" if got == expect_d300 else f"MISMATCH(exp {fmt(expect_d300)})"
+                checks.append(f"D300={fmt(got)} {status}")
             if expect_d310 is not None:
                 got = read_d(310, 2)
-                checks.append(f"D310={fmt(got)} {'MATCH' if got == expect_d310 else 'MISMATCH(exp ' + fmt(expect_d310) + ')'}")
+                status = "MATCH" if got == expect_d310 else f"MISMATCH(exp {fmt(expect_d310)})"
+                checks.append(f"D310={fmt(got)} {status}")
             if expect_m200 is not None:
                 got = read_m(200, 1)
-                checks.append(f"M200={fmt(got)} {'MATCH' if got == expect_m200 else 'MISMATCH(exp ' + fmt(expect_m200) + ')'}")
+                status = "MATCH" if got == expect_m200 else f"MISMATCH(exp {fmt(expect_m200)})"
+                checks.append(f"M200={fmt(got)} {status}")
             print(line)
             print(f"  payload: {payload.hex(' ').upper()}")
             for check in checks:
@@ -182,7 +185,10 @@ def main() -> int:
         after_d310 = read_d(310, 2)
         after_m200 = read_m(200, 1)
         restored = after_d300 == before_d300 and after_d310 == before_d310 and after_m200 == before_m200
-        print(f"restore: D300={fmt(after_d300)} D310={fmt(after_d310)} M200={fmt(after_m200)} -> {'OK' if restored else 'NG'}")
+        print(
+            f"restore: D300={fmt(after_d300)} D310={fmt(after_d310)} "
+            f"M200={fmt(after_m200)} -> {'OK' if restored else 'NG'}"
+        )
     return 0
 
 
