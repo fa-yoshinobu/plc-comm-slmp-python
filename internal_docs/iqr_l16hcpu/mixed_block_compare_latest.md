@@ -1,11 +1,11 @@
 # Mixed Block Comparison Report
 
-- Date: 2026-06-12 07:03:27
+- Date: 2026-06-12 07:41:37
 - Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
 - Series: iqr
-- Model: R08CPU
+- Model: L16HCPU
 - Target: network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 - Word block: D300 x2 -> [0x87F7, 0x80BE]
 - Bit block: M200 x1 packed -> [0x6DFE]

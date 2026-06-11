@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 - Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
 - Added forced remote STOP support through `remote_stop(force=True)` on both sync and async clients.
 
+### Changed
+- Removed `retry_mixed_on_error` from sync and async `write_block()`; mixed block-write failures now return the PLC end code unchanged, and only explicit `split_mixed_blocks=True` sends separate block writes.
+
 ## 0.1.14 - 2026-05-02
 
 ### Added

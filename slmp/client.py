@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import socket
-import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from . import _operations
 from .constants import Command, FrameType, PLCSeries
 from .core import (
-    _MIXED_BLOCK_RETRY_END_CODES,
     BlockReadResult,
     CpuOperationState,
     DeviceRef,
@@ -38,7 +36,7 @@ from .core import (
     parse_device,
     resolve_extended_device_and_extension,
 )
-from .errors import SlmpError, SlmpPracticalPathWarning
+from .errors import SlmpError
 
 if TYPE_CHECKING:
     from .device_ranges import SlmpDeviceRangeCatalog, SlmpDeviceRangeFamily
@@ -772,7 +770,6 @@ class SlmpClient:
         bit_blocks: Sequence[tuple[str | DeviceRef, Sequence[int]]] = (),
         series: PLCSeries | str | None = None,
         split_mixed_blocks: bool = False,
-        retry_mixed_on_error: bool = False,
     ) -> None:
         """Write word blocks and bit-device word blocks."""
         if not word_blocks and not bit_blocks:
@@ -785,14 +782,12 @@ class SlmpClient:
                 bit_blocks=(),
                 series=series,
                 split_mixed_blocks=False,
-                retry_mixed_on_error=False,
             )
             self.write_block(
                 word_blocks=(),
                 bit_blocks=bit_blocks,
                 series=series,
                 split_mixed_blocks=False,
-                retry_mixed_on_error=False,
             )
             return
         request = _operations.build_write_block_request(
@@ -809,30 +804,6 @@ class SlmpClient:
             raise_on_error=False,
         )
         if resp.end_code == 0:
-            return
-        if retry_mixed_on_error and word_blocks and bit_blocks and resp.end_code in _MIXED_BLOCK_RETRY_END_CODES:
-            warnings.warn(
-                (
-                    f"mixed block write was rejected with 0x{resp.end_code:04X}; "
-                    "retrying as separate word-only and bit-only block writes"
-                ),
-                SlmpPracticalPathWarning,
-                stacklevel=2,
-            )
-            self.write_block(
-                word_blocks=word_blocks,
-                bit_blocks=(),
-                series=series,
-                split_mixed_blocks=False,
-                retry_mixed_on_error=False,
-            )
-            self.write_block(
-                word_blocks=(),
-                bit_blocks=bit_blocks,
-                series=series,
-                split_mixed_blocks=False,
-                retry_mixed_on_error=False,
-            )
             return
         if self.raise_on_error:
             _raise_response_error(resp, command=request.command, subcommand=request.subcommand)

@@ -91,19 +91,21 @@ Manual expectation:
 Current implementation:
 
 - default behavior still sends one mixed request
-- optional compatibility fallbacks exist:
+- optional compatibility split exists:
   - `split_mixed_blocks=True`
-  - `retry_mixed_on_error=True` for `write_block(...)` on known mixed-write rejection end codes (`0xC056`, `0xC05B`, `0xC061` currently)
+- automatic retry is not part of the API; PLC end codes are returned unchanged
 
 Reason:
 
-- some PLC environments reject one mixed request
+- after the fixed manual layout, a non-zero PLC end code should remain visible
+  to the caller instead of being hidden by automatic retry
 
 Observed on the validated target:
 
 - one-request mixed `write_block(D300 x2 + M200 x1 packed)` returned `0xC05B`
 - the PLC memory remained unchanged after that first failed request
-- `retry_mixed_on_error=True` then succeeded by retrying as separate word-only and bit-only writes
+- the historical automatic-retry option then succeeded by retrying as separate
+  word-only and bit-only writes; that option has since been removed
 - later live checks on additional targets also rejected the first mixed write:
   - `L16HCPU` -> `0xC056`
   - `FX5UC-32MT/D` -> `0xC061`
@@ -112,7 +114,7 @@ Observed on the validated target:
 Status:
 
 - keep the manual-aligned one-request mixed form implemented
-- but document `split_mixed_blocks=True` as the safest operational choice on current hardware evidence
+- document `split_mixed_blocks=True` as the only intentional split path
 
 - optional non-default deviation
 

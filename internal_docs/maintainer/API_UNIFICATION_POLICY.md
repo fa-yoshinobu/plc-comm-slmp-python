@@ -200,7 +200,9 @@ Rules:
 
 - `*_single_request` helpers keep one logical operation on one protocol request.
 - `*_chunked` helpers are opt-in and must keep 32-bit values aligned.
-- Fallbacks that change mixed-block write semantics must stay opt-in, for example `split_mixed_blocks=True` or `retry_mixed_on_error=True`.
+- Fallbacks that change mixed-block write semantics must stay explicit.
+  `split_mixed_blocks=True` is the supported split path; automatic retry is
+  not part of the API.
 
 ## Non-Goals
 
