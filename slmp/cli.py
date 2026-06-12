@@ -45,8 +45,8 @@ from .core import (
     encode_device_spec,
     pack_bit_values,
     parse_device,
-    resolve_extended_device_and_extension,
     resolve_device_subcommand,
+    resolve_extended_device_and_extension,
     unpack_bit_values,
 )
 from .errors import SlmpPracticalPathWarning
@@ -2862,7 +2862,10 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
         "--direct-memory",
         type=_int_auto,
         default=DIRECT_MEMORY_NORMAL,
-        help="default direct memory specification when a probe omits its fourth field; 0 means infer from qualified device",
+        help=(
+            "default direct memory specification when a probe omits its fourth field; "
+            "0 means infer from qualified device"
+        ),
     )
     parser.add_argument(
         "--keep-written-value",
@@ -3004,6 +3007,9 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
 
     summary = Counter(status for _, status, _ in rows)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    default_direct_memory_text = (
+        "auto" if args.direct_memory == DIRECT_MEMORY_NORMAL else f"0x{args.direct_memory:02X}"
+    )
     header_lines = [
         f"- Date: {now}",
         f"- Host: {args.host}",
@@ -3015,15 +3021,20 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
             f"module_io=0x{target.module_io:04X}, multidrop=0x{target.multidrop:02X}"
         ),
         f"- Base extension specification: 0x{args.extension_specification:04X}",
-        f"- Default direct memory specification: {'auto' if args.direct_memory == DIRECT_MEMORY_NORMAL else f'0x{args.direct_memory:02X}'}",
+        f"- Default direct memory specification: {default_direct_memory_text}",
         f"- Restore enabled: {'no' if args.keep_written_value else 'yes'}",
         f"- Summary: OK={summary['OK']}, NG={summary['NG']}, SKIP={summary['SKIP']}",
     ]
     for probe in probes:
+        probe_direct_memory_text = (
+            "auto"
+            if probe.direct_memory_specification == DIRECT_MEMORY_NORMAL
+            else f"0x{probe.direct_memory_specification:02X}"
+        )
         header_lines.append(
             f"- Probe: {probe.label}, device={probe.device}, "
             f"preferred_write=0x{probe.preferred_write_value & 0xFFFF:04X}, "
-            f"direct_memory={'auto' if probe.direct_memory_specification == DIRECT_MEMORY_NORMAL else f'0x{probe.direct_memory_specification:02X}'}"
+            f"direct_memory={probe_direct_memory_text}"
         )
     _write_markdown_report(
         output_path,
