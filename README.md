@@ -9,7 +9,6 @@
 
 ![Illustration](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-slmp-python/main/docsrc/assets/melsec.png)
 
-[![Automated Release](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/automated-release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/automated-release.yml)
 [![Release](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/release.yml)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
