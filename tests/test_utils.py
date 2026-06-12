@@ -95,6 +95,13 @@ class TestParseAddress(unittest.TestCase):
     def test_bit_in_word_hex(self):
         _, _, idx = _parse_address("D0.A")
         self.assertEqual(idx, 10)
+        _, _, idx = _parse_address("D0.D")
+        self.assertEqual(idx, 13)
+
+    def test_invalid_bit_in_word_suffix(self):
+        with self.assertRaises(ValueError):
+            _parse_address("D0.10")
+        self.assertIsNone(try_parse_address("D0.10"))
 
     def test_normalize_address(self):
         self.assertEqual(normalize_address("d100"), "D100")

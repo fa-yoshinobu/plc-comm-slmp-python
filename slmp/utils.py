@@ -479,10 +479,12 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
         return base.strip(), dtype.strip().upper(), None
     if "." in address:
         base, bit_str = address.split(".", 1)
-        try:
-            return base.strip(), "BIT_IN_WORD", int(bit_str, 16)
-        except ValueError:
-            pass
+        bit_text = bit_str.strip()
+        if len(bit_text) == 1 and bit_text.upper() in "0123456789ABCDEF":
+            return base.strip(), "BIT_IN_WORD", int(bit_text, 16)
+        raise ValueError(
+            f"Invalid bit-in-word index {bit_str!r}; use one hex digit 0-F or ':' for dtype."
+        )
     return address.strip(), "U", None
 
 
