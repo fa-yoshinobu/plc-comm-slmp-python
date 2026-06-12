@@ -133,21 +133,24 @@ Status:
 
 Manual expectation:
 
-- the manual is internally inconsistent between `0000` and `0001`
+- the supported subcommand is `0000`
+- the request data after the subcommand is fixed data `01 00`
 - successful `0000` may return no response
 
 Current implementation:
 
-- `remote_reset()` defaults to `1006/0000`
+- `remote_reset()` defaults to `1006/0000 + 01 00`
 - no-response handling is the default behavior
+- non-zero high-level subcommands are rejected
 
 Reason:
 
-- this best matches the manual note about successful completion without a response
+- R120PCPU live verification on 2026-06-13 reset successfully with `1006/0000 + 01 00`
+- the same target returned `0xC061` for `1006/0000` with an empty payload, even after enabling remote reset
 
 Status:
 
-- manual ambiguity resolved by implementation choice
+- implementation follows the live-verified `1006/0000 + 01 00` request format
 
 ## 6. `R/ZR` Boundary Acceptance
 

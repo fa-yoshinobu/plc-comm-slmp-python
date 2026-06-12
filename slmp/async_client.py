@@ -750,7 +750,10 @@ class AsyncSlmpClient:
         await self.request(request.command, request.subcommand, request.payload)
 
     async def remote_stop(self, *, force: bool = False) -> None:
-        """Remote stop the PLC."""
+        """Remote stop the PLC.
+
+        The force flag is kept for API compatibility; Remote STOP always sends the manual fixed data.
+        """
         request = _operations.build_remote_stop_request(force=force)
         await self.request(request.command, request.subcommand, request.payload)
 
@@ -767,7 +770,7 @@ class AsyncSlmpClient:
     async def remote_reset(self, *, subcommand: int = 0x0000, expect_response: bool | None = None) -> None:
         """Remote reset the PLC."""
         request = _operations.build_remote_reset_request(subcommand=subcommand)
-        should_wait = (subcommand != 0x0000) if expect_response is None else expect_response
+        should_wait = False if expect_response is None else expect_response
         if should_wait:
             await self.request(request.command, request.subcommand, request.payload)
             return
@@ -1078,11 +1081,9 @@ class AsyncSlmpClient:
         """Execute a raw remote latch clear command."""
         await self.request(Command.REMOTE_LATCH_CLEAR, 0x0000, payload)
 
-    async def remote_reset_raw(self, payload: bytes = b"") -> None:
+    async def remote_reset_raw(self, payload: bytes = b"\x01\x00") -> None:
         """Execute a raw remote reset command."""
-        if payload:
-            raise ValueError("remote reset does not use request data")
-        await self._send_no_response(Command.REMOTE_RESET, 0x0000, b"")
+        await self._send_no_response(Command.REMOTE_RESET, 0x0000, payload)
 
     async def remote_password_lock_raw(self, payload: bytes = b"") -> None:
         """Execute a raw remote password lock command."""

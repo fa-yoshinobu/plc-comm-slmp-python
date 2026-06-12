@@ -1059,6 +1059,13 @@ def _check_points_u16(points: int, name: str) -> None:
         raise ValueError(f"{name} out of range (0..65535): {points}")
 
 
+def _check_direct_device_points(points: int, *, bit_unit: bool, name: str) -> None:
+    limit = 7168 if bit_unit else 960
+    unit = "bit" if bit_unit else "word"
+    if points < 1 or points > limit:
+        raise ValueError(f"{name} {unit} access points out of range (1..{limit}): {points}")
+
+
 def _check_random_read_like_counts(word_points: int, dword_points: int, *, series: PLCSeries, name: str) -> None:
     total = word_points + dword_points
     limit = 96 if series == PLCSeries.IQR else 192
@@ -1075,12 +1082,33 @@ def _check_random_bit_write_count(points: int, *, series: PLCSeries, name: str) 
         raise ValueError(f"{name} bit access points out of range (1..{limit}) for {series.value}: {points}")
 
 
+def _check_random_write_word_counts(word_points: int, dword_points: int, *, series: PLCSeries, name: str) -> None:
+    total = word_points + dword_points
+    if total < 1:
+        raise ValueError(f"{name} word/dword access points out of range: word={word_points}, dword={dword_points}")
+    weighted = word_points * 12 + dword_points * 14
+    limit = 960 if series == PLCSeries.IQR else 1920
+    if weighted > limit:
+        raise ValueError(
+            f"{name} word/dword access points out of range for {series.value}: "
+            f"word={word_points}, dword={dword_points}, weighted={weighted}, limit={limit}"
+        )
+
+
+def _block_points(points: int | Sequence[object], name: str) -> int:
+    count = int(points) if isinstance(points, int) else len(points)
+    if count < 1 or count > 0xFFFF:
+        raise ValueError(f"{name} block points out of range (1..65535): {count}")
+    return count
+
+
 def _check_block_request_limits(
     word_blocks: Sequence[tuple[str | DeviceRef, int | Sequence[object]]],
     bit_blocks: Sequence[tuple[str | DeviceRef, int | Sequence[object]]],
     *,
     series: PLCSeries,
     name: str,
+    write: bool = False,
 ) -> None:
     total_blocks = len(word_blocks) + len(bit_blocks)
     block_limit = 60 if series == PLCSeries.IQR else 120
@@ -1089,11 +1117,16 @@ def _check_block_request_limits(
 
     total_points = 0
     for _, points in word_blocks:
-        total_points += int(points) if isinstance(points, int) else len(points)
+        total_points += _block_points(points, f"{name} word")
     for _, points in bit_blocks:
-        total_points += int(points) if isinstance(points, int) else len(points)
-    if total_points > 960:
-        raise ValueError(f"{name} total device points out of range (<=960): {total_points}")
+        total_points += _block_points(points, f"{name} bit")
+    limit_value = total_points
+    if write:
+        per_block_overhead = 9 if series == PLCSeries.IQR else 4
+        limit_value += total_blocks * per_block_overhead
+    if limit_value > 960:
+        detail = f"weighted={limit_value}, total_points={total_points}" if write else f"total_points={total_points}"
+        raise ValueError(f"{name} total device points out of range (<=960): {detail}")
 
 
 def _normalize_items(

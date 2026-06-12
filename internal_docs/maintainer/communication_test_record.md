@@ -88,7 +88,7 @@ After PLC-side setting updates:
 - `1005` remote latch clear is state-dependent:
   - `0x4013` observed outside the accepted condition
   - `0x0000` confirmed with the PLC in `STOP`
-- `1006` remote reset is intentionally excluded from routine live verification
+- `1006` remote reset remains excluded from routine live verification; R120PCPU spot verification on 2026-06-13 confirmed `1006/0000 + 01 00` and rejected empty payload with `0xC061`
 
 ### Password lock/unlock
 

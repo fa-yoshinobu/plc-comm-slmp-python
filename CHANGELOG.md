@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 0.1.16 - 2026-06-12
 
 ### Changed
+- Aligned Remote STOP with the manual fixed request data `01 00`; `remote_stop(force=True)` remains accepted for API compatibility but sends the same payload as the default STOP.
+- Aligned Self Test loopback input validation with the manual: 1..960 bytes, ASCII `0`-`9`/`A`-`F` only.
 - Republished the Python package metadata with the current README and release workflow badge state.
 - Removed the obsolete duplicate automated-release badge from the packaged long description.
 

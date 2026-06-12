@@ -1897,6 +1897,48 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIn(b"\x90\x00\x01\x00", payload)
         self.assertTrue(payload.endswith(b"\x9d\x00\x00\x00"))
 
+    def test_manual_point_limits_for_direct_access(self) -> None:
+        client = FakeClient()
+        client.next_response_data = b"\x00\x00" * 960
+        self.assertEqual(len(client.read_devices("D0", 960, bit_unit=False, series=PLCSeries.IQR)), 960)
+        with self.assertRaisesRegex(ValueError, r"1\.\.960"):
+            client.read_devices("D0", 961, bit_unit=False, series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, r"1\.\.960"):
+            client.write_devices("D0", [0] * 961, bit_unit=False, series=PLCSeries.IQR)
+
+        client.next_response_data = b"\x00" * 3584
+        self.assertEqual(len(client.read_devices("M0", 7168, bit_unit=True, series=PLCSeries.IQR)), 7168)
+        with self.assertRaisesRegex(ValueError, r"1\.\.7168"):
+            client.read_devices("M0", 7169, bit_unit=True, series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, r"1\.\.7168"):
+            client.write_devices("M0", [False] * 7169, bit_unit=True, series=PLCSeries.IQR)
+
+    def test_manual_point_limits_for_random_write(self) -> None:
+        client = FakeClient()
+        client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(80)], series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, "word/dword access points out of range"):
+            client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(81)], series=PLCSeries.IQR)
+
+        client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(68)], series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, "word/dword access points out of range"):
+            client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(69)], series=PLCSeries.IQR)
+
+        client.write_random_bits([(f"M{4000 + i}", False) for i in range(94)], series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, r"1\.\.94"):
+            client.write_random_bits([(f"M{4000 + i}", False) for i in range(95)], series=PLCSeries.IQR)
+
+    def test_manual_point_limits_for_block_access(self) -> None:
+        client = FakeClient()
+        client.next_response_data = b"\x00\x00" * 960
+        result = client.read_block(word_blocks=[("D0", 960)], series=PLCSeries.IQR)
+        self.assertEqual(len(result.word_blocks[0].values), 960)
+        with self.assertRaisesRegex(ValueError, "total device points"):
+            client.read_block(word_blocks=[("D0", 961)], series=PLCSeries.IQR)
+
+        client.write_block(word_blocks=[("D8000", [0] * 951)], series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, "total device points"):
+            client.write_block(word_blocks=[("D8000", [0] * 952)], series=PLCSeries.IQR)
+
     def test_manual_write_helpers_use_lt_lst_special_paths(self) -> None:
         """Test test_manual_write_helpers_use_lt_lst_special_paths."""
 
@@ -2071,14 +2113,14 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x01\x00\x00\x00")
 
-    def test_remote_stop_force_uses_forced_mode(self) -> None:
-        """Test test_remote_stop_force_uses_forced_mode."""
+    def test_remote_stop_force_uses_manual_fixed_mode(self) -> None:
+        """Test test_remote_stop_force_uses_manual_fixed_mode."""
         client = FakeClient()
         client.remote_stop(force=True)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.REMOTE_STOP)
         self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x03\x00")
+        self.assertEqual(payload, b"\x01\x00")
 
     def test_self_test_loopback(self) -> None:
         """Test test_self_test_loopback."""
@@ -2091,15 +2133,30 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x05\x00ABCDE")
 
+    def test_self_test_loopback_rejects_manual_invalid_payloads(self) -> None:
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
+            client.self_test_loopback("HELLO")
+        with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
+            client.self_test_loopback(b"\x00\xFF")
+        with self.assertRaisesRegex(ValueError, r"1\.\.960"):
+            client.self_test_loopback(b"")
+        with self.assertRaisesRegex(ValueError, r"1\.\.960"):
+            client.self_test_loopback(b"A" * 961)
+
     def test_remote_reset_uses_no_response_mode_by_default(self) -> None:
         """Test test_remote_reset_uses_no_response_mode_by_default."""
         client = FakeClient()
         client.remote_reset()
         expected_kwargs = {"serial": None, "target": None, "monitoring_timer": None}
-        self.assertEqual(client.last_no_response, (int(Command.REMOTE_RESET), 0x0000, b"", expected_kwargs))
+        self.assertEqual(client.last_no_response, (int(Command.REMOTE_RESET), 0x0000, b"\x01\x00", expected_kwargs))
 
-        client.remote_reset()
-        self.assertEqual(client.last_no_response, (int(Command.REMOTE_RESET), 0x0000, b"", expected_kwargs))
+        client.remote_reset(expect_response=True)
+        expected_request_kwargs = {**expected_kwargs, "raise_on_error": None}
+        self.assertEqual(client.last_request, (int(Command.REMOTE_RESET), 0x0000, b"\x01\x00", expected_request_kwargs))
+
+        with self.assertRaises(ValueError):
+            client.remote_reset(subcommand=0x0001)
 
     def test_read_devices_ext(self) -> None:
         """Test test_read_devices_ext."""

@@ -1062,7 +1062,7 @@ class SlmpClient:
         """Remote STOP.
 
         Args:
-            force: Force STOP.
+            force: Kept for API compatibility. Remote STOP always sends the manual fixed data.
 
         """
         request = _operations.build_remote_stop_request(force=force)
@@ -1087,12 +1087,12 @@ class SlmpClient:
         """Remote RESET.
 
         Args:
-            subcommand: Subcommand (0x0000: RESET, 0x0001: RESET and wait).
+            subcommand: Subcommand (0x0000: RESET).
             expect_response: Whether to wait for a response.
 
         """
         request = _operations.build_remote_reset_request(subcommand=subcommand)
-        should_wait = (subcommand != 0x0000) if expect_response is None else expect_response
+        should_wait = False if expect_response is None else expect_response
         if should_wait:
             self.request(request.command, request.subcommand, request.payload)
             return
@@ -1378,11 +1378,9 @@ class SlmpClient:
         """Low-level wrapper for REMOTE_LATCH_CLEAR command."""
         self.request(Command.REMOTE_LATCH_CLEAR, 0x0000, payload)
 
-    def remote_reset_raw(self, payload: bytes = b"") -> None:
+    def remote_reset_raw(self, payload: bytes = b"\x01\x00") -> None:
         """Low-level wrapper for REMOTE_RESET command (no response)."""
-        if payload:
-            raise ValueError("remote reset does not use request data")
-        self._send_no_response(Command.REMOTE_RESET, 0x0000, b"")
+        self._send_no_response(Command.REMOTE_RESET, 0x0000, payload)
 
     def read_type_name(self) -> TypeNameInfo:
         """Read the PLC model name and code."""

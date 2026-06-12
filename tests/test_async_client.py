@@ -202,7 +202,7 @@ async def test_async_remote_run_default_clear_mode_does_not_clear_devices() -> N
 
 
 @pytest.mark.asyncio
-async def test_async_remote_stop_force_uses_forced_mode() -> None:
+async def test_async_remote_stop_force_uses_manual_fixed_mode() -> None:
     cli = FakeAsyncClient()
 
     await cli.remote_stop(force=True)
@@ -210,7 +210,7 @@ async def test_async_remote_stop_force_uses_forced_mode() -> None:
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.REMOTE_STOP)
     assert cli.last_request[1] == 0x0000
-    assert cli.last_request[2] == b"\x03\x00"
+    assert cli.last_request[2] == b"\x01\x00"
 
 
 def test_async_client_rejects_invalid_device_family() -> None:
