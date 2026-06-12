@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.16 - 2026-06-12
+
+### Changed
+- Republished the Python package metadata with the current README and release workflow badge state.
+- Removed the obsolete duplicate automated-release badge from the packaged long description.
+
 ## 0.1.15 - 2026-06-12
 
 ### Added
