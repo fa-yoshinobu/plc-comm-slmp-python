@@ -766,7 +766,6 @@ def build_write_block_request(
     _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="write_block")
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
-    payload = bytearray([len(word_blocks), len(bit_blocks)])
     word_refs: list[DeviceRef] = []
     bit_refs: list[DeviceRef] = []
     for device, values in word_blocks:
@@ -774,23 +773,27 @@ def build_write_block_request(
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "word block size")
-        payload += encode_device_spec(ref, series=effective_series)
-        payload += len(values).to_bytes(2, "little")
         word_refs.append(ref)
     for device, values in bit_blocks:
         ref = _parse_device_for_family(device, device_family)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "bit block size")
-        payload += encode_device_spec(ref, series=effective_series)
-        payload += len(values).to_bytes(2, "little")
         bit_refs.append(ref)
     _validate_block_write_devices(word_refs, bit_refs)
 
-    for _, values in word_blocks:
+    # Each block's write data follows that block's own spec (SLMP reference
+    # manual Write Block request format); data must not be batched after the
+    # block specs, or multi-block/mixed requests misparse on the PLC.
+    payload = bytearray([len(word_blocks), len(bit_blocks)])
+    for ref, (_, values) in zip(word_refs, word_blocks, strict=True):
+        payload += encode_device_spec(ref, series=effective_series)
+        payload += len(values).to_bytes(2, "little")
         for value in values:
             payload += int(value).to_bytes(2, "little", signed=False)
-    for _, values in bit_blocks:
+    for ref, (_, values) in zip(bit_refs, bit_blocks, strict=True):
+        payload += encode_device_spec(ref, series=effective_series)
+        payload += len(values).to_bytes(2, "little")
         for value in values:
             payload += int(value).to_bytes(2, "little", signed=False)
     return OperationRequest(Command.DEVICE_WRITE_BLOCK, subcommand, bytes(payload))

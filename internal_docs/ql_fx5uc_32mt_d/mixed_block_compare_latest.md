@@ -1,11 +1,11 @@
 # Mixed Block Comparison Report
 
-- Date: 2026-06-12 07:03:27
+- Date: 2026-06-12 07:47:12
 - Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
-- Series: iqr
-- Model: R08CPU
+- Series: ql
+- Model: FX5UC-32MT/D
 - Target: network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 - Word block: D300 x2 -> [0x87F7, 0x80BE]
 - Bit block: M200 x1 packed -> [0x6DFE]
@@ -16,7 +16,7 @@
 
 | Scenario | Status | End codes | Memory changed | Trace count | Notes |
 |---|---|---|---|---|---|
-| readBlock words+bits | OK | 0x0000 | n/a | 1 | words=[0x0000, 0x0000], bits=[0x0000] |
+| readBlock words+bits | OK | 0x0000 | n/a | 1 | words=[0x0000, 0x0001], bits=[0x0000] |
 | writeBlock words only | OK | 0x0000 | yes | 1 | after=[0x87F7, 0x80BE], restore=OK |
 | writeBlock bits only | OK | 0x0000 | yes | 1 | after=[0x6DFE], restore=OK |
 | writeBlock mixed | OK | 0x0000 | yes | 1 | after_words=[0x87F7, 0x80BE], after_bits=[0x6DFE], request_count=1 |
@@ -27,30 +27,30 @@
 - Devices: word=D300 x2, bit=M200 x1 packed
 - Warnings: none
 - Error: none
-- Returned words: [0x0000, 0x0000]
+- Returned words: [0x0000, 0x0001]
 - Returned bits: [0x0000]
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 03 00 00 00 00 FF FF 03 00 18 00 10 00 06 04 02 00 01 01 2C 01 00 00 A8 00 02 00 C8 00 00 00 90 00 01 00
-response: D4 00 03 00 00 00 00 FF FF 03 00 08 00 00 00 00 00 00 00 00 00
+request: 50 00 00 FF FF 03 00 14 00 10 00 06 04 00 00 01 01 2C 01 00 A8 02 00 C8 00 00 90 01 00
+response: D0 00 00 FF FF 03 00 08 00 00 00 00 00 01 00 00 00
 ```
 
 ## writeBlock words only
 
 - API: write_block(word_blocks=[('D300', [0x87F7, 0x80BE])], bit_blocks=[])
-- Before words: [0x0000, 0x0000]
+- Before words: [0x0000, 0x0001]
 - Test words: [0x87F7, 0x80BE]
 - After words: [0x87F7, 0x80BE]
 - Restore status: OK
-- Restored words: [0x0000, 0x0000]
+- Restored words: [0x0000, 0x0001]
 - Warnings: none
 - Error: none
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 04 00 00 00 00 FF FF 03 00 14 00 10 00 06 14 02 00 01 00 2C 01 00 00 A8 00 02 00 F7 87 BE 80
-response: D4 00 04 00 00 00 00 FF FF 03 00 02 00 00 00
+request: 50 00 00 FF FF 03 00 12 00 10 00 06 14 00 00 01 00 2C 01 00 A8 02 00 F7 87 BE 80
+response: D0 00 00 FF FF 03 00 02 00 00 00
 ```
 
 ## writeBlock bits only
@@ -66,14 +66,14 @@ response: D4 00 04 00 00 00 00 FF FF 03 00 02 00 00 00
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 08 00 00 00 00 FF FF 03 00 12 00 10 00 06 14 02 00 00 01 C8 00 00 00 90 00 01 00 FE 6D
-response: D4 00 08 00 00 00 00 FF FF 03 00 02 00 00 00
+request: 50 00 00 FF FF 03 00 10 00 10 00 06 14 00 00 00 01 C8 00 00 90 01 00 FE 6D
+response: D0 00 00 FF FF 03 00 02 00 00 00
 ```
 
 ## writeBlock mixed
 
 - API: write_block(word_blocks=[('D300', [0x87F7, 0x80BE])], bit_blocks=[('M200', [0x6DFE])], split_mixed_blocks=False, retry_mixed_on_error=False)
-- Before words: [0x0000, 0x0000]
+- Before words: [0x0000, 0x0001]
 - Before bits: [0x0000]
 - Test words: [0x87F7, 0x80BE]
 - Test bits: [0x6DFE]
@@ -81,13 +81,13 @@ response: D4 00 08 00 00 00 00 FF FF 03 00 02 00 00 00
 - After bits: [0x6DFE]
 - Request count: 1
 - Restore status: OK
-- Restored words: [0x0000, 0x0000]
+- Restored words: [0x0000, 0x0001]
 - Restored bits: [0x0000]
 - Warnings: none
 - Error: none
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 0C 00 00 00 00 FF FF 03 00 1E 00 10 00 06 14 02 00 01 01 2C 01 00 00 A8 00 02 00 F7 87 BE 80 C8 00 00 00 90 00 01 00 FE 6D
-response: D4 00 0C 00 00 00 00 FF FF 03 00 02 00 00 00
+request: 50 00 00 FF FF 03 00 1A 00 10 00 06 14 00 00 01 01 2C 01 00 A8 02 00 F7 87 BE 80 C8 00 00 90 01 00 FE 6D
+response: D0 00 00 FF FF 03 00 02 00 00 00
 ```

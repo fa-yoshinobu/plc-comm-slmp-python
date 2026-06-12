@@ -1,11 +1,11 @@
 # Mixed Block Comparison Report
 
-- Date: 2026-06-12 07:03:27
+- Date: 2026-06-12 07:18:45
 - Host: 192.168.250.100
 - Port: 1025
 - Transport: tcp
-- Series: iqr
-- Model: R08CPU
+- Series: ql
+- Model: L02SCPU
 - Target: network=0x00, station=0xFF, module_io=0x03FF, multidrop=0x00
 - Word block: D300 x2 -> [0x87F7, 0x80BE]
 - Bit block: M200 x1 packed -> [0x6DFE]
@@ -32,7 +32,7 @@
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 03 00 00 00 00 FF FF 03 00 18 00 10 00 06 04 02 00 01 01 2C 01 00 00 A8 00 02 00 C8 00 00 00 90 00 01 00
+request: 54 00 03 00 00 00 00 FF FF 03 00 14 00 10 00 06 04 00 00 01 01 2C 01 00 A8 02 00 C8 00 00 90 01 00
 response: D4 00 03 00 00 00 00 FF FF 03 00 08 00 00 00 00 00 00 00 00 00
 ```
 
@@ -49,7 +49,7 @@ response: D4 00 03 00 00 00 00 FF FF 03 00 08 00 00 00 00 00 00 00 00 00
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 04 00 00 00 00 FF FF 03 00 14 00 10 00 06 14 02 00 01 00 2C 01 00 00 A8 00 02 00 F7 87 BE 80
+request: 54 00 04 00 00 00 00 FF FF 03 00 12 00 10 00 06 14 00 00 01 00 2C 01 00 A8 02 00 F7 87 BE 80
 response: D4 00 04 00 00 00 00 FF FF 03 00 02 00 00 00
 ```
 
@@ -66,7 +66,7 @@ response: D4 00 04 00 00 00 00 FF FF 03 00 02 00 00 00
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 08 00 00 00 00 FF FF 03 00 12 00 10 00 06 14 02 00 00 01 C8 00 00 00 90 00 01 00 FE 6D
+request: 54 00 08 00 00 00 00 FF FF 03 00 10 00 10 00 06 14 00 00 00 01 C8 00 00 90 01 00 FE 6D
 response: D4 00 08 00 00 00 00 FF FF 03 00 02 00 00 00
 ```
 
@@ -88,6 +88,6 @@ response: D4 00 08 00 00 00 00 FF FF 03 00 02 00 00 00
 
 ```text
 attempt 1: end_code=0x0000
-request: 54 00 0C 00 00 00 00 FF FF 03 00 1E 00 10 00 06 14 02 00 01 01 2C 01 00 00 A8 00 02 00 F7 87 BE 80 C8 00 00 00 90 00 01 00 FE 6D
+request: 54 00 0C 00 00 00 00 FF FF 03 00 1A 00 10 00 06 14 00 00 01 01 2C 01 00 A8 02 00 F7 87 BE 80 C8 00 00 90 01 00 FE 6D
 response: D4 00 0C 00 00 00 00 FF FF 03 00 02 00 00 00
 ```

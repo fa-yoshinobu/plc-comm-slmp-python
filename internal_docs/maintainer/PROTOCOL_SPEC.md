@@ -155,9 +155,11 @@ Random bit write (`1402`) state value:
 Block read/write compatibility handling:
 - `read_block` and `write_block` send mixed word+bit blocks in one `0406/1406` request by default, matching the manual.
 - If a target environment needs a compatibility fallback, `split_mixed_blocks=True` sends two commands (word-only, bit-only).
-- For write-side compatibility, `retry_mixed_on_error=True` first sends one mixed `1406` request and retries as split word-only and bit-only writes only when the PLC returns a known mixed-write rejection end code. The current retry set is `0xC056` and `0xC061`; `0xC05B` is preserved as an observed PLC end code but is not a retry trigger.
-- Practical recommendation on current hardware evidence: if mixed write reliability matters more than keeping the manual's one-request form, prefer `split_mixed_blocks=True`.
-- As of 2026-03-19, this project has no live-verified PLC path where the first one-request mixed `1406` write was accepted.
+- Automatic mixed-write retry is not part of the API. PLC end codes are
+  returned unchanged.
+- Practical recommendation: use the manual one-request form by default. If a
+  target requires separate block writes, opt into `split_mixed_blocks=True`
+  explicitly so the caller owns that semantic change.
 - `bit_blocks` does not use one value per bit.
 - Each bit-block point is handled as one packed 16-bit unit for the specified bit device family.
 - Example:

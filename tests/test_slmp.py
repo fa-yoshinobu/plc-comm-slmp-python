@@ -2134,8 +2134,8 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(len(client.requests), 1)
         self.assertEqual(client.requests[0][0], Command.DEVICE_WRITE_BLOCK)
 
-    def test_write_block_retry_mixed_on_c05b_does_not_split(self) -> None:
-        """Test test_write_block_retry_mixed_on_c05b_does_not_split."""
+    def test_write_block_c05b_does_not_split_automatically(self) -> None:
+        """Test test_write_block_c05b_does_not_split_automatically."""
         client = FakeClient()
         client.response_queue = [(0xC05B, b"")]
         with self.assertRaises(SlmpError) as ctx:
@@ -2143,53 +2143,38 @@ class TestDeviceApi(unittest.TestCase):
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
                 series=PLCSeries.IQR,
-                retry_mixed_on_error=True,
             )
         self.assertEqual(ctx.exception.end_code, 0xC05B)
         self.assertEqual(len(client.requests), 1)
 
-    def test_write_block_retry_mixed_on_c056_splits_after_failed_combined_request(self) -> None:
-        """Test test_write_block_retry_mixed_on_c056_splits_after_failed_combined_request."""
+    def test_write_block_c056_does_not_split_automatically(self) -> None:
+        """Test test_write_block_c056_does_not_split_automatically."""
         client = FakeClient()
-        client.response_queue = [(0xC056, b""), (0x0000, b""), (0x0000, b"")]
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        client.response_queue = [(0xC056, b"")]
+        with self.assertRaises(SlmpError) as ctx:
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
                 series=PLCSeries.QL,
-                retry_mixed_on_error=True,
             )
-        self.assertEqual(len(client.requests), 3)
-        self.assertEqual([request[0] for request in client.requests], [Command.DEVICE_WRITE_BLOCK] * 3)
-        self.assertEqual([request[2][:2] for request in client.requests], [b"\x01\x01", b"\x01\x00", b"\x00\x01"])
-        self.assertTrue(all(request[3]["raise_on_error"] is False for request in client.requests))
-        self.assertTrue(
-            any(isinstance(item.message, SlmpPracticalPathWarning) and "0xC056" in str(item.message) for item in caught)
-        )
+        self.assertEqual(ctx.exception.end_code, 0xC056)
+        self.assertEqual(len(client.requests), 1)
 
-    def test_write_block_retry_mixed_on_c061_splits_after_failed_combined_request(self) -> None:
-        """Test test_write_block_retry_mixed_on_c061_splits_after_failed_combined_request."""
+    def test_write_block_c061_does_not_split_automatically(self) -> None:
+        """Test test_write_block_c061_does_not_split_automatically."""
         client = FakeClient()
-        client.response_queue = [(0xC061, b""), (0x0000, b""), (0x0000, b"")]
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        client.response_queue = [(0xC061, b"")]
+        with self.assertRaises(SlmpError) as ctx:
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
                 series=PLCSeries.QL,
-                retry_mixed_on_error=True,
             )
-        self.assertEqual(len(client.requests), 3)
-        self.assertEqual([request[0] for request in client.requests], [Command.DEVICE_WRITE_BLOCK] * 3)
-        self.assertEqual([request[2][:2] for request in client.requests], [b"\x01\x01", b"\x01\x00", b"\x00\x01"])
-        self.assertTrue(all(request[3]["raise_on_error"] is False for request in client.requests))
-        self.assertTrue(
-            any(isinstance(item.message, SlmpPracticalPathWarning) and "0xC061" in str(item.message) for item in caught)
-        )
+        self.assertEqual(ctx.exception.end_code, 0xC061)
+        self.assertEqual(len(client.requests), 1)
 
-    def test_write_block_retry_mixed_on_unknown_end_code_does_not_split(self) -> None:
-        """Test test_write_block_retry_mixed_on_unknown_end_code_does_not_split."""
+    def test_write_block_unknown_end_code_does_not_split_automatically(self) -> None:
+        """Test test_write_block_unknown_end_code_does_not_split_automatically."""
         client = FakeClient()
         client.response_queue = [(0xC059, b"")]
         with self.assertRaises(SlmpError) as ctx:
@@ -2197,7 +2182,6 @@ class TestDeviceApi(unittest.TestCase):
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
                 series=PLCSeries.IQR,
-                retry_mixed_on_error=True,
             )
         self.assertEqual(ctx.exception.end_code, 0xC059)
         self.assertEqual(len(client.requests), 1)
@@ -2782,6 +2766,50 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(
             payload,
             b"\x00\x01" + encode_device_spec("M1000", series=PLCSeries.IQR) + b"\x02\x00" + b"\x05\x00\x01\x00",
+        )
+
+    def test_write_block_mixed_payload_inlines_data_per_block(self) -> None:
+        """Each block's write data must directly follow that block's spec."""
+        client = FakeClient()
+        client.write_block(
+            word_blocks=[("D300", [0x1111, 0x2222])],
+            bit_blocks=[("M200", [0x00FF])],
+            series=PLCSeries.IQR,
+        )
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.DEVICE_WRITE_BLOCK)
+        self.assertEqual(subcommand, 0x0002)
+        self.assertEqual(
+            payload,
+            b"\x01\x01"
+            + encode_device_spec("D300", series=PLCSeries.IQR)
+            + b"\x02\x00"
+            + b"\x11\x11\x22\x22"
+            + encode_device_spec("M200", series=PLCSeries.IQR)
+            + b"\x01\x00"
+            + b"\xff\x00",
+        )
+
+    def test_write_block_multi_word_block_payload_inlines_data_per_block(self) -> None:
+        """Multi-block word writes must also inline data per block."""
+        client = FakeClient()
+        client.write_block(
+            word_blocks=[("D300", [0x1111, 0x2222]), ("D310", [0x3333])],
+            bit_blocks=(),
+            series=PLCSeries.QL,
+        )
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.DEVICE_WRITE_BLOCK)
+        self.assertEqual(subcommand, 0x0000)
+        self.assertEqual(
+            payload,
+            b"\x02\x00"
+            + encode_device_spec("D300", series=PLCSeries.QL)
+            + b"\x02\x00"
+            + b"\x11\x11\x22\x22"
+            + encode_device_spec("D310", series=PLCSeries.QL)
+            + b"\x01\x00"
+            + b"\x33\x33",
         )
 
     def test_write_block_rejects_lcs_lcc(self) -> None:

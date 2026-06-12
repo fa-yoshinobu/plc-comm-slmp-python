@@ -411,7 +411,6 @@ def _scenario_write_mixed(
     bit_test_values: list[int],
     keep_written_value: bool,
     split_mixed_blocks: bool,
-    retry_mixed_on_error: bool,
     series: str,
 ) -> ScenarioResult:
     operation = _run_operation(
@@ -421,7 +420,6 @@ def _scenario_write_mixed(
             bit_blocks=[(bit_device, bit_test_values)],
             series=series,
             split_mixed_blocks=split_mixed_blocks,
-            retry_mixed_on_error=retry_mixed_on_error,
         ),
     )
     after_words_text = "unavailable"
@@ -489,7 +487,7 @@ def _scenario_write_mixed(
                 "API: write_block("
                 f"word_blocks=[('{word_device}', {_format_values(word_test_values)})], "
                 f"bit_blocks=[('{bit_device}', {_format_values(bit_test_values)})], "
-                f"split_mixed_blocks={split_mixed_blocks}, retry_mixed_on_error={retry_mixed_on_error})"
+                f"split_mixed_blocks={split_mixed_blocks})"
             ),
             f"Before words: {_format_values(word_before)}",
             f"Before bits: {_format_values(bit_before)}",
@@ -544,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=1025, help="SLMP port number")
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp", help="Transport protocol")
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr", help="PLC device encoding family")
+    parser.add_argument("--frame-type", choices=("3e", "4e"), default="4e", help="SLMP frame type")
     parser.add_argument("--timeout", type=float, default=3.0, help="Socket timeout in seconds")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="SLMP monitoring timer")
     parser.add_argument("--network", type=_int_auto, default=0x00, help="Target network number")
@@ -570,11 +569,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Send the mixed write as two requests instead of one combined request",
     )
     parser.add_argument(
-        "--retry-mixed-on-error",
-        action="store_true",
-        help="Try one mixed write first and only split on known mixed-write rejection end codes",
-    )
-    parser.add_argument(
         "--keep-written-value",
         action="store_true",
         help="Do not restore the original PLC values after each write scenario",
@@ -598,6 +592,7 @@ def main(argv: list[str] | None = None) -> int:
         port=args.port,
         transport=args.transport,
         timeout=args.timeout,
+        frame_type=args.frame_type,
         plc_series=args.series,
         monitoring_timer=args.monitoring_timer,
         default_target=target,
@@ -648,7 +643,6 @@ def main(argv: list[str] | None = None) -> int:
                 bit_test_values=list(args.bit_values),
                 keep_written_value=args.keep_written_value,
                 split_mixed_blocks=args.split_mixed_blocks,
-                retry_mixed_on_error=args.retry_mixed_on_error,
                 series=args.series,
             ),
         ]
@@ -680,17 +674,12 @@ def main(argv: list[str] | None = None) -> int:
         f"- Bit block: {args.bit_device} x{len(args.bit_values)} packed -> {_format_values(list(args.bit_values))}",
         (
             "- Mixed write options: "
-            f"split_mixed_blocks={args.split_mixed_blocks}, "
-            f"retry_mixed_on_error={args.retry_mixed_on_error}"
+            f"split_mixed_blocks={args.split_mixed_blocks}"
         ),
         f"- Keep written value: {args.keep_written_value}",
         (
-            "- First-pass comparison recommendation: keep both mixed-write "
-            "fallback options disabled so the first PLC response is preserved"
-        ),
-        (
-            "- Note: if retry_mixed_on_error=True triggers an internal retry, the reported memory-changed state is the "
-            "post-call state, not an observation between the first failed request and the retry"
+            "- First-pass comparison recommendation: keep split_mixed_blocks "
+            "disabled so the first PLC response is preserved"
         ),
     ]
     _write_report(output_path, header_lines=header_lines, scenarios=scenarios)

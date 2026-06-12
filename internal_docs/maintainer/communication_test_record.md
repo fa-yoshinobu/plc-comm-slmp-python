@@ -38,23 +38,28 @@ Observed example values:
 
 ### 2. Mixed block compatibility
 
-- issue: the validated PLC rejected some one-request mixed block writes
-- fix: the client exposes opt-in mixed-block compatibility fallbacks:
+- historical issue: the validated PLC rejected old one-request mixed block writes
+- current fix: the client emits the manual Write Block layout and exposes only
+  an explicit mixed-block split:
   - `split_mixed_blocks=True`
-  - `retry_mixed_on_error=True` for `write_block(...)` on known mixed-write rejection end codes
+- automatic retry is not part of the API; PLC end codes are returned unchanged
 - 2026-03-14 live comparison result:
   - `readBlock words+bits` on `D300 x2 + M200 x1 packed` -> `0x0000`
   - `writeBlock words only` on `D300 x2` -> `0x0000`
   - `writeBlock bits only` on `M200 x1 packed` -> `0x0000`
   - first one-request `writeBlock mixed` on `D300 x2 + M200 x1 packed` -> `0xC05B`
   - the first failed mixed write left PLC memory unchanged
-  - `retry_mixed_on_error=True` then produced `0xC05B -> 0x0000 -> 0x0000`
+  - the historical automatic-retry option then produced
+    `0xC05B -> 0x0000 -> 0x0000`; current clients no longer auto-retry
 - 2026-03-19 additional live comparison results:
   - `L16HCPU` first one-request mixed `writeBlock` -> `0xC056`
   - `FX5UC-32MT/D` first one-request mixed `writeBlock` -> `0xC061`
   - `R08CPU + RJ71EN71` first one-request mixed `writeBlock` -> `0xC05B`
-- result: no current live-verified hardware path in this project accepts the first one-request mixed `1406` write
-- practical record: keep the one-request form implemented, but prefer `split_mixed_blocks=True` for reliable real-hardware operation
+- result after the 2026-06-12 layout fix: one-request mixed `1406` succeeds on
+  the re-verified targets that support block commands
+- practical record: keep the one-request form implemented; use
+  `split_mixed_blocks=True` only when the caller intentionally wants separate
+  block writes
 
 ### 3. PLC setting changes
 
