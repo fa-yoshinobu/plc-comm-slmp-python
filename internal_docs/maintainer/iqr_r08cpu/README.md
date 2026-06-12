@@ -32,7 +32,6 @@ If you only need the current practical picture, read these first:
 - `1005` remote latch clear was confirmed under PLC `STOP`
 - password lock/unlock is confirmed
 - `0601/1601` is confirmed on the narrow CPU-buffer helper path
-- `18xx` file commands remain environment-dependent and are still unresolved on this PLC
 - direct `G`, `HG`, and `S` remain blocked in typed device APIs on this project
 
 ## Report Index

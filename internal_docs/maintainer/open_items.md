@@ -21,18 +21,12 @@ Remaining work is broader coverage across:
 - broader UDP address coverage
 - additional PLC families
 
-### 2. Mixed block write root cause
-
-The project still needs a root-cause explanation for why the validated iQ-R
-path rejects the first single-request mixed `1406` block write with `0xC05B`
-even when the request format matches the manual.
-
-### 3. `1617` Clear Error operator-visible effect
+### 2. `1617` Clear Error operator-visible effect
 
 Transport-level acceptance is confirmed, but the practical, operator-visible
 effect is still not pinned down on real hardware.
 
-### 4. Regression suite expansion
+### 3. Regression suite expansion
 
 The local regression suite already covers unit tests, `ruff`, `mypy`, and CLI
 `--help` smoke checks. Expand it only if selected live or manual flows need a
@@ -40,8 +34,31 @@ single-command orchestrator.
 
 ## Current Practical Limits
 
-- one-request mixed `1406` writes are not currently accepted on any live-verified path in this project
 - ASCII mode remains intentionally out of scope
+
+## Resolved Historical Items
+
+### Mixed block write root cause
+
+The old `0xC05B` mixed block write note is no longer tracked as an unresolved
+item. The 2026-06-12 root-cause check found that the failing clients were using
+an invalid Write Block payload layout: they grouped all block specs first and
+all data last. The corrected layout writes each block's data immediately after
+that block's device spec and point count.
+
+Current guidance:
+
+- automatic mixed-write split retry has been removed
+- if a PLC rejects one mixed `1406` write, the library returns the original PLC
+  end code
+- callers that intentionally want separate word-only and bit-only requests must
+  opt into `split_mixed_blocks=True`
+- QnUDV was revalidated as genuine command non-support
+- L16HCPU was revalidated as the old layout bug and fixed clients were verified
+  live
+
+See
+`../validation/reports/MIXED_BLOCK_WRITE_1406_LAYOUT_ROOT_CAUSE_2026-06-12.md`.
 
 Related maintainer pages:
 

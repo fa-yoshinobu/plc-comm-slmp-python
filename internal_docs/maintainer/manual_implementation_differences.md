@@ -82,7 +82,7 @@ Status:
 
 - removed from current project scope
 
-## 4. Mixed Block Fallback
+## 4. Mixed Block Split Behavior
 
 Manual expectation:
 
@@ -97,19 +97,30 @@ Current implementation:
 
 Reason:
 
-- after the fixed manual layout, a non-zero PLC end code should remain visible
-  to the caller instead of being hidden by automatic retry
+- after the fixed manual layout, any non-zero PLC end code should remain
+  visible to the caller instead of being hidden by automatic retry
 
-Observed on the validated target:
+Historical observations before the 2026-06-12 layout fix:
 
 - one-request mixed `write_block(D300 x2 + M200 x1 packed)` returned `0xC05B`
 - the PLC memory remained unchanged after that first failed request
 - the historical automatic-retry option then succeeded by retrying as separate
   word-only and bit-only writes; that option has since been removed
-- later live checks on additional targets also rejected the first mixed write:
+- later live checks on additional targets with the old layout also rejected the
+  first mixed write:
   - `L16HCPU` -> `0xC056`
   - `FX5UC-32MT/D` -> `0xC061`
   - `R08CPU + RJ71EN71` -> `0xC05B`
+
+Resolution:
+
+- the 2026-06-12 root-cause check found that the failing clients used an
+  invalid Write Block payload layout
+- current clients emit the corrected layout, with each block's data immediately
+  after that block's device spec and point count
+- revalidated targets that support block commands accepted the corrected
+  one-request mixed write; QnUDV was reclassified as genuine command
+  non-support
 
 Status:
 

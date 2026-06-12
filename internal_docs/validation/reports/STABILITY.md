@@ -19,7 +19,6 @@ This document records the verification and bug-fixing process performed to impro
 
 ### 2.3. Robustness and Validation
 - **Node Search**: Added bounds-checking to `decode_node_search_response` to prevent `IndexError` on truncated UDP packets.
-- **File Commands**: Added 6-32 character password validation for iQ-R file subcommands (`0x0040`).
 
 ## 3. Verification Matrix
 | Test Case | Frames | Sync/Async | Result | Note |

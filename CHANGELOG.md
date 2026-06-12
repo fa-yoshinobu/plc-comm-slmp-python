@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Removed `retry_mixed_on_error` from sync and async `write_block()`; mixed block-write failures now return the PLC end code unchanged, and only explicit `split_mixed_blocks=True` sends separate block writes.
+- Removed remaining current-scope references to unsupported `18xx` file-control commands from maintainer TODO/status documents.
 
 ## 0.1.14 - 2026-05-02
 
@@ -111,7 +112,6 @@ All notable changes to this project will be documented in this file.
 - **Bit Data Packing**: Swapped nibble order in `pack_bit_values` and `unpack_bit_values` to correctly map the first device to the high nibble and the second device to the low nibble, matching the SLMP binary specification and live PLC behavior.
 - **ZR Device Base**: Changed `ZR` device radix from hexadecimal to decimal in `constants.py` to align with live-verified iQ-R behavior.
 - **Node Search**: Improved robustness of `decode_node_search_response` against truncated or malformed network data.
-- **File Validation**: Added password length validation (6-32 characters) for iQ-R file subcommands (e.g. `0x0040`).
 - Fixed several type hinting issues in `core.py` and redundant constant definitions.
 
 ## 0.1.3 - 2026-03-15
@@ -173,7 +173,6 @@ Initial packaged release for the current repository scope.
   - remote control
   - password lock/unlock
   - self test
-  - major file commands
 - Extended Specification typed extension builders and access APIs
 - practical helper APIs for:
   - long timer / long retentive timer decoding
