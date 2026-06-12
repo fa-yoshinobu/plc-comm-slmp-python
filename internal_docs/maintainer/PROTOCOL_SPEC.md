@@ -347,7 +347,7 @@ Practical conclusion for this repository:
 
 - TCP and UDP are supported.
 - TCP receives exactly one SLMP frame using `response_data_length`.
-- For remote reset (`1006`), the typed helper defaults to subcommand `0000` with no-response handling because normal completion may not return a response.
+- For remote reset (`1006`), the typed helper sends `1006/0000 + 01 00` and defaults to no-response handling because normal completion may not return a response.
 - `receive_request(...)` decodes an incoming 4E request frame from the PLC.
 
 ## 7.1 Verified Practical Access Path Notes

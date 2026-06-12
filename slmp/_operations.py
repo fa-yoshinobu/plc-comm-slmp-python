@@ -22,10 +22,12 @@ from .core import (
     SlmpResponse,
     TypeNameInfo,
     _check_block_request_limits,
+    _check_direct_device_points,
     _check_label_unit_specification,
     _check_points_u16,
     _check_random_bit_write_count,
     _check_random_read_like_counts,
+    _check_random_write_word_counts,
     _check_temporarily_unsupported_device,
     _check_temporarily_unsupported_devices,
     _check_u16,
@@ -106,7 +108,7 @@ def build_read_devices_request(
     default_series: PLCSeries,
     device_family: object | None,
 ) -> OperationRequest:
-    _check_points_u16(points, "points")
+    _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices")
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_family(device, device_family)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
@@ -150,6 +152,7 @@ def build_write_devices_request(
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
+    _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices")
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_family(device, device_family)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
@@ -267,7 +270,7 @@ def build_read_devices_ext_request(
     default_series: PLCSeries,
     device_family: object | None,
 ) -> OperationRequest:
-    _check_points_u16(points, "points")
+    _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices_ext")
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
@@ -294,6 +297,7 @@ def build_write_devices_ext_request(
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
+    _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices_ext")
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
@@ -434,7 +438,9 @@ def build_remote_run_request(*, force: bool, clear_mode: int) -> OperationReques
 
 
 def build_remote_stop_request(*, force: bool) -> OperationRequest:
-    mode = 0x0003 if force else 0x0001
+    # Remote Stop has no force-mode branch in SH-080931-R p.132; keep the
+    # force argument only for API compatibility.
+    mode = 0x0001
     return OperationRequest(Command.REMOTE_STOP, 0x0000, mode.to_bytes(2, "little"))
 
 
@@ -448,9 +454,9 @@ def build_remote_latch_clear_request() -> OperationRequest:
 
 
 def build_remote_reset_request(*, subcommand: int) -> OperationRequest:
-    if subcommand not in {0x0000, 0x0001}:
-        raise ValueError(f"remote reset subcommand must be 0x0000 or 0x0001: 0x{subcommand:04X}")
-    return OperationRequest(Command.REMOTE_RESET, subcommand, b"")
+    if subcommand != 0x0000:
+        raise ValueError(f"remote reset subcommand must be 0x0000: 0x{subcommand:04X}")
+    return OperationRequest(Command.REMOTE_RESET, subcommand, b"\x01\x00")
 
 
 def build_remote_password_lock_request(
@@ -586,6 +592,12 @@ def build_write_random_words_request(
         raise ValueError("word_values and dword_values must be <= 255 each")
 
     effective_series = _effective_series(series, default_series)
+    _check_random_write_word_counts(
+        len(word_items),
+        len(dword_items),
+        series=effective_series,
+        name="write_random_words",
+    )
     _validate_random_write_word_devices([device for device, _ in word_items])
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
     payload = bytearray([len(word_items), len(dword_items)])
@@ -613,6 +625,12 @@ def build_write_random_words_ext_request(
     if len(word_values) > 0xFF or len(dword_values) > 0xFF:
         raise ValueError("word_values and dword_values must be <= 255 each")
     effective_series = _effective_series(series, default_series)
+    _check_random_write_word_counts(
+        len(word_values),
+        len(dword_values),
+        series=effective_series,
+        name="write_random_words_ext",
+    )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
@@ -763,7 +781,7 @@ def build_write_block_request(
     if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
         raise ValueError("word_blocks and bit_blocks must be <= 255 each")
     effective_series = _effective_series(series, default_series)
-    _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="write_block")
+    _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="write_block", write=True)
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
     word_refs: list[DeviceRef] = []
@@ -803,6 +821,8 @@ def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
     loopback = data.encode("ascii") if isinstance(data, str) else bytes(data)
     if len(loopback) < 1 or len(loopback) > 960:
         raise ValueError(f"loopback data size out of range (1..960): {len(loopback)}")
+    if any(ch not in b"0123456789ABCDEF" for ch in loopback):
+        raise ValueError("loopback data must contain only ASCII 0-9/A-F bytes")
     payload = len(loopback).to_bytes(2, "little") + loopback
     return OperationRequest(Command.SELF_TEST, 0x0000, payload)
 

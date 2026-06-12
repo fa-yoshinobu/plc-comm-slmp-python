@@ -339,8 +339,8 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "remote_reset_with_response",
-            lambda c: c.remote_reset(subcommand=0x0001, expect_response=True),
-            lambda c: c.remote_reset(subcommand=0x0001, expect_response=True),
+            lambda c: c.remote_reset(expect_response=True),
+            lambda c: c.remote_reset(expect_response=True),
             [b""],
         ),
         _ParityCase(

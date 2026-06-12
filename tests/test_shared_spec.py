@@ -128,4 +128,8 @@ class TestSharedFrameVectors(unittest.TestCase):
             client.remote_password_unlock(args["password"])
             return
 
+        if operation == "remote_reset":
+            client.remote_reset(expect_response=bool(args.get("expect_response", True)))
+            return
+
         raise AssertionError(f"Unsupported shared frame operation: {operation}")
