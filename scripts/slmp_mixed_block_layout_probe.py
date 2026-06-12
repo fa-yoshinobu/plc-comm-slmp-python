@@ -117,7 +117,13 @@ def main() -> int:
         print(f"before: D300x2={fmt(before_d300)} D310x2={fmt(before_d310)} M200={fmt(before_m200)}")
         print()
 
-        def send(name: str, payload: bytes, expect_d300=None, expect_d310=None, expect_m200=None) -> None:
+        def send(
+            name: str,
+            payload: bytes,
+            expect_d300: list[int] | None = None,
+            expect_d310: list[int] | None = None,
+            expect_m200: list[int] | None = None,
+        ) -> None:
             resp = cli.raw_command(0x1406, subcommand=subcommand, payload=payload, raise_on_error=False)
             line = f"{name}: end_code=0x{resp.end_code:04X}"
             checks = []
