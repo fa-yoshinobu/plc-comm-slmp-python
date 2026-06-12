@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## 0.1.15 - 2026-06-12
 
 ### Added
 - Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Removed `retry_mixed_on_error` from sync and async `write_block()`; mixed block-write failures now return the PLC end code unchanged, and only explicit `split_mixed_blocks=True` sends separate block writes.
 - Removed remaining current-scope references to unsupported `18xx` file-control commands from maintainer TODO/status documents.
+- Guarded Extended Specification `G`/`HG` access before transport: `G` now requires a `U...` qualified module path, and `HG` is accepted only for `U3E0\HG` through `U3E3\HG` with the matching direct-memory code.
 
 ## 0.1.14 - 2026-05-02
 

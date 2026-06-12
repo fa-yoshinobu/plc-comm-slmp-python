@@ -463,6 +463,7 @@ class ExtendedDevice:
     ref: DeviceRef
     extension_specification: int | None = None
     direct_memory_specification: int | None = None
+    qualifier: str | None = None
 
 
 def parse_device(
@@ -517,6 +518,7 @@ def parse_extended_device(
             ref=parse_device(device_txt, family=family),
             extension_specification=j_network,
             direct_memory_specification=DIRECT_MEMORY_LINK_DIRECT,
+            qualifier="J",
         )
 
     qualified = re.fullmatch(r"U([0-9A-F]+)[\\/](.+)", text)
@@ -530,11 +532,13 @@ def parse_extended_device(
         if dev_ref.code == "G":
             dm = DIRECT_MEMORY_MODULE_ACCESS  # 0xF8
         elif dev_ref.code == "HG":
+            _validate_hg_extension_specification(extension_specification)
             dm = DIRECT_MEMORY_CPU_BUFFER  # 0xFA
         return ExtendedDevice(
             ref=dev_ref,
             extension_specification=extension_specification,
             direct_memory_specification=dm,
+            qualifier="U",
         )
 
     return ExtendedDevice(ref=parse_device(value, family=family))
@@ -548,6 +552,7 @@ def resolve_extended_device_and_extension(
 ) -> tuple[DeviceRef, ExtensionSpec]:
     """Resolve device and extension specification, prioritizing explicit qualification in the device string."""
     qualified = parse_extended_device(device, family=family)
+    _validate_g_hg_extended_device_qualification(qualified)
     overrides: dict[str, Any] = {}
     if (
         qualified.extension_specification is not None
@@ -559,6 +564,15 @@ def resolve_extended_device_and_extension(
         and extension.direct_memory_specification == DIRECT_MEMORY_NORMAL
     ):
         overrides["direct_memory_specification"] = qualified.direct_memory_specification
+    elif (
+        qualified.direct_memory_specification is not None
+        and extension.direct_memory_specification != qualified.direct_memory_specification
+    ):
+        raise ValueError(
+            f"{qualified.ref.code} Extended Device access requires "
+            f"direct_memory_specification=0x{qualified.direct_memory_specification:02X}; "
+            f"got 0x{extension.direct_memory_specification:02X}"
+        )
     if not overrides:
         return qualified.ref, extension
     return qualified.ref, replace(extension, **overrides)
@@ -821,6 +835,24 @@ def _validate_extension_spec(spec: ExtensionSpec) -> None:
     _check_u8(spec.direct_memory_specification, "direct_memory_specification")
 
 
+def _validate_hg_extension_specification(extension_specification: int) -> None:
+    if extension_specification not in _HG_VALID_EXTENSION_SPECIFICATIONS:
+        raise ValueError("HG Extended Device access is valid only for U3E0\\HG through U3E3\\HG.")
+
+
+def _validate_g_hg_extended_device_qualification(device: ExtendedDevice) -> None:
+    if device.ref.code == "G":
+        if device.qualifier != "U":
+            raise ValueError("G Extended Device access requires U-qualified module access such as U1\\G0.")
+        return
+    if device.ref.code != "HG":
+        return
+    if device.qualifier != "U":
+        raise ValueError("HG Extended Device access requires U-qualified CPU-buffer access U3E0\\HG through U3E3\\HG.")
+    assert device.extension_specification is not None
+    _validate_hg_extension_specification(device.extension_specification)
+
+
 def _uses_capture_aligned_g_hg_layout(ref: DeviceRef, *, extension: ExtensionSpec) -> bool:
     return ref.code in _G_HG_CODES and extension.direct_memory_specification in {0xF8, 0xFA}
 
@@ -881,24 +913,40 @@ def encode_extended_device_spec(
 ) -> bytes:
     """Encode an Extended Device extended device specification into bytes."""
     ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=family)
-    if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
+    return encode_resolved_extended_device_spec(
+        ref,
+        series=series,
+        extension=effective_extension,
+        include_direct_memory_at_end=include_direct_memory_at_end,
+    )
+
+
+def encode_resolved_extended_device_spec(
+    ref: DeviceRef,
+    *,
+    series: PLCSeries,
+    extension: ExtensionSpec,
+    include_direct_memory_at_end: bool = True,
+) -> bytes:
+    """Encode an already validated Extended Device spec."""
+    if extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
         return _encode_link_direct_device_spec(
             ref,
-            extension=effective_extension,
+            extension=extension,
             include_direct_memory_at_end=include_direct_memory_at_end,
         )
-    if _uses_capture_aligned_g_hg_layout(ref, extension=effective_extension):
+    if _uses_capture_aligned_g_hg_layout(ref, extension=extension):
         return _encode_capture_aligned_g_hg_extension_spec(
             ref,
             series=series,
-            extension=effective_extension,
+            extension=extension,
             include_direct_memory_at_end=include_direct_memory_at_end,
         )
     payload = bytearray()
-    payload += encode_extension_spec(effective_extension)
+    payload += encode_extension_spec(extension)
     payload += encode_device_spec(ref, series=series)
     if include_direct_memory_at_end:
-        payload += effective_extension.direct_memory_specification.to_bytes(1, "little")
+        payload += extension.direct_memory_specification.to_bytes(1, "little")
     return bytes(payload)
 
 
@@ -1269,6 +1317,7 @@ _LONG_FAMILY_STATE_WRITE_DIRECT_CODES = _LT_LST_DIRECT_CODES | _LC_CONTACT_CODES
 _DWORD_ONLY_DIRECT_CODES = frozenset({"LZ"})
 _RANDOM_DWORD_ONLY_DIRECT_CODES = frozenset({"LCN", "LZ"})
 _G_HG_CODES = frozenset({"G", "HG"})
+_HG_VALID_EXTENSION_SPECIFICATIONS = frozenset({0x03E0, 0x03E1, 0x03E2, 0x03E3})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})
 

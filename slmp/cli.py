@@ -24,6 +24,7 @@ from .constants import (
     DIRECT_MEMORY_CPU_BUFFER,
     DIRECT_MEMORY_LINK_DIRECT,
     DIRECT_MEMORY_MODULE_ACCESS,
+    DIRECT_MEMORY_NORMAL,
     Command,
     FrameType,
     ModuleIONo,
@@ -44,6 +45,7 @@ from .core import (
     encode_device_spec,
     pack_bit_values,
     parse_device,
+    resolve_extended_device_and_extension,
     resolve_device_subcommand,
     unpack_bit_values,
 )
@@ -2859,8 +2861,8 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
     parser.add_argument(
         "--direct-memory",
         type=_int_auto,
-        default=DIRECT_MEMORY_MODULE_ACCESS,
-        help="default direct memory specification when a probe omits its fourth field",
+        default=DIRECT_MEMORY_NORMAL,
+        help="default direct memory specification when a probe omits its fourth field; 0 means infer from qualified device",
     )
     parser.add_argument(
         "--keep-written-value",
@@ -2986,6 +2988,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
                 series=args.series,
             )
             try:
+                _, extension = resolve_extended_device_and_extension(probe.device, extension)
                 _run_extended_device_word_probe(
                     cli,
                     item_name=probe.label,
@@ -3012,7 +3015,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
             f"module_io=0x{target.module_io:04X}, multidrop=0x{target.multidrop:02X}"
         ),
         f"- Base extension specification: 0x{args.extension_specification:04X}",
-        f"- Default direct memory specification: 0x{args.direct_memory:02X}",
+        f"- Default direct memory specification: {'auto' if args.direct_memory == DIRECT_MEMORY_NORMAL else f'0x{args.direct_memory:02X}'}",
         f"- Restore enabled: {'no' if args.keep_written_value else 'yes'}",
         f"- Summary: OK={summary['OK']}, NG={summary['NG']}, SKIP={summary['SKIP']}",
     ]
@@ -3020,7 +3023,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
         header_lines.append(
             f"- Probe: {probe.label}, device={probe.device}, "
             f"preferred_write=0x{probe.preferred_write_value & 0xFFFF:04X}, "
-            f"direct_memory=0x{probe.direct_memory_specification:02X}"
+            f"direct_memory={'auto' if probe.direct_memory_specification == DIRECT_MEMORY_NORMAL else f'0x{probe.direct_memory_specification:02X}'}"
         )
     _write_markdown_report(
         output_path,
@@ -3045,9 +3048,9 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--station", type=_int_auto, default=0xFF)
     parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
     parser.add_argument("--multidrop", type=_int_auto, default=0x00)
-    parser.add_argument("--cpu-io", type=_int_auto, default=0x03E0, help="CPU buffer extension spec")
-    parser.add_argument("--g-device", default="G10", help="Extended Device G device to probe")
-    parser.add_argument("--hg-device", default="HG20", help="Extended Device HG device to probe")
+    parser.add_argument("--cpu-io", type=_int_auto, default=0x03E0, help="base CPU buffer extension spec")
+    parser.add_argument("--g-device", default=r"U3E0\G10", help="qualified Extended Device G device to probe")
+    parser.add_argument("--hg-device", default=r"U3E0\HG20", help="qualified Extended Device HG device to probe")
     parser.add_argument(
         "--g-write-value",
         type=_int_auto,
@@ -3176,23 +3179,36 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
             device_modification_index=args.extended_device_dev_mod_index,
             use_indirect_specification=args.extended_device_indirect,
             register_mode=args.extended_device_reg,
-            direct_memory_specification=DIRECT_MEMORY_CPU_BUFFER,
+            direct_memory_specification=DIRECT_MEMORY_NORMAL,
             series=args.series,
         )
 
         restore_enabled = not args.keep_written_value
 
         def run_probe(item_name: str, *, device: str, preferred_write_value: int) -> None:
+            _, effective_extension = resolve_extended_device_and_extension(device, extension)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-                before_values = cli.read_devices_ext(device, 1, extension=extension, bit_unit=False, series=args.series)
+                before_values = cli.read_devices_ext(
+                    device,
+                    1,
+                    extension=effective_extension,
+                    bit_unit=False,
+                    series=args.series,
+                )
                 before = int(before_values[0])
                 write_value = _choose_probe_word_value(current=before, preferred=preferred_write_value)
-                cli.write_devices_ext(device, [write_value], extension=extension, bit_unit=False, series=args.series)
+                cli.write_devices_ext(
+                    device,
+                    [write_value],
+                    extension=effective_extension,
+                    bit_unit=False,
+                    series=args.series,
+                )
                 readback_values = cli.read_devices_ext(
                     device,
                     1,
-                    extension=extension,
+                    extension=effective_extension,
                     bit_unit=False,
                     series=args.series,
                 )
@@ -3213,11 +3229,17 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
                     record(item_name, "OK", ", ".join(detail_parts + ["restore=disabled"]))
                     return
 
-                cli.write_devices_ext(device, [before], extension=extension, bit_unit=False, series=args.series)
+                cli.write_devices_ext(
+                    device,
+                    [before],
+                    extension=effective_extension,
+                    bit_unit=False,
+                    series=args.series,
+                )
                 restored_values = cli.read_devices_ext(
                     device,
                     1,
-                    extension=extension,
+                    extension=effective_extension,
                     bit_unit=False,
                     series=args.series,
                 )
@@ -3912,7 +3934,7 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
         "--direct-memory",
         action="append",
         type=_int_auto,
-        help="Extended Device direct memory specification; repeatable, defaults to 0xFA for iqr and 0xF8 for ql",
+        help="Extended Device direct memory specification; repeatable, defaults to auto from each qualified device",
     )
     parser.add_argument(
         "--extension-specification",
@@ -3976,8 +3998,7 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
     if not devices:
         parser.error("at least one non-empty --device is required")
     point_counts = [int(value) for value in _dedupe_preserve_order(args.points or [1])]
-    default_direct_memory = DIRECT_MEMORY_CPU_BUFFER if args.series == "iqr" else DIRECT_MEMORY_MODULE_ACCESS
-    direct_memories = [int(value) for value in _dedupe_preserve_order(args.direct_memory or [default_direct_memory])]
+    direct_memories = [int(value) for value in _dedupe_preserve_order(args.direct_memory or [DIRECT_MEMORY_NORMAL])]
     transports = [str(value) for value in _dedupe_preserve_order(args.transport or ["tcp"])]
 
     target = SlmpTarget(
@@ -4021,7 +4042,10 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
     print(f"[INFO] Targets={[entry.name for entry in targets]}")
     print(f"[INFO] Devices={devices}")
     print(f"[INFO] Points={point_counts}")
-    print(f"[INFO] Direct memory={[f'0x{value:02X}' for value in direct_memories]}")
+    print(
+        "[INFO] Direct memory="
+        f"{['auto' if value == DIRECT_MEMORY_NORMAL else f'0x{value:02X}' for value in direct_memories]}"
+    )
 
     explicit_target_mode = bool(args.target or args.target_file)
     restore_enabled = not args.keep_written_value
@@ -4069,7 +4093,7 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
                 print(f"[INFO] Frame dump directory: {dump_dir_ref[0]}")
 
                 for direct_memory in direct_memories:
-                    extension = cli.make_extension_spec(
+                    base_extension = cli.make_extension_spec(
                         extension_specification=args.extension_specification,
                         extension_specification_modification=args.extended_device_ext_mod,
                         device_modification_index=args.extended_device_dev_mod_index,
@@ -4079,8 +4103,23 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
                         series=args.series,
                     )
                     for device in devices:
+                        try:
+                            _, extension = resolve_extended_device_and_extension(device, base_extension)
+                        except Exception as exc:  # noqa: BLE001
+                            for points in point_counts:
+                                item_name = (
+                                    f"{device} points={points} direct="
+                                    f"{'auto' if direct_memory == DIRECT_MEMORY_NORMAL else f'0x{direct_memory:02X}'}"
+                                )
+                                if explicit_target_mode or len(targets) > 1:
+                                    item_name = f"{entry.name} {item_name}"
+                                if len(transports) > 1:
+                                    item_name = f"{transport} {item_name}"
+                                record(item_name, "NG", str(exc))
+                            continue
+                        effective_direct_memory = extension.direct_memory_specification
                         for points in point_counts:
-                            item_name = f"{device} points={points} direct=0x{direct_memory:02X}"
+                            item_name = f"{device} points={points} direct=0x{effective_direct_memory:02X}"
                             if explicit_target_mode or len(targets) > 1:
                                 item_name = f"{entry.name} {item_name}"
                             if len(transports) > 1:
@@ -4121,7 +4160,8 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
         ),
         f"- Devices: {', '.join(devices)}",
         f"- Point counts: {', '.join(str(value) for value in point_counts)}",
-        f"- Direct memory values: {', '.join(f'0x{value:02X}' for value in direct_memories)}",
+        "- Direct memory values: "
+        + ", ".join("auto" if value == DIRECT_MEMORY_NORMAL else f"0x{value:02X}" for value in direct_memories),
         f"- Mode: {'write_check' if args.write_check else 'read_only'}",
         f"- Restore enabled: {'no' if args.keep_written_value else 'yes'}",
         f"- Preferred write base: 0x{args.preferred_write_base & 0xFFFF:04X}",

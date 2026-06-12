@@ -87,8 +87,8 @@ For normal application code:
 | `iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
 | `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
 | `iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
-| `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | provisional; review in `TODO.md` |
-| `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | provisional; review in `TODO.md` |
+| `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | fixed family mapping |
+| `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | fixed family mapping |
 | `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
 | `lcpu` | `3e` | `ql` | hexadecimal | `lcpu` | retained path |
 | `qnu` | `3e` | `ql` | hexadecimal | `qnu` | retained path |
@@ -103,8 +103,8 @@ High-level accepted `plc_family` values:
 | `iq-f` | FX5 / iQ-F | `X` / `Y` use manual octal text |
 | `iq-r` | iQ-R | `X` / `Y` use hexadecimal text |
 | `iq-l` | iQ-L | independent iQ-L range rules; live-validated on `L16HCPU` |
-| `mx-f` | MX-F | pending live validation |
-| `mx-r` | MX-R | pending live validation |
+| `mx-f` | MX-F | fixed high-level family mapping |
+| `mx-r` | MX-R | fixed high-level family mapping |
 | `qcpu` | QCPU | `3e/ql` fixed profile |
 | `lcpu` | LCPU | `3e/ql` fixed profile |
 | `qnu` | QnU | `3e/ql` fixed profile |

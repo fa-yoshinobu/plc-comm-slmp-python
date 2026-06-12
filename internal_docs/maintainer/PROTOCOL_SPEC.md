@@ -272,12 +272,14 @@ Binary payload builder:
 
 For `G/HG`, the practical meaning is that the access is unit/module-scoped, not a standalone normal device address.
 - `G` corresponds to a module access device (`U\\G` style, for example `U4\\G0` in engineering-tool notation).
-- `HG` is CPU-buffer related, but it is still not a standalone direct device on the validated target.
+- `HG` is CPU-buffer related and is only meaningful in the `U3E0\\HG`, `U3E1\\HG`,
+  `U3E2\\HG`, and `U3E3\\HG` forms in the current iQ-R multi-CPU context. Do not
+  treat lower unit forms such as `U1\\HG` as valid `HG` targets.
 - In both cases, plain `G0` / `HG0` without surrounding unit/module context is not sufficient on the validated target.
 - The `Uxxxx` qualifier is syntax only at the protocol builder level. The repository can encode it as an protocol extension specification, but the actual meaning depends on the PLC configuration and on whether the corresponding unit exists.
 - In the currently verified iQ-R path, that unit context is provided by `0601/1601` with `module_no=0x03E0`.
 - On the user's current multi-CPU environment, the practical Extended Specification qualifiers for `G/HG` are `U3E0`, `U3E1`, `U3E2`, and `U3E3`, representing CPU memories for CPU No.1 through CPU No.4 respectively.
-- Lower `U**` values must not be read as CPU-memory selectors by default. In the same workspace context, lower `U**` values are ordinary I/O unit addresses unless the PLC-side environment explicitly defines the `U3E0..U3E3` style CPU-memory mapping for `G/HG`.
+- Lower `U**` values must not be read as CPU-memory selectors by default. In the same workspace context, lower `U**` values are ordinary I/O unit addresses for `G`, while `HG` is limited to `U3E0..U3E3`.
 - Therefore, `U1\\G*`, `U4\\G*`, `U01\\G*`, and `U3E0\\G*` must not be generalized from one another unless a capture or live verification proves that the target interprets them in the same way.
 - For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository now special-cases `G/HG` requests to match the captured reordered payload layout. That layout now has direct capture evidence for `U3E0\G10`, `U3E0\HG20`, and `U01\G22`. The iQ-R `U3E0\G10` / `U3E0\HG20` path was revalidated on the current R120PCPU target for single-word `G10` / `HG20` read-write-readback with restore. Each target still requires its own validation.
 
@@ -296,8 +298,10 @@ For convenience, the typed `_ext` APIs also accept qualified device strings such
 - this override does not prove what the target means by that `Uxxxx` value; it only controls the encoded Extended Specification qualifier
 - the byte-level layout difference for `G/HG` is documented in `internal_docs/validation/reports/G_HG_extended_device_LAYOUT_DIFF_2026-03-19.md`
 - the Q/L-style `U01\G22` capture evidence is documented in `internal_docs/validation/reports/U01_G22_extended_device_CAPTURE_2026-03-19.md`
-- in the user's current multi-CPU environment, `U3E0..U3E3` are the meaningful `G/HG` qualifiers and map to CPU No.1..No.4 memory
-- lower `U**` values remain plain I/O unit addresses unless the target family defines a CPU-memory mapping for that range
+- in the user's current multi-CPU environment, `U3E0..U3E3` are the meaningful `HG`
+  qualifiers and map to CPU No.1..No.4 memory
+- lower `U**` values remain plain I/O unit addresses for `G`; they are not valid `HG`
+  targets
 
 ## 5.4 Observed Environment Gap (Manual vs PLC)
 
@@ -315,7 +319,9 @@ Current operational status is tracked in:
 
 Practical conclusion for this repository:
 - `G` should be documented and treated as a unit-qualified module-access device (`U\\G` style).
-- `HG` should be documented and treated as requiring explicit CPU-buffer / module context as well.
+- `HG` should be documented and treated as requiring one of the explicit `U3E0..U3E3`
+  CPU-buffer contexts. `U1\\HG` and similar lower-unit forms are invalid targets, not
+  unresolved access failures.
 - On the validated target, the only repository-verified operational form is still `0601/1601` with `module_no=0x03E0`.
 - The typed Extended Specification `_ext` APIs now generate the capture-aligned `G/HG` payload shape, and the iQ-R path has been hardware-revalidated on the current R120PCPU target for single-word `G10` / `HG20`.
 - The manual-side Extended Specification interpretation for `U4\\G0` is:

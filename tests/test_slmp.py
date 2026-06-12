@@ -295,6 +295,8 @@ class TestCodec(unittest.TestCase):
         extended_device_ql = parse_extended_device(r"U01\G22")
         self.assertEqual(str(extended_device_ql.ref), "G22")
         self.assertEqual(extended_device_ql.extension_specification, 0x0001)
+        with self.assertRaisesRegex(ValueError, r"U3E0\\HG through U3E3\\HG"):
+            parse_extended_device(r"U1\HG0")
 
     def test_extension_helpers(self) -> None:
         """Test test_extension_helpers."""
@@ -319,12 +321,18 @@ class TestCodec(unittest.TestCase):
             extension_specification_modification=0x00,
             device_modification_index=0x00,
             device_modification_flags=0x00,
-            direct_memory_specification=0xFA,
+            direct_memory_specification=0x00,
         )
-        g_data = encode_extended_device_spec("G10", series=PLCSeries.IQR, extension=cpu_ext)
-        self.assertEqual(g_data, b"\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xfa")
-        hg_data = encode_extended_device_spec("HG20", series=PLCSeries.IQR, extension=cpu_ext)
+        with self.assertRaisesRegex(ValueError, "G Extended Device access requires U-qualified"):
+            encode_extended_device_spec("G10", series=PLCSeries.IQR, extension=cpu_ext)
+        with self.assertRaisesRegex(ValueError, "HG Extended Device access requires U-qualified"):
+            encode_extended_device_spec("HG20", series=PLCSeries.IQR, extension=cpu_ext)
+        g_data = encode_extended_device_spec(r"U3E0\G10", series=PLCSeries.IQR, extension=cpu_ext)
+        self.assertEqual(g_data, b"\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xf8")
+        hg_data = encode_extended_device_spec(r"U3E0\HG20", series=PLCSeries.IQR, extension=cpu_ext)
         self.assertEqual(hg_data, b"\x00\x00\x14\x00\x00\x00\x2e\x00\x00\x00\xe0\x03\xfa")
+        with self.assertRaisesRegex(ValueError, r"U3E0\\HG through U3E3\\HG"):
+            encode_extended_device_spec(r"U1\HG20", series=PLCSeries.IQR, extension=cpu_ext)
         qualified_g_data = encode_extended_device_spec(
             r"U3E0\G10",
             series=PLCSeries.IQR,
@@ -333,7 +341,7 @@ class TestCodec(unittest.TestCase):
                 extension_specification_modification=0x00,
                 device_modification_index=0x00,
                 device_modification_flags=0x00,
-                direct_memory_specification=0xFA,
+                direct_memory_specification=0x00,
             ),
         )
         self.assertEqual(qualified_g_data, g_data)
@@ -344,7 +352,9 @@ class TestCodec(unittest.TestCase):
             device_modification_flags=0x00,
             direct_memory_specification=0xF8,
         )
-        ql_g_data = encode_extended_device_spec("G22", series=PLCSeries.QL, extension=module_ext)
+        with self.assertRaisesRegex(ValueError, "G Extended Device access requires U-qualified"):
+            encode_extended_device_spec("G22", series=PLCSeries.QL, extension=module_ext)
+        ql_g_data = encode_extended_device_spec(r"U01\G22", series=PLCSeries.QL, extension=module_ext)
         self.assertEqual(ql_g_data, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8")
         qualified_ql_g_data = encode_extended_device_spec(
             r"U01\G22",
@@ -1724,7 +1734,7 @@ class TestDeviceApi(unittest.TestCase):
             extension_specification_modification=0x00,
             device_modification_index=0x00,
             device_modification_flags=0x00,
-            direct_memory_specification=0xFA,
+            direct_memory_specification=0x00,
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
@@ -1733,7 +1743,7 @@ class TestDeviceApi(unittest.TestCase):
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
         self.assertEqual(subcommand, 0x0082)
-        self.assertEqual(payload, b"\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xfa\x01\x00")
+        self.assertEqual(payload, b"\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xf8\x01\x00")
 
     def test_extended_device_ql_g_read_payload_matches_capture_shape(self) -> None:
         """Test test_extended_device_ql_g_read_payload_matches_capture_shape."""
@@ -1796,7 +1806,7 @@ class TestDeviceApi(unittest.TestCase):
             extension_specification_modification=0x00,
             device_modification_index=0x00,
             device_modification_flags=0x00,
-            direct_memory_specification=0xFA,
+            direct_memory_specification=0x00,
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
@@ -1804,7 +1814,7 @@ class TestDeviceApi(unittest.TestCase):
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_ENTRY_MONITOR)
         self.assertEqual(subcommand, 0x0082)
-        self.assertEqual(payload, b"\x01\x00\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xfa")
+        self.assertEqual(payload, b"\x01\x00\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xf8")
 
     def test_read_devices_ext_rejects_long_counter_current_before_transport(self) -> None:
         """Extended direct word reads must use the same long-current guards as direct reads."""
@@ -2239,15 +2249,15 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(
             CoverageClient.read_calls,
             [
-                (r"U3E0\G10", 1, 0xFA),
-                (r"U3E0\G10", 4, 0xFA),
+                (r"U3E0\G10", 1, 0xF8),
+                (r"U3E0\G10", 4, 0xF8),
                 (r"U3E0\HG20", 1, 0xFA),
                 (r"U3E0\HG20", 4, 0xFA),
             ],
         )
         self.assertIn("# G/HG Extended Device Coverage Report", report)
         self.assertIn("- Mode: read_only", report)
-        self.assertIn(r"| U3E0\G10 points=1 direct=0xFA | OK |", report)
+        self.assertIn(r"| U3E0\G10 points=1 direct=0xF8 | OK |", report)
 
     def test_g_hg_extended_device_coverage_main_write_check_restores_values(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_write_check_restores_values."""
@@ -2422,8 +2432,8 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIn("- Transports: tcp, udp", report)
         self.assertIn("- Targets: SELF(", report)
         self.assertIn("NW1-ST2(", report)
-        self.assertIn(r"| tcp SELF U3E0\G10 points=1 direct=0xFA | OK |", report)
-        self.assertIn(r"| udp NW1-ST2 U3E0\G10 points=1 direct=0xFA | OK |", report)
+        self.assertIn(r"| tcp SELF U3E0\G10 points=1 direct=0xF8 | OK |", report)
+        self.assertIn(r"| udp NW1-ST2 U3E0\G10 points=1 direct=0xF8 | OK |", report)
 
     def test_g_hg_extended_device_coverage_main_type_name_failure_is_nonfatal(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_type_name_failure_is_nonfatal."""
