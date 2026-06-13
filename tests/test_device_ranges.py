@@ -1,4 +1,4 @@
-"""Tests for explicit-family device-range catalog helpers."""
+"""Tests for explicit-profile device-range catalog helpers."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import unittest
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
-from slmp.core import SlmpResponse, SlmpTarget, encode_device_spec
-from slmp.device_ranges import SlmpDeviceRangeFamily, SlmpDeviceRangeNotation, normalize_device_range_family
+from slmp.core import SlmpPlcProfile, SlmpResponse, SlmpTarget, encode_device_spec
+from slmp.device_ranges import SlmpDeviceRangeNotation, normalize_plc_profile
 from slmp.errors import SlmpError
 
 
@@ -69,8 +69,8 @@ class _FakeAsyncClient(AsyncSlmpClient):
 
 class TestSyncDeviceRanges(unittest.TestCase):
     def test_family_alias_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported PLC family"):
-            normalize_device_range_family("iqf")
+        with self.assertRaisesRegex(ValueError, "Unsupported PLC profile"):
+            normalize_plc_profile("iqf")
 
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
         client = _FakeSyncClient()
@@ -99,9 +99,9 @@ class TestSyncDeviceRanges(unittest.TestCase):
             },
         )
 
-        catalog = client.read_device_range_catalog_for_family("iq-f")
+        catalog = client.read_device_range_catalog_for_plc_profile("melsec:iq-f")
 
-        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqF)
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.IqF)
         self.assertEqual(catalog.model, "IQ-F")
         self.assertFalse(catalog.has_model_code)
         self.assertEqual(
@@ -140,7 +140,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
 
         catalog = client.read_device_range_catalog()
 
-        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqL)
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.IqL)
         self.assertEqual(client.plc_profile, "melsec:iq-l")
         self.assertEqual(
             client.last_request,
@@ -179,9 +179,9 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-        catalog = await client.read_device_range_catalog_for_family(SlmpDeviceRangeFamily.QnU)
+        catalog = await client.read_device_range_catalog_for_plc_profile(SlmpPlcProfile.QnU)
 
-        self.assertEqual(catalog.family, SlmpDeviceRangeFamily.QnU)
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.QnU)
         self.assertEqual(
             client.last_request,
             (

@@ -72,6 +72,9 @@ This table lists the device families accepted by the current parser and explains
 | iQ-F direct devices | `DX` and `DY` are not valid for `melsec:iq-f`. |
 | Module buffers | `G` and `HG` are raw or extended-device API families, not public high-level helper families. |
 | `X`/`Y` numbering | `melsec:iq-f` uses octal text for `X` and `Y`; every other profile uses hexadecimal text. |
+| PLC profile selection | Use canonical values such as `melsec:iq-r`; short aliases are rejected. |
+| Profile detection | The library does not infer the active profile from `ReadTypeName` or model codes. |
+| Device range catalog | Device-range catalog reads follow the fixed range profile derived from `plc_profile`. |
 | First smoke test | Start with a simple `D` word read such as `D100`. |
 | Bit-in-word notation | `.n` is valid only on word devices and uses one hexadecimal bit index from `0` to `F`. |
 

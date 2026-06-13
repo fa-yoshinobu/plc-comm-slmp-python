@@ -36,7 +36,7 @@ from .core import (
     _encode_remote_password_payload,
     _label_array_data_bytes,
     _normalize_items,
-    _require_explicit_device_family_for_xy,
+    _require_explicit_plc_profile_for_xy,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_direct_dword_read_device,
@@ -85,18 +85,18 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
-def _parse_device_for_family(device: str | DeviceRef, device_family: object | None) -> DeviceRef:
-    ref = parse_device(device, family=device_family)
-    return _require_explicit_device_family_for_xy(device, device_family, ref)
+def _parse_device_for_family(device: str | DeviceRef, address_profile: object | None) -> DeviceRef:
+    ref = parse_device(device, plc_profile=address_profile)
+    return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
 
 
 def _resolve_extended_device_for_family(
     device: str | DeviceRef,
     extension: ExtensionSpec,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> tuple[DeviceRef, ExtensionSpec]:
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=device_family)
-    return _require_explicit_device_family_for_xy(device, device_family, ref), effective_extension
+    ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=address_profile)
+    return _require_explicit_plc_profile_for_xy(device, address_profile, ref), effective_extension
 
 
 def build_read_devices_request(
@@ -106,11 +106,11 @@ def build_read_devices_request(
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices")
     effective_series = _effective_series(series, default_series)
-    ref = _parse_device_for_family(device, device_family)
+    ref = _parse_device_for_family(device, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
@@ -148,13 +148,13 @@ def build_write_devices_request(
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices")
     effective_series = _effective_series(series, default_series)
-    ref = _parse_device_for_family(device, device_family)
+    ref = _parse_device_for_family(device, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
@@ -184,11 +184,11 @@ def build_read_dwords_request(
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if count < 1:
         raise ValueError("count must be >= 1")
-    ref = _parse_device_for_family(device, device_family)
+    ref = _parse_device_for_family(device, address_profile)
     _validate_direct_dword_read_device(ref)
     return build_read_devices_request(
         ref,
@@ -196,7 +196,7 @@ def build_read_dwords_request(
         bit_unit=False,
         series=series,
         default_series=default_series,
-        device_family=device_family,
+        address_profile=address_profile,
     )
 
 
@@ -214,7 +214,7 @@ def build_write_dwords_request(
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
@@ -229,7 +229,7 @@ def build_write_dwords_request(
         bit_unit=False,
         series=series,
         default_series=default_series,
-        device_family=device_family,
+        address_profile=address_profile,
     )
 
 
@@ -246,7 +246,7 @@ def build_write_float32s_request(
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     dwords: list[int] = []
     for value in values:
@@ -256,7 +256,7 @@ def build_write_float32s_request(
         dwords,
         series=series,
         default_series=default_series,
-        device_family=device_family,
+        address_profile=address_profile,
     )
 
 
@@ -268,11 +268,11 @@ def build_read_devices_ext_request(
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices_ext")
     effective_series = _effective_series(series, default_series)
-    ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+    ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
     _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
@@ -293,13 +293,13 @@ def build_write_devices_ext_request(
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices_ext")
     effective_series = _effective_series(series, default_series)
-    ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+    ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
     _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
@@ -323,7 +323,7 @@ def build_register_monitor_devices_request(
     dword_devices: Sequence[str | DeviceRef],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
@@ -342,12 +342,12 @@ def build_register_monitor_devices_request(
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
     for dev in word_devices:
-        ref = _parse_device_for_family(dev, device_family)
+        ref = _parse_device_for_family(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
         payload += encode_device_spec(ref, series=effective_series)
         word_refs.append(ref)
     for dev in dword_devices:
-        ref = _parse_device_for_family(dev, device_family)
+        ref = _parse_device_for_family(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
         payload += encode_device_spec(ref, series=effective_series)
         dword_refs.append(ref)
@@ -361,7 +361,7 @@ def build_register_monitor_devices_ext_request(
     dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
@@ -379,12 +379,12 @@ def build_register_monitor_devices_ext_request(
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
     for dev, ext in word_devices:
-        ref, effective_extension = _resolve_extended_device_for_family(dev, ext, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for dev, ext in dword_devices:
-        ref, effective_extension = _resolve_extended_device_for_family(dev, ext, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
@@ -484,7 +484,7 @@ def build_read_random_request(
     dword_devices: Sequence[str | DeviceRef],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> RandomReadOperation:
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
@@ -499,8 +499,8 @@ def build_read_random_request(
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
-    words = [_parse_device_for_family(device, device_family) for device in word_devices]
-    dwords = [_parse_device_for_family(device, device_family) for device in dword_devices]
+    words = [_parse_device_for_family(device, address_profile) for device in word_devices]
+    dwords = [_parse_device_for_family(device, address_profile) for device in dword_devices]
     _validate_random_read_devices(words, dwords)
     _check_temporarily_unsupported_devices(words)
     _check_temporarily_unsupported_devices(dwords)
@@ -523,7 +523,7 @@ def build_read_random_ext_request(
     dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> RandomReadOperation:
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
@@ -542,12 +542,12 @@ def build_read_random_ext_request(
     words: list[DeviceRef] = []
     dwords: list[DeviceRef] = []
     for device, extension in word_devices:
-        ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         words.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for device, extension in dword_devices:
-        ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dwords.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
@@ -615,7 +615,7 @@ def build_write_random_words_ext_request(
     dword_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not word_values and not dword_values:
         raise ValueError("word_values and dword_values must not both be empty")
@@ -632,13 +632,13 @@ def build_write_random_words_ext_request(
     payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
     for device, value, extension in word_values:
-        ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(2, "little", signed=False)
     for device, value, extension in dword_values:
-        ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(4, "little", signed=False)
@@ -676,7 +676,7 @@ def build_write_random_bits_ext_request(
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not bit_values:
         raise ValueError("bit_values must not be empty")
@@ -687,7 +687,7 @@ def build_write_random_bits_ext_request(
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
     for device, state, extension in bit_values:
-        ref, effective_extension = _resolve_extended_device_for_family(device, extension, device_family)
+        ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         if effective_series == PLCSeries.IQR:
@@ -703,7 +703,7 @@ def build_read_block_request(
     bit_blocks: Sequence[tuple[str | DeviceRef, int]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> BlockReadOperation:
     if not word_blocks and not bit_blocks:
         raise ValueError("word_blocks and bit_blocks must not both be empty")
@@ -718,7 +718,7 @@ def build_read_block_request(
     normalized_bit: list[tuple[DeviceRef, int]] = []
     for device, points in word_blocks:
         _check_points_u16(points, "word_block points")
-        ref = _parse_device_for_family(device, device_family)
+        ref = _parse_device_for_family(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         normalized_word.append((ref, points))
@@ -726,7 +726,7 @@ def build_read_block_request(
         payload += points.to_bytes(2, "little")
     for device, points in bit_blocks:
         _check_points_u16(points, "bit_block points")
-        ref = _parse_device_for_family(device, device_family)
+        ref = _parse_device_for_family(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         normalized_bit.append((ref, points))
@@ -771,7 +771,7 @@ def build_write_block_request(
     bit_blocks: Sequence[tuple[str | DeviceRef, Sequence[int]]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> OperationRequest:
     if not word_blocks and not bit_blocks:
         raise ValueError("word_blocks and bit_blocks must not both be empty")
@@ -784,13 +784,13 @@ def build_write_block_request(
     word_refs: list[DeviceRef] = []
     bit_refs: list[DeviceRef] = []
     for device, values in word_blocks:
-        ref = _parse_device_for_family(device, device_family)
+        ref = _parse_device_for_family(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "word block size")
         word_refs.append(ref)
     for device, values in bit_blocks:
-        ref = _parse_device_for_family(device, device_family)
+        ref = _parse_device_for_family(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "bit block size")

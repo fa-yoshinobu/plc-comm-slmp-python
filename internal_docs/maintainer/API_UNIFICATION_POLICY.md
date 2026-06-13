@@ -126,8 +126,8 @@ Rules:
 - `parse_address(...)` returns `SlmpAddress` with `base_device`, `dtype`, bit index, and explicit dtype state.
 - `try_parse_address(...)` is the non-throwing UI/config validation path.
 - `format_address(...)` renders stored address metadata back to canonical helper-layer text.
-- `X` / `Y` string notation still requires `plc_family` or an explicit device-family hint.
-- `plc_family` remains the only normal high-level PLC selector. Raw `frame_type`, access profile, and range-family knobs stay in low-level/client tooling unless live evidence creates a concrete public need.
+- `X` / `Y` string notation still requires `plc_profile` or an explicit profile hint.
+- `plc_profile` remains the only normal high-level PLC selector. Raw `frame_type`, access profile, and range-profile knobs stay in low-level/client tooling unless live evidence creates a concrete public need.
 
 ## Cross-Language Parity Rules
 

@@ -28,7 +28,7 @@ from .core import (
     SlmpTraceFrame,
     TypeNameInfo,
     _raise_response_error,
-    _require_explicit_device_family_for_xy,
+    _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     build_device_modification_flags,
     decode_cpu_operation_state,
@@ -40,7 +40,8 @@ from .core import (
 from .errors import SlmpError
 
 if TYPE_CHECKING:
-    from .device_ranges import SlmpDeviceRangeCatalog, SlmpDeviceRangeFamily
+    from .core import SlmpPlcProfile
+    from .device_ranges import SlmpDeviceRangeCatalog
 
 
 class SLMPDatagramProtocol(asyncio.DatagramProtocol):
@@ -82,7 +83,7 @@ class AsyncSlmpClient:
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], Any] | None = None,
-        device_family: object | None = None,
+        address_profile: object | None = None,
         _allow_manual_profile: bool = False,
     ) -> None:
         """Initialize the asynchronous SLMP client.
@@ -103,7 +104,7 @@ class AsyncSlmpClient:
                     "plc_profile is required for the standard AsyncSlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if any(value is not None for value in (plc_series, frame_type, device_family)):
+            if plc_profile is not None and any(value is not None for value in (plc_series, frame_type, address_profile)):
                 raise ValueError(
                     "plc_profile is the only supported PLC selector for the standard AsyncSlmpClient route."
                 )
@@ -111,13 +112,13 @@ class AsyncSlmpClient:
             self.plc_profile,
             self.plc_series,
             self.frame_type,
-            self.device_family,
-            self.device_range_family,
+            self.address_profile,
+            self.range_profile,
         ) = _resolve_connection_profile(
             plc_profile=plc_profile,
             plc_series=plc_series,
             frame_type=frame_type,
-            device_family=device_family,
+            address_profile=address_profile,
         )
         self.default_target = default_target or SlmpTarget()
         self.monitoring_timer = monitoring_timer
@@ -133,16 +134,16 @@ class AsyncSlmpClient:
         self._udp_protocol: SLMPDatagramProtocol | None = None
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
-        ref = parse_device(device, family=self.device_family)
-        return _require_explicit_device_family_for_xy(device, self.device_family, ref)
+        ref = parse_device(device, plc_profile=self.address_profile)
+        return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref)
 
     def _resolve_extended_device_and_extension(
         self,
         device: str | DeviceRef,
         extension: ExtensionSpec,
     ) -> tuple[DeviceRef, ExtensionSpec]:
-        ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=self.device_family)
-        return _require_explicit_device_family_for_xy(device, self.device_family, ref), effective_extension
+        ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=self.address_profile)
+        return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref), effective_extension
 
     async def connect(self) -> None:
         """Open the connection to the PLC."""
@@ -321,7 +322,7 @@ class AsyncSlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
@@ -341,7 +342,7 @@ class AsyncSlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -377,7 +378,7 @@ class AsyncSlmpClient:
             count,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_dwords_response(resp, count=count)
@@ -395,7 +396,7 @@ class AsyncSlmpClient:
             values,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -431,7 +432,7 @@ class AsyncSlmpClient:
             count,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_float32s_response(resp, count=count)
@@ -449,7 +450,7 @@ class AsyncSlmpClient:
             values,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -470,7 +471,7 @@ class AsyncSlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
@@ -492,7 +493,7 @@ class AsyncSlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -509,7 +510,7 @@ class AsyncSlmpClient:
             dword_devices=dword_devices,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         request = operation.request
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
@@ -528,7 +529,7 @@ class AsyncSlmpClient:
             dword_devices=dword_devices,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         request = operation.request
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
@@ -563,7 +564,7 @@ class AsyncSlmpClient:
             dword_values=dword_values,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -592,7 +593,7 @@ class AsyncSlmpClient:
             bit_values,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -609,7 +610,7 @@ class AsyncSlmpClient:
             dword_devices=dword_devices,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -626,7 +627,7 @@ class AsyncSlmpClient:
             dword_devices=dword_devices,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -668,7 +669,7 @@ class AsyncSlmpClient:
             bit_blocks=bit_blocks,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         request = operation.request
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
@@ -706,7 +707,7 @@ class AsyncSlmpClient:
             bit_blocks=bit_blocks,
             series=series,
             default_series=self.plc_series,
-            device_family=self.device_family,
+            address_profile=self.address_profile,
         )
         resp = await self.request(
             request.command,
@@ -729,20 +730,20 @@ class AsyncSlmpClient:
         resp = await self.request(request.command, request.subcommand, request.payload)
         return _operations.decode_read_type_name_response(resp)
 
-    async def read_device_range_catalog_for_family(
+    async def read_device_range_catalog_for_plc_profile(
         self,
-        family: SlmpDeviceRangeFamily | str,
+        plc_profile: SlmpPlcProfile | str,
     ) -> SlmpDeviceRangeCatalog:
-        """Read the configured device-range catalog for one canonical explicit PLC family."""
-        from .device_ranges import read_device_range_catalog_for_family
+        """Read the configured device-range catalog for one canonical explicit PLC profile."""
+        from .device_ranges import read_device_range_catalog_for_plc_profile
 
-        return await read_device_range_catalog_for_family(self, family)
+        return await read_device_range_catalog_for_plc_profile(self, plc_profile)
 
     async def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
-        """Read the configured device-range catalog for this client's explicit PLC family."""
-        if self.device_range_family is None:
+        """Read the configured device-range catalog for this client's explicit PLC profile."""
+        if self.range_profile is None:
             raise ValueError("read_device_range_catalog() requires explicit plc_profile on the client.")
-        return await self.read_device_range_catalog_for_family(self.device_range_family)
+        return await self.read_device_range_catalog_for_plc_profile(self.range_profile)
 
     async def read_cpu_operation_state(self) -> CpuOperationState:
         """Read SD203 and decode the CPU operation state from the lower 4 bits."""

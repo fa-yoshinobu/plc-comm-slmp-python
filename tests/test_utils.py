@@ -105,7 +105,7 @@ class TestParseAddress(unittest.TestCase):
 
     def test_normalize_address(self):
         self.assertEqual(normalize_address("d100"), "D100")
-        self.assertEqual(normalize_address("y220", family="iq-f"), "Y220")
+        self.assertEqual(normalize_address("y220", plc_profile="melsec:iq-f"), "Y220")
         self.assertEqual(normalize_address("y220", plc_profile="melsec:iq-f"), "Y220")
 
     def test_public_parse_try_format_address(self):
@@ -143,9 +143,9 @@ class TestParseAddress(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             parse_address("x100", plc_profile="MELSEC:IQ-F")
 
-    def test_read_named_sync_rejects_xy_without_device_family(self):
+    def test_read_named_sync_rejects_xy_without_address_profile(self):
         client = MagicMock()
-        client.device_family = None
+        client.address_profile = None
         with self.assertRaisesRegex(ValueError, "plc_profile"):
             read_named_sync(client, ["X40"])
 
@@ -624,8 +624,8 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(options.plc_profile, "melsec:iq-l")
         self.assertEqual(options.plc_series.value, "iqr")
         self.assertEqual(options.frame_type.value, "4e")
-        self.assertEqual(options.device_family, "iq-r")
-        self.assertEqual(options.device_range_family, "iq-l")
+        self.assertEqual(options.address_profile, "melsec:iq-l")
+        self.assertEqual(options.range_profile, "melsec:iq-l")
 
     def test_connection_options_reject_short_plc_profile_alias(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):

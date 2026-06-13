@@ -13,8 +13,8 @@ from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
     SlmpTarget,
-    _normalize_device_family_hint,
-    _require_explicit_device_family_for_xy,
+    _normalize_plc_profile_hint,
+    _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     _resolve_plc_profile_defaults,
     _validate_direct_dword_read_device,
@@ -84,8 +84,8 @@ class SlmpConnectionOptions:
         trace_hook: Optional callback for transport tracing.
         plc_series: Derived access profile fixed by ``plc_profile``.
         frame_type: Derived frame type fixed by ``plc_profile``.
-        device_family: Derived address family used for string device parsing.
-        device_range_family: Derived family used for device-range catalog reads.
+        address_profile: Derived address profile used for string device parsing.
+        range_profile: Derived range profile used for device-range catalog reads.
     """
 
     host: str
@@ -99,8 +99,8 @@ class SlmpConnectionOptions:
     trace_hook: Any | None = None
     plc_series: PLCSeries = field(init=False)
     frame_type: FrameType = field(init=False)
-    device_family: str = field(init=False)
-    device_range_family: str = field(init=False)
+    address_profile: str = field(init=False)
+    range_profile: str = field(init=False)
 
     def __post_init__(self) -> None:
         if self.plc_profile is None:
@@ -109,19 +109,19 @@ class SlmpConnectionOptions:
             normalized_plc_profile,
             plc_series,
             frame_type,
-            device_family,
-            device_range_family,
+            address_profile,
+            range_profile,
         ) = _resolve_connection_profile(
             plc_profile=self.plc_profile,
             plc_series=None,
             frame_type=None,
-            device_family=None,
+            address_profile=None,
         )
         object.__setattr__(self, "plc_profile", normalized_plc_profile)
         object.__setattr__(self, "plc_series", plc_series)
         object.__setattr__(self, "frame_type", frame_type)
-        object.__setattr__(self, "device_family", device_family)
-        object.__setattr__(self, "device_range_family", device_range_family)
+        object.__setattr__(self, "address_profile", address_profile)
+        object.__setattr__(self, "range_profile", range_profile)
 
 
 @dataclass(frozen=True)
@@ -135,8 +135,8 @@ class SlmpAddress:
     explicit_dtype: bool = False
 
 
-def _client_device_family(client: object) -> str | None:
-    family = getattr(client, "device_family", None)
+def _client_address_profile(client: object) -> str | None:
+    family = getattr(client, "address_profile", None)
     if family is None:
         return None
     if isinstance(family, str):
@@ -151,15 +151,15 @@ def _parse_device_for_family(
     device: str | DeviceRef,
     family: object | None = None,
 ) -> DeviceRef:
-    ref = parse_device(device, family=family)
-    return _require_explicit_device_family_for_xy(device, family, ref)
+    ref = parse_device(device, plc_profile=family)
+    return _require_explicit_plc_profile_for_xy(device, family, ref)
 
 
 def _parse_device_for_client(
     client: object,
     device: str | DeviceRef,
 ) -> DeviceRef:
-    return _parse_device_for_family(device, _client_device_family(client))
+    return _parse_device_for_family(device, _client_address_profile(client))
 
 
 def _validate_dword_read_target(client: object, device: str | DeviceRef) -> DeviceRef:
@@ -407,7 +407,7 @@ async def read_named(
         The address list is compiled once, then grouped into random reads where
         possible. Use ``.bit`` notation only with word devices.
     """
-    plan = _compile_read_plan(addresses, family=_client_device_family(client))
+    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
     return await _read_named_with_plan(client, plan)
 
 
@@ -416,7 +416,7 @@ def read_named_sync(
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
     """Synchronously read a mixed logical snapshot by address string."""
-    plan = _compile_read_plan(addresses, family=_client_device_family(client))
+    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
     return _read_named_with_plan_sync(client, plan)
 
 
@@ -434,7 +434,7 @@ async def write_named(
     ``D50.3`` updates one bit inside one word. Direct bit devices such as
     ``M1000`` are normalized to ``"BIT"`` writes.
     """
-    family = _client_device_family(client)
+    family = _client_address_profile(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
@@ -452,7 +452,7 @@ def write_named_sync(
     updates: dict[str, int | float | bool],
 ) -> None:
     """Synchronously write a mixed logical snapshot by address string."""
-    family = _client_device_family(client)
+    family = _client_address_profile(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
@@ -490,7 +490,7 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
     return address.strip(), "U", None
 
 
-def _effective_device_family(
+def _effective_address_profile(
     *,
     plc_profile: object | None = None,
     family: object | None = None,
@@ -499,9 +499,9 @@ def _effective_device_family(
         raise ValueError("Pass either plc_profile or family, not both.")
     if plc_profile is not None:
         defaults = _resolve_plc_profile_defaults(plc_profile)
-        return None if defaults is None else defaults.device_family
+        return None if defaults is None else defaults.address_profile
     if family is not None:
-        return _normalize_device_family_hint(family)
+        return _normalize_plc_profile_hint(family)
     return None
 
 
@@ -521,7 +521,7 @@ def parse_address(
         text = str(address)
         return SlmpAddress(text=text, base_device=text, dtype="U")
 
-    effective_family = _effective_device_family(plc_profile=plc_profile, family=family)
+    effective_family = _effective_address_profile(plc_profile=plc_profile, family=family)
     raw_text = address.strip()
     base, dtype, bit_index = _parse_address(raw_text)
     device = _parse_device_for_family(base, effective_family)
@@ -606,14 +606,14 @@ def normalize_address(
     if not isinstance(address, str):
         return str(address)
 
-    effective_family = _effective_device_family(plc_profile=plc_profile, family=family)
+    effective_family = _effective_address_profile(plc_profile=plc_profile, family=family)
 
     text = address.strip()
     if ":" not in text and "." not in text:
-        return str(parse_device(text, family=effective_family))
+        return str(parse_device(text, plc_profile=effective_family))
 
     base, dtype, bit_index = _parse_address(text)
-    canonical_base = str(parse_device(base, family=effective_family))
+    canonical_base = str(parse_device(base, plc_profile=effective_family))
     if bit_index is not None:
         return f"{canonical_base}.{bit_index:X}"
     if ":" in text:
@@ -1101,7 +1101,7 @@ async def poll(
 
     The address list is compiled once and reused for every cycle.
     """
-    plan = _compile_read_plan(addresses, family=_client_device_family(client))
+    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
     while True:
         yield await _read_named_with_plan(client, plan)
         await asyncio.sleep(interval)
@@ -1113,7 +1113,7 @@ def poll_sync(
     interval: float,
 ) -> Iterator[dict[str, int | float | bool]]:
     """Synchronously yield mixed snapshots at a fixed interval."""
-    plan = _compile_read_plan(addresses, family=_client_device_family(client))
+    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
     while True:
         yield _read_named_with_plan_sync(client, plan)
         time.sleep(interval)

@@ -1,6 +1,6 @@
 ﻿# Bit Device Access Table
 
-This note explains how bit-device families such as `M`, `B`, `X`, and `Y` behave across the main read forms used in this project.
+This note explains how bit-device groups such as `M`, `B`, `X`, and `Y` behave across the main read forms used in this project.
 
 ## Key Rule
 
@@ -29,19 +29,19 @@ then the packed value beginning at `M1000` is `0x0005`.
 
 The same rule applies to `B`, `X`, and `Y`.
 
-## Device Family Notes
+## Device Group Notes
 
 | Family | Number Format | Example Start |
 |---|---|---|
 | `M` | decimal | `M1000` |
 | `B` | hexadecimal | `B20` |
-| `X` | explicit family required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `X20` / `X100` |
-| `Y` | explicit family required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `Y20` / `Y100` |
+| `X` | explicit `plc_profile` required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `X20` / `X100` |
+| `Y` | explicit `plc_profile` required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `Y20` / `Y100` |
 
-For communication, this library does not auto-detect the PLC family for `X` / `Y`.
+For communication, this library does not auto-detect the PLC profile for `X` / `Y`.
 Set canonical `plc_profile` explicitly.
 
-The device-range catalog follows the fixed range-family rule derived from `plc_profile`.
+The device-range catalog follows the fixed range profile derived from `plc_profile`.
 Only these `plc_profile` values are accepted:
 
 - `melsec:iq-f`
@@ -83,7 +83,7 @@ Instead:
 
 ## Write-Side Reminder
 
-The same packed-unit rule applies when you write one word value to a bit-device family:
+The same packed-unit rule applies when you write one word value to a bit-device group:
 
 ```python
 await write_typed(client, "M1000", "U", 0x0005)

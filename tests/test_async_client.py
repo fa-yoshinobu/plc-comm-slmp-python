@@ -168,7 +168,7 @@ async def test_async_read_devices() -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_read_devices_xy_requires_explicit_device_family_for_string_addresses() -> None:
+async def test_async_read_devices_xy_requires_explicit_address_profile_for_string_addresses() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match="plc_profile"):
         await cli.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
@@ -176,7 +176,7 @@ async def test_async_read_devices_xy_requires_explicit_device_family_for_string_
 
 
 @pytest.mark.asyncio
-async def test_async_read_devices_xy_allows_numeric_deviceref_without_device_family() -> None:
+async def test_async_read_devices_xy_allows_numeric_deviceref_without_address_profile() -> None:
     cli = FakeAsyncClient()
     cli.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
 
@@ -213,14 +213,14 @@ async def test_async_remote_stop_uses_manual_fixed_mode() -> None:
     assert cli.last_request[2] == b"\x01\x00"
 
 
-def test_async_client_rejects_invalid_device_family() -> None:
-    with pytest.raises(ValueError, match="Unsupported device_family"):
-        FakeAsyncClient(device_family="auto")
+def test_async_client_rejects_invalid_address_profile() -> None:
+    with pytest.raises(ValueError, match="Unsupported plc_profile"):
+        FakeAsyncClient(address_profile="auto")
 
 
-def test_async_client_rejects_device_family_alias() -> None:
-    with pytest.raises(ValueError, match="Unsupported device_family"):
-        FakeAsyncClient(device_family="iqf")
+def test_async_client_rejects_address_profile_alias() -> None:
+    with pytest.raises(ValueError, match="Unsupported plc_profile"):
+        FakeAsyncClient(address_profile="iqf")
 
 
 @pytest.mark.asyncio
@@ -248,8 +248,8 @@ def test_async_client_plc_profile_derives_fixed_profile_defaults() -> None:
     assert cli.plc_profile == "melsec:iq-l"
     assert cli.plc_series == PLCSeries.IQR
     assert cli.frame_type.value == "4e"
-    assert cli.device_family == "iq-r"
-    assert cli.device_range_family == "iq-l"
+    assert cli.address_profile == "melsec:iq-l"
+    assert cli.range_profile == "melsec:iq-l"
 
 
 @pytest.mark.asyncio

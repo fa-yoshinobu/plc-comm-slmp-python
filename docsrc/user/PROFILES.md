@@ -6,15 +6,15 @@ Use one canonical `plc_profile` string for each connection. The profile selects 
 
 | Profile string | Hardware | Frame | Mode | Notes |
 | --- | --- | --- | --- | --- |
-| `melsec:iq-f` | MELSEC iQ-F / FX5 | 3E | Legacy `ql` | Device family `iq-f`; range family `iq-f`; `X`/`Y` text is octal. |
-| `melsec:iq-r` | MELSEC iQ-R | 4E | iQR `iqr` | Device family `iq-r`; range family `iq-r`; `X`/`Y` text is hexadecimal. |
-| `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Device family `iq-r`; range family `iq-l`; `X`/`Y` text is hexadecimal. |
-| `melsec:mx-f` | MELSEC MX-F-compatible endpoint | 4E | iQR `iqr` | Device family `mx-f`; range family `mx-f`. |
-| `melsec:mx-r` | MELSEC MX-R-compatible endpoint | 4E | iQR `iqr` | Device family `mx-r`; range family `mx-r`. |
-| `melsec:qcpu` | MELSEC-Q CPU | 3E | Legacy `ql` | Device family `qcpu`; range family `qcpu`. |
-| `melsec:lcpu` | MELSEC-L CPU | 3E | Legacy `ql` | Device family `lcpu`; range family `lcpu`. |
-| `melsec:qnu` | MELSEC QnU CPU | 3E | Legacy `ql` | Device family `qnu`; range family `qnu`. |
-| `melsec:qnudv` | MELSEC QnUDV CPU | 3E | Legacy `ql` | Device family `qnudv`; range family `qnudv`. |
+| `melsec:iq-f` | MELSEC iQ-F / FX5 | 3E | Legacy `ql` | Address profile `melsec:iq-f`; range profile `melsec:iq-f`; `X`/`Y` text is octal. |
+| `melsec:iq-r` | MELSEC iQ-R | 4E | iQR `iqr` | Address profile `melsec:iq-r`; range profile `melsec:iq-r`; `X`/`Y` text is hexadecimal. |
+| `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Address profile `melsec:iq-l`; range profile `melsec:iq-l`; currently uses iQ-R-compatible address rules. |
+| `melsec:mx-f` | MELSEC MX-F-compatible endpoint | 4E | iQR `iqr` | Address profile `melsec:mx-f`; range profile `melsec:mx-f`. |
+| `melsec:mx-r` | MELSEC MX-R-compatible endpoint | 4E | iQR `iqr` | Address profile `melsec:mx-r`; range profile `melsec:mx-r`. |
+| `melsec:qcpu` | MELSEC-Q CPU | 3E | Legacy `ql` | Address profile `melsec:qcpu`; range profile `melsec:qcpu`. |
+| `melsec:lcpu` | MELSEC-L CPU | 3E | Legacy `ql` | Address profile `melsec:lcpu`; range profile `melsec:lcpu`. |
+| `melsec:qnu` | MELSEC QnU CPU | 3E | Legacy `ql` | Address profile `melsec:qnu`; range profile `melsec:qnu`. |
+| `melsec:qnudv` | MELSEC QnUDV CPU | 3E | Legacy `ql` | Address profile `melsec:qnudv`; range profile `melsec:qnudv`. |
 
 ## How to select
 

@@ -87,7 +87,7 @@ If you need human confirmation, use:
 ### Boundary and range probes
 
 - `slmp_device_range_probe.py`
-  - Probe configured device-family upper boundaries.
+  - Probe configured profile-specific device upper boundaries.
 - `slmp_register_boundary_probe.py`
   - Probe focused register-boundary edge cases.
 

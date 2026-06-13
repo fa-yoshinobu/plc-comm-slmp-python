@@ -97,83 +97,64 @@ class DeviceRef:
 
 _IQF_OCTAL_DEVICE_CODES = frozenset({"X", "Y"})
 _DEVICE_CODE_CANDIDATES = tuple(sorted(DEVICE_CODES.keys(), key=lambda code: (-len(code), code)))
-_DEVICE_FAMILIES = frozenset(
-    {
-        "iq-r",
-        "mx-f",
-        "mx-r",
-        "iq-f",
-        "qcpu",
-        "lcpu",
-        "qnu",
-        "qnudv",
-    }
-)
-_PLC_PROFILES = frozenset(
-    {
-        "melsec:iq-f",
-        "melsec:iq-r",
-        "melsec:iq-l",
-        "melsec:mx-f",
-        "melsec:mx-r",
-        "melsec:qcpu",
-        "melsec:lcpu",
-        "melsec:qnu",
-        "melsec:qnudv",
-    }
-)
+
+
+class SlmpPlcProfile(str, Enum):
+    """Canonical PLC profile used by high-level SLMP helpers."""
+
+    IqF = "melsec:iq-f"
+    IqR = "melsec:iq-r"
+    IqL = "melsec:iq-l"
+    MxF = "melsec:mx-f"
+    MxR = "melsec:mx-r"
+    QCpu = "melsec:qcpu"
+    LCpu = "melsec:lcpu"
+    QnU = "melsec:qnu"
+    QnUDV = "melsec:qnudv"
+
+
+_PLC_PROFILES = frozenset(profile.value for profile in SlmpPlcProfile)
+
+
 @dataclass(frozen=True)
 class _PlcProfileDefaults:
     frame_type: FrameType
     plc_series: PLCSeries
-    device_family: str
-    range_family: str
+    address_profile: str
+    range_profile: str
 
 
 _PLC_PROFILE_DEFAULTS: dict[str, _PlcProfileDefaults] = {
-    "melsec:iq-f": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "iq-f", "iq-f"),
-    "melsec:iq-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
-    "melsec:iq-l": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-l"),
-    "melsec:mx-f": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-f", "mx-f"),
-    "melsec:mx-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-r", "mx-r"),
-    "melsec:qcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qcpu", "qcpu"),
-    "melsec:lcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "lcpu", "lcpu"),
-    "melsec:qnu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnu", "qnu"),
-    "melsec:qnudv": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnudv", "qnudv"),
+    "melsec:iq-f": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:iq-f", "melsec:iq-f"),
+    "melsec:iq-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:iq-r", "melsec:iq-r"),
+    "melsec:iq-l": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:iq-l", "melsec:iq-l"),
+    "melsec:mx-f": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-f", "melsec:mx-f"),
+    "melsec:mx-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-r", "melsec:mx-r"),
+    "melsec:qcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qcpu", "melsec:qcpu"),
+    "melsec:lcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:lcpu", "melsec:lcpu"),
+    "melsec:qnu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qnu", "melsec:qnu"),
+    "melsec:qnudv": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qnudv", "melsec:qnudv"),
 }
 
 
-def _normalize_plc_profile_hint(family: object | None) -> str | None:
-    if family is None:
+def _normalize_plc_profile_hint(plc_profile: object | None) -> str | None:
+    if plc_profile is None:
         return None
-    raw = getattr(family, "value", family)
+    raw = getattr(plc_profile, "value", plc_profile)
     normalized = str(raw).strip()
     if not normalized:
         return None
     if normalized in _PLC_PROFILES:
         return normalized
     supported = ", ".join(sorted(_PLC_PROFILES))
-    raise ValueError(f"Unsupported plc_profile {family!r}. Supported profiles: {supported}")
+    raise ValueError(f"Unsupported plc_profile {plc_profile!r}. Supported profiles: {supported}")
 
 
-def _resolve_plc_profile_defaults(family: object | None) -> _PlcProfileDefaults | None:
-    normalized = _normalize_plc_profile_hint(family)
+def _resolve_plc_profile_defaults(plc_profile: object | None) -> _PlcProfileDefaults | None:
+    normalized = _normalize_plc_profile_hint(plc_profile)
     if normalized is None:
         return None
     return _PLC_PROFILE_DEFAULTS[normalized]
-
-
-def _normalize_device_family_hint(family: object | None) -> str | None:
-    if family is None:
-        return None
-    raw = getattr(family, "value", family)
-    normalized = str(raw).strip().lower()
-    if not normalized:
-        return None
-    if normalized in _DEVICE_FAMILIES:
-        return normalized
-    supported = ", ".join(sorted(_DEVICE_FAMILIES))
-    raise ValueError(f"Unsupported device_family {family!r}. Supported families: {supported}")
 
 
 def _resolve_connection_profile(
@@ -181,52 +162,52 @@ def _resolve_connection_profile(
     plc_profile: object | None,
     plc_series: PLCSeries | str | None,
     frame_type: FrameType | str | None,
-    device_family: object | None,
+    address_profile: object | None,
 ) -> tuple[str | None, PLCSeries, FrameType, str | None, str | None]:
     defaults = _resolve_plc_profile_defaults(plc_profile)
     if defaults is not None:
-        if plc_series is not None or frame_type is not None or device_family is not None:
+        if plc_series is not None or frame_type is not None or address_profile is not None:
             raise ValueError(
                 "plc_profile already determines frame_type, access_profile, and address/range handling. "
-                "Do not also pass plc_series, frame_type, or device_family."
+                "Do not also pass plc_series, frame_type, or address_profile."
             )
         normalized_plc_profile = _normalize_plc_profile_hint(plc_profile)
         return (
             normalized_plc_profile,
             defaults.plc_series,
             defaults.frame_type,
-            defaults.device_family,
-            defaults.range_family,
+            defaults.address_profile,
+            defaults.range_profile,
         )
     return (
         None,
         PLCSeries(plc_series) if plc_series is not None else PLCSeries.QL,
         FrameType(frame_type) if frame_type is not None else FrameType.FRAME_4E,
-        _normalize_device_family_hint(device_family),
+        _normalize_plc_profile_hint(address_profile),
         None,
     )
 
 
-def _resolve_device_radix(code: str, family: object | None = None) -> int:
-    normalized_family = _normalize_device_family_hint(family)
-    if normalized_family == "iq-f" and code in _IQF_OCTAL_DEVICE_CODES:
+def _resolve_device_radix(code: str, plc_profile: object | None = None) -> int:
+    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    if normalized_profile == "melsec:iq-f" and code in _IQF_OCTAL_DEVICE_CODES:
         return 8
     return DEVICE_CODES[code].radix
 
 
-def _ensure_device_supported_for_family(code: str, family: object | None = None) -> None:
-    normalized_family = _normalize_device_family_hint(family)
-    if normalized_family == "iq-f" and code in {"DX", "DY"}:
+def _ensure_device_supported_for_profile(code: str, plc_profile: object | None = None) -> None:
+    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    if normalized_profile == "melsec:iq-f" and code in {"DX", "DY"}:
         raise SlmpUnsupportedDeviceError(f"SLMP device code '{code}' is not supported for plc_profile 'melsec:iq-f'.")
 
 
-def _apply_device_family_hint(value: DeviceRef, family: object | None = None) -> DeviceRef:
-    if family is None:
+def _apply_plc_profile_hint(value: DeviceRef, plc_profile: object | None = None) -> DeviceRef:
+    if plc_profile is None:
         return value
     if value.code not in DEVICE_CODES:
         return value
-    _ensure_device_supported_for_family(value.code, family)
-    radix = _resolve_device_radix(value.code, family)
+    _ensure_device_supported_for_profile(value.code, plc_profile)
+    radix = _resolve_device_radix(value.code, plc_profile)
     if value.radix_override == radix:
         return value
     if value.radix_override is None and DEVICE_CODES[value.code].radix == radix:
@@ -234,14 +215,14 @@ def _apply_device_family_hint(value: DeviceRef, family: object | None = None) ->
     return replace(value, radix_override=radix)
 
 
-def _require_explicit_device_family_for_xy(
+def _require_explicit_plc_profile_for_xy(
     value: str | DeviceRef,
-    family: object | None,
+    plc_profile: object | None,
     ref: DeviceRef,
 ) -> DeviceRef:
     if not isinstance(value, str):
         return ref
-    if _normalize_device_family_hint(family) is not None:
+    if _normalize_plc_profile_hint(plc_profile) is not None:
         return ref
     if ref.code not in _IQF_OCTAL_DEVICE_CODES:
         return ref
@@ -467,7 +448,7 @@ class ExtendedDevice:
 def parse_device(
     value: str | DeviceRef,
     *,
-    family: object | None = None,
+    plc_profile: object | None = None,
 ) -> DeviceRef:
     """Parse a device string into a `DeviceRef`.
 
@@ -481,28 +462,28 @@ def parse_device(
         ValueError: If the device format is invalid or the code is unknown.
     """
     if isinstance(value, DeviceRef):
-        return _apply_device_family_hint(value, family)
+        return _apply_plc_profile_hint(value, plc_profile)
 
     text = value.strip().upper()
     code, num_txt = _split_device_text(value, text)
-    _ensure_device_supported_for_family(code, family)
+    _ensure_device_supported_for_profile(code, plc_profile)
 
-    base = _resolve_device_radix(code, family)
+    base = _resolve_device_radix(code, plc_profile)
     try:
         number = int(num_txt, base)
     except ValueError:
         raise ValueError(f"Invalid SLMP device number {num_txt!r} for device code '{code}' in {value!r}.") from None
-    return _apply_device_family_hint(DeviceRef(code=code, number=number), family)
+    return _apply_plc_profile_hint(DeviceRef(code=code, number=number), plc_profile)
 
 
 def parse_extended_device(
     value: str | DeviceRef,
     *,
-    family: object | None = None,
+    plc_profile: object | None = None,
 ) -> ExtendedDevice:
     r"""Parse an Extended Device string (e.g., 'U01\G10', 'J2\SW10') or return ExtendedDevice as-is."""
     if isinstance(value, DeviceRef):
-        return ExtendedDevice(ref=parse_device(value, family=family))
+        return ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
 
     text = value.strip().upper()
 
@@ -513,7 +494,7 @@ def parse_extended_device(
         j_network = int(j_net_txt)
         _check_u8(j_network, "extended_device j_network")
         return ExtendedDevice(
-            ref=parse_device(device_txt, family=family),
+            ref=parse_device(device_txt, plc_profile=plc_profile),
             extension_specification=j_network,
             direct_memory_specification=DIRECT_MEMORY_LINK_DIRECT,
             qualifier="J",
@@ -524,7 +505,7 @@ def parse_extended_device(
         extension_txt, device_txt = qualified.groups()
         extension_specification = int(extension_txt, 16)
         _check_u16(extension_specification, "extended_device extension_specification")
-        dev_ref = parse_device(device_txt, family=family)
+        dev_ref = parse_device(device_txt, plc_profile=plc_profile)
         # G/HG buffer memory devices have a fixed DM by device code (matches GOT pcap-verified format)
         dm: int | None = None
         if dev_ref.code == "G":
@@ -539,17 +520,17 @@ def parse_extended_device(
             qualifier="U",
         )
 
-    return ExtendedDevice(ref=parse_device(value, family=family))
+    return ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
 
 
 def resolve_extended_device_and_extension(
     device: str | DeviceRef,
     extension: ExtensionSpec,
     *,
-    family: object | None = None,
+    plc_profile: object | None = None,
 ) -> tuple[DeviceRef, ExtensionSpec]:
     """Resolve device and extension specification, prioritizing explicit qualification in the device string."""
-    qualified = parse_extended_device(device, family=family)
+    qualified = parse_extended_device(device, plc_profile=plc_profile)
     _validate_g_hg_extended_device_qualification(qualified)
     overrides: dict[str, Any] = {}
     if (
@@ -797,10 +778,10 @@ def encode_device_spec(
     device: str | DeviceRef,
     *,
     series: PLCSeries,
-    family: object | None = None,
+    plc_profile: object | None = None,
 ) -> bytes:
     """Encode a device specification into bytes based on the PLC series."""
-    ref = parse_device(device, family=family)
+    ref = parse_device(device, plc_profile=plc_profile)
     if ref.code == "R" and ref.number > 32767:
         raise ValueError(f"R device number out of supported range (0..32767): {ref.number}")
     dev = DEVICE_CODES[ref.code]
@@ -907,10 +888,10 @@ def encode_extended_device_spec(
     series: PLCSeries,
     extension: ExtensionSpec,
     include_direct_memory_at_end: bool = True,
-    family: object | None = None,
+    plc_profile: object | None = None,
 ) -> bytes:
     """Encode an Extended Device extended device specification into bytes."""
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension, family=family)
+    ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=plc_profile)
     return encode_resolved_extended_device_spec(
         ref,
         series=series,

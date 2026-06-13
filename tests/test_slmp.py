@@ -292,21 +292,21 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(str(parse_device("X20")), "X20")
         self.assertEqual(str(parse_device("XFF")), "XFF")
         self.assertEqual(str(parse_device("SWFF")), "SWFF")
-        self.assertEqual(str(parse_device("Y220", family="iq-f")), "Y220")
-        self.assertEqual(parse_device("Y220", family="iq-f").number - parse_device("Y217", family="iq-f").number, 1)
+        self.assertEqual(str(parse_device("Y220", plc_profile="melsec:iq-f")), "Y220")
+        self.assertEqual(parse_device("Y220", plc_profile="melsec:iq-f").number - parse_device("Y217", plc_profile="melsec:iq-f").number, 1)
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
-            parse_device("DX10", family="iq-f")
+            parse_device("DX10", plc_profile="melsec:iq-f")
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
-            parse_device("DY10", family="iq-f")
+            parse_device("DY10", plc_profile="melsec:iq-f")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.IQR), b"\x64\x00\x00\x00\xa8\x00")
         self.assertEqual(encode_device_spec("R32767", series=PLCSeries.IQR), b"\xff\x7f\x00\x00\xaf\x00")
         self.assertEqual(
-            encode_device_spec("Y217", series=PLCSeries.IQR, family="iq-f"),
+            encode_device_spec("Y217", series=PLCSeries.IQR, plc_profile="melsec:iq-f"),
             b"\x8f\x00\x00\x00\x9d\x00",
         )
-        with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
-            parse_device("Y220", family="iqf")
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+            parse_device("Y220", plc_profile="iqf")
         with self.assertRaisesRegex(ValueError, "device code 'D'"):
             parse_device("DFFFF")
         with self.assertRaises(ValueError):
@@ -1638,13 +1638,13 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x64\x00\x00\xa8\x02\x00")
 
-    def test_read_devices_xy_requires_explicit_device_family_for_string_addresses(self) -> None:
+    def test_read_devices_xy_requires_explicit_address_profile_for_string_addresses(self) -> None:
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "plc_profile"):
             client.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
         self.assertIsNone(client.last_request)
 
-    def test_read_devices_xy_allows_numeric_deviceref_without_device_family(self) -> None:
+    def test_read_devices_xy_allows_numeric_deviceref_without_address_profile(self) -> None:
         client = FakeClient()
         client.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
 
@@ -1671,9 +1671,9 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0003)
         self.assertEqual(payload, b"\x8f\x00\x00\x00\x9d\x00\x02\x00")
 
-    def test_invalid_device_family_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
-            FakeClient(device_family="auto")
+    def test_invalid_address_profile_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+            FakeClient(address_profile="auto")
 
     def test_invalid_plc_profile_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
@@ -1685,8 +1685,8 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(client.plc_profile, "melsec:iq-l")
         self.assertEqual(client.plc_series, PLCSeries.IQR)
         self.assertEqual(client.frame_type, FrameType.FRAME_4E)
-        self.assertEqual(client.device_family, "iq-r")
-        self.assertEqual(client.device_range_family, "iq-l")
+        self.assertEqual(client.address_profile, "melsec:iq-l")
+        self.assertEqual(client.range_profile, "melsec:iq-l")
 
     def test_plc_profile_rejects_manual_profile_override(self) -> None:
         with self.assertRaisesRegex(ValueError, "plc_profile already determines"):

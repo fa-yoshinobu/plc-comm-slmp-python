@@ -15,7 +15,8 @@ Python library for Mitsubishi SLMP (Binary 3E/4E) PLC communication.
 
 ## Supported PLC profiles
 
-Set `plc_profile` once when you connect. The library derives the SLMP frame type, access mode, device parsing rules, and device-range family from that profile.
+Set `plc_profile` once when you connect. The library derives the SLMP frame type, access mode, device parsing rules, and device-range profile from that profile.
+`read_type_name()` and model-code data are diagnostic only; the library does not infer the active profile from PLC-reported model names because some PLCs cannot return a reliable type name and a wrong guess can select the wrong address grammar or range catalog.
 
 | Profile string | Hardware | Frame | Notes |
 | --- | --- | --- | --- |

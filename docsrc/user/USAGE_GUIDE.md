@@ -174,17 +174,17 @@ asyncio.run(main())
 
 ## Device range catalog
 
-`read_device_range_catalog_for_family` reads live device range bounds from the family-specific SD registers. It requires an explicit family from your selected profile; it does not auto-discover the PLC model.
+`read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model.
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_device_range_catalog_for_family
+from slmp import SlmpConnectionOptions, open_and_connect
 
 
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        catalog = await read_device_range_catalog_for_family(client, "iq-r")
+        catalog = await client.read_device_range_catalog()
         entry = next(item for item in catalog.entries if item.device == "D")
         print(f"{entry.device}: {entry.address_range}")
 

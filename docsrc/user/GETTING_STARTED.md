@@ -23,6 +23,7 @@ pip install slmp-connect-python
 ## Choose your PLC profile
 
 `plc_profile` in `SlmpConnectionOptions` is the only required PLC selector for the public helper layer. The library derives the frame type and access mode from it.
+This is intentional. `ReadTypeName` and model-code data are diagnostic only because some PLCs or communication paths cannot return a useful type name. If a model-to-profile conversion guesses wrong, the library can use the wrong address grammar or device-range catalog. Let a human, configuration file, or UI choose the canonical `plc_profile`.
 
 ```python
 options = SlmpConnectionOptions(
