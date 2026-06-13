@@ -214,6 +214,35 @@ class TestTypedHelpers(unittest.TestCase):
         self.assertEqual(client.last_request[0], int(Command.LABEL_READ_RANDOM))
 
 
+class TestRemotePassword(unittest.TestCase):
+    def test_iqr_password_rejects_short_text(self) -> None:
+        client = FakeClient(plc_profile="melsec:iq-r")
+
+        with self.assertRaisesRegex(ValueError, "6..32"):
+            client.remote_password_unlock("12345")
+
+    def test_iqr_password_sends_length_prefixed_text(self) -> None:
+        client = FakeClient(plc_profile="melsec:iq-r")
+
+        client.remote_password_unlock("secret")
+
+        assert client.last_request is not None
+        self.assertEqual(client.last_request[0], int(Command.REMOTE_PASSWORD_UNLOCK))
+        self.assertEqual(client.last_request[1], 0x0000)
+        self.assertEqual(client.last_request[2], b"\x06\x00secret")
+
+    def test_ql_password_requires_exactly_four_bytes(self) -> None:
+        client = FakeClient()
+
+        with self.assertRaisesRegex(ValueError, "exactly 4"):
+            client.remote_password_unlock("123")
+
+        client.remote_password_unlock("1234")
+
+        assert client.last_request is not None
+        self.assertEqual(client.last_request[2], b"\x04\x001234")
+
+
 class TestCodec(unittest.TestCase):
     """TestCodec class."""
 
@@ -1597,7 +1626,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_devices_xy_requires_explicit_device_family_for_string_addresses(self) -> None:
         client = FakeClient()
-        with self.assertRaisesRegex(ValueError, "plc_family"):
+        with self.assertRaisesRegex(ValueError, "plc_profile"):
             client.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
         self.assertIsNone(client.last_request)
 
@@ -1616,7 +1645,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_devices_iqf_xy_uses_octal_start_address(self) -> None:
         """iQ-F X/Y direct reads must encode the octal device number, not hex text."""
-        client = FakeClient(plc_family="iq-f")
+        client = FakeClient(plc_profile="melsec:iq-f")
         client.next_response_data = b"\x10"
 
         values = client.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
@@ -1632,22 +1661,22 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported device_family"):
             FakeClient(device_family="auto")
 
-    def test_invalid_plc_family_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported plc_family"):
-            FakeClient(plc_family="iqf")
+    def test_invalid_plc_profile_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+            FakeClient(plc_profile="bad-profile")
 
-    def test_plc_family_derives_fixed_profile_defaults(self) -> None:
-        client = FakeClient(plc_family="iq-l")
+    def test_plc_profile_derives_fixed_profile_defaults(self) -> None:
+        client = FakeClient(plc_profile="melsec:iq-l")
 
-        self.assertEqual(client.plc_family, "iq-l")
+        self.assertEqual(client.plc_profile, "melsec:iq-l")
         self.assertEqual(client.plc_series, PLCSeries.IQR)
         self.assertEqual(client.frame_type, FrameType.FRAME_4E)
         self.assertEqual(client.device_family, "iq-r")
         self.assertEqual(client.device_range_family, "iq-l")
 
-    def test_plc_family_rejects_manual_profile_override(self) -> None:
-        with self.assertRaisesRegex(ValueError, "plc_family already determines"):
-            FakeClient(plc_family="iq-f", frame_type="4e")
+    def test_plc_profile_rejects_manual_profile_override(self) -> None:
+        with self.assertRaisesRegex(ValueError, "plc_profile already determines"):
+            FakeClient(plc_profile="melsec:iq-f", frame_type="4e")
 
     def test_practical_path_warning_for_lt_direct_access(self) -> None:
         """Direct LT state access must fail instead of warning."""
@@ -2113,10 +2142,10 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x01\x00\x00\x00")
 
-    def test_remote_stop_force_uses_manual_fixed_mode(self) -> None:
-        """Test test_remote_stop_force_uses_manual_fixed_mode."""
+    def test_remote_stop_uses_manual_fixed_mode(self) -> None:
+        """Test test_remote_stop_uses_manual_fixed_mode."""
         client = FakeClient()
-        client.remote_stop(force=True)
+        client.remote_stop()
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.REMOTE_STOP)
         self.assertEqual(subcommand, 0x0000)

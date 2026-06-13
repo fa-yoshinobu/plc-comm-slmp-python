@@ -54,7 +54,7 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_type
 async def main() -> None:
     options = SlmpConnectionOptions(
         host="192.168.250.100",
-        plc_family="iq-f",
+        plc_profile="melsec:iq-f",
         port=1025,
     )
     async with await open_and_connect(options) as client:
@@ -70,52 +70,52 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Choose canonical `plc_family` explicitly.
-In the recommended high-level helper layer, the only PLC selector is `plc_family`.
+Choose canonical `plc_profile` explicitly.
+In the recommended high-level helper layer, the only PLC selector is `plc_profile`.
 
 ## High-Level PLC Selection
 
 For normal application code:
 
-- set `plc_family`
+- set `plc_profile`
 - let the library derive the fixed frame type, access profile, `X` / `Y` text rule, and device-range family
 - do not pass raw `frame_type`, `plc_series`, or `device_family`
 
-| `plc_family` | Derived `frame_type` | Derived `access_profile` | `X` / `Y` text | Derived range family | Notes |
+| `plc_profile` | Derived `frame_type` | Derived `access_profile` | `X` / `Y` text | Derived range family | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
-| `iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
-| `iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
-| `mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | fixed family mapping |
-| `mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | fixed family mapping |
-| `qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
-| `lcpu` | `3e` | `ql` | hexadecimal | `lcpu` | retained path |
-| `qnu` | `3e` | `ql` | hexadecimal | `qnu` | retained path |
-| `qnudv` | `3e` | `ql` | hexadecimal | `qnudv` | retained path |
+| `melsec:iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
+| `melsec:iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
+| `melsec:iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
+| `melsec:mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | fixed family mapping |
+| `melsec:mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | fixed family mapping |
+| `melsec:qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
+| `melsec:lcpu` | `3e` | `ql` | hexadecimal | `lcpu` | retained path |
+| `melsec:qnu` | `3e` | `ql` | hexadecimal | `qnu` | retained path |
+| `melsec:qnudv` | `3e` | `ql` | hexadecimal | `qnudv` | retained path |
 
 Low-level compatibility tools may still work with raw `frame_type` / `plc_series`, but that is not the normal public helper path.
 
-High-level accepted `plc_family` values:
+High-level accepted `plc_profile` values:
 
 | Canonical | Typical target | Notes |
 | --- | --- | --- |
-| `iq-f` | FX5 / iQ-F | `X` / `Y` use manual octal text |
-| `iq-r` | iQ-R | `X` / `Y` use hexadecimal text |
-| `iq-l` | iQ-L | independent iQ-L range rules; live-validated on `L16HCPU` |
-| `mx-f` | MX-F | fixed high-level family mapping |
-| `mx-r` | MX-R | fixed high-level family mapping |
-| `qcpu` | QCPU | `3e/ql` fixed profile |
-| `lcpu` | LCPU | `3e/ql` fixed profile |
-| `qnu` | QnU | `3e/ql` fixed profile |
-| `qnudv` | QnUDV | `3e/ql` fixed profile |
+| `melsec:iq-f` | FX5 / iQ-F | `X` / `Y` use manual octal text |
+| `melsec:iq-r` | iQ-R | `X` / `Y` use hexadecimal text |
+| `melsec:iq-l` | iQ-L | independent iQ-L range rules; live-validated on `L16HCPU` |
+| `melsec:mx-f` | MX-F | fixed high-level family mapping |
+| `melsec:mx-r` | MX-R | fixed high-level family mapping |
+| `melsec:qcpu` | QCPU | `3e/ql` fixed profile |
+| `melsec:lcpu` | LCPU | `3e/ql` fixed profile |
+| `melsec:qnu` | QnU | `3e/ql` fixed profile |
+| `melsec:qnudv` | QnUDV | `3e/ql` fixed profile |
 
 Practical rules:
 
 - non-`iQ-F` `X` / `Y`: text such as `X20` / `Y20` is interpreted as hexadecimal
 - `iQ-F` / FX5 `X` / `Y`: text such as `X100` / `Y100` is interpreted as manual octal notation and encoded to the binary numeric value
 - example: `X100` on `iQ-F` becomes binary device number `0x40`
-- if you pass a numeric `DeviceRef`, string notation is already resolved, so `plc_family` is not needed for that one address
-- short aliases such as `iqf`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected
+- if you pass a numeric `DeviceRef`, string notation is already resolved, so `plc_profile` is not needed for that one address
+- short aliases such as `iq-f`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected; use canonical `melsec:...` strings
 
 ## Supported PLC Registers
 
@@ -168,7 +168,7 @@ from slmp import format_address, normalize_address, parse_address
 
 print(normalize_address("x20"))   # X20
 print(normalize_address("d200"))  # D200
-print(normalize_address("x100", plc_family="iq-f"))  # X100
+print(normalize_address("x100", plc_profile="melsec:iq-f"))  # X100
 
 parsed = parse_address("d200:f")
 print(parsed.base_device, parsed.dtype)  # D200 F
@@ -187,22 +187,22 @@ await write_typed(client, "D100", "U", 1234)
 
 Use `.bit` notation only with word devices such as `D50.3`.
 Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
-For communication, `X` / `Y` string addresses require explicit `plc_family`.
+For communication, `X` / `Y` string addresses require explicit `plc_profile`.
 
 ### Device Range Catalog
 
-Use `plc_family` and read the derived family SD block once.
+Use `plc_profile` and read the derived family SD block once.
 
 ```python
 from slmp import SlmpClient
 
-with SlmpClient("192.168.250.100", 1025, plc_family="qnu") as client:
+with SlmpClient("192.168.250.100", 1025, plc_profile="melsec:qnu") as client:
     catalog = client.read_device_range_catalog()
     for entry in catalog.entries:
         print(entry.device, entry.point_count, entry.address_range)
 ```
 
-This path does not call `read_type_name()`. The client uses the fixed range family derived from `plc_family`.
+This path does not call `read_type_name()`. The client uses the fixed range family derived from `plc_profile`.
 
 ## Development
 

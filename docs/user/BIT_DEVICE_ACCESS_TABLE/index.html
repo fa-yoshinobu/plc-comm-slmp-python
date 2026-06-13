@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -1163,16 +1163,38 @@
 </tr>
 <tr>
 <td><code>X</code></td>
-<td>hexadecimal</td>
-<td><code>X20</code></td>
+<td>explicit family required: non-<code>iQ-F</code> text = hexadecimal, <code>iQ-F</code> text = octal</td>
+<td><code>X20</code> / <code>X100</code></td>
 </tr>
 <tr>
 <td><code>Y</code></td>
-<td>hexadecimal</td>
-<td><code>Y20</code></td>
+<td>explicit family required: non-<code>iQ-F</code> text = hexadecimal, <code>iQ-F</code> text = octal</td>
+<td><code>Y20</code> / <code>Y100</code></td>
 </tr>
 </tbody>
 </table>
+<p>For communication, this library does not auto-detect the PLC family for <code>X</code> / <code>Y</code>.
+Set canonical <code>plc_family</code> explicitly.</p>
+<p>The device-range catalog follows the fixed family rule derived from <code>plc_family</code>.
+Only these <code>plc_family</code> values are accepted:</p>
+<ul>
+<li><code>iq-f</code></li>
+<li><code>iq-r</code></li>
+<li><code>iq-l</code></li>
+<li><code>mx-f</code></li>
+<li><code>mx-r</code></li>
+<li><code>qcpu</code></li>
+<li><code>lcpu</code></li>
+<li><code>qnu</code></li>
+<li>
+<p><code>qnudv</code></p>
+</li>
+<li>
+<p>non-<code>iQ-F</code>: text such as <code>X20</code> / <code>Y20</code> is interpreted as hexadecimal</p>
+</li>
+<li><code>iQ-F</code> / FX5: text such as <code>X100</code> / <code>Y100</code> is interpreted as manual octal notation</li>
+<li>binary frames carry the converted numeric value, so <code>iQ-F</code> <code>X100</code> is encoded as device number <code>0x40</code></li>
+</ul>
 <h2 id="access-mapping">Access Mapping</h2>
 <table>
 <thead>
@@ -1344,13 +1366,13 @@
 <td>DX</td>
 <td>Direct input</td>
 <td>Hex</td>
-<td></td>
+<td>rejected for <code>plc_family="iq-f"</code></td>
 </tr>
 <tr>
 <td>DY</td>
 <td>Direct output</td>
 <td>Hex</td>
-<td></td>
+<td>rejected for <code>plc_family="iq-f"</code></td>
 </tr>
 <tr>
 <td>TS</td>
@@ -1535,10 +1557,10 @@
 </table>
 <hr />
 <h2 id="long-timer-retentive-timer-helpers-iq-r">Long Timer / Retentive Timer Helpers (iQ-R)</h2>
-<p>These helpers read device data in 4-word units (32-bit current value + 32-bit set value) and return <code>LongTimerResult</code> objects.</p>
+<p>These helpers read 4-word device blocks and return <code>LongTimerResult</code> objects.</p>
 <pre><code class="language-python">results = client.read_long_timer(head_no=0, points=4)
 for r in results:
-    print(r.current_value, r.set_value, r.contact, r.coil)
+    print(r.current_value, r.status_word, r.contact, r.coil)
 </code></pre>
 <table>
 <thead>
@@ -1552,7 +1574,7 @@ for r in results:
 <tr>
 <td><code>read_long_timer(head_no, points)</code></td>
 <td>LTN</td>
-<td><code>list[LongTimerResult]</code> with <code>.current_value</code>, <code>.set_value</code>, <code>.contact</code> (LTS), <code>.coil</code> (LTC)</td>
+<td><code>list[LongTimerResult]</code> with <code>.current_value</code>, <code>.status_word</code>, <code>.contact</code> (LTS), <code>.coil</code> (LTC), <code>.raw_words</code></td>
 </tr>
 <tr>
 <td><code>read_long_retentive_timer(head_no, points)</code></td>
@@ -1584,6 +1606,7 @@ for r in results:
 <p><code>read_named</code> / <code>read_named_sync</code> follow the same practical rule:</p>
 <ul>
 <li>plain <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> addresses are treated as 32-bit current values</li>
+<li><code>LCN</code> current-value reads and writes use random dword access in the high-level helpers</li>
 <li><code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, and <code>LSTC</code> are resolved through the corresponding <code>LTN</code> / <code>LSTN</code> helper-backed 4-word decode instead of direct state reads</li>
 </ul>
 <blockquote>
@@ -1681,7 +1704,7 @@ client.write_devices_ext(&quot;J1\\X11&quot;, [True], extension=ExtensionSpec(),
 <pre><code class="language-python">from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
 # Constructor default: all requests go to Network 1, Station 1
-client = SlmpClient(&quot;192.168.250.100&quot;, default_target=SlmpTarget(network=0x01, station=0x01))
+client = SlmpClient(&quot;192.168.250.100&quot;, plc_family=&quot;iq-r&quot;, default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
 target = SlmpTarget(network=0x01, station=0x01)

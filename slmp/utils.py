@@ -16,7 +16,7 @@ from .core import (
     _normalize_device_family_hint,
     _require_explicit_device_family_for_xy,
     _resolve_connection_profile,
-    _resolve_plc_family_defaults,
+    _resolve_plc_profile_defaults,
     _validate_direct_dword_read_device,
     parse_device,
 )
@@ -73,7 +73,7 @@ class SlmpConnectionOptions:
 
     Attributes:
         host: PLC hostname or IP address.
-        plc_family: Canonical high-level PLC family. This is the only
+        plc_profile: Canonical high-level PLC profile. This is the only
             application-level PLC selector for the recommended helper layer.
         port: TCP or UDP port used by the SLMP endpoint.
         transport: Transport name such as ``"tcp"`` or ``"udp"``.
@@ -82,14 +82,14 @@ class SlmpConnectionOptions:
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.
         trace_hook: Optional callback for transport tracing.
-        plc_series: Derived access profile fixed by ``plc_family``.
-        frame_type: Derived frame type fixed by ``plc_family``.
+        plc_series: Derived access profile fixed by ``plc_profile``.
+        frame_type: Derived frame type fixed by ``plc_profile``.
         device_family: Derived address family used for string device parsing.
         device_range_family: Derived family used for device-range catalog reads.
     """
 
     host: str
-    plc_family: object
+    plc_profile: object
     port: int = 5000
     transport: str = "tcp"
     timeout: float = 3.0
@@ -104,18 +104,18 @@ class SlmpConnectionOptions:
 
     def __post_init__(self) -> None:
         (
-            normalized_plc_family,
+            normalized_plc_profile,
             plc_series,
             frame_type,
             device_family,
             device_range_family,
         ) = _resolve_connection_profile(
-            plc_family=self.plc_family,
+            plc_profile=self.plc_profile,
             plc_series=None,
             frame_type=None,
             device_family=None,
         )
-        object.__setattr__(self, "plc_family", normalized_plc_family)
+        object.__setattr__(self, "plc_profile", normalized_plc_profile)
         object.__setattr__(self, "plc_series", plc_series)
         object.__setattr__(self, "frame_type", frame_type)
         object.__setattr__(self, "device_family", device_family)
@@ -490,13 +490,13 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
 
 def _effective_device_family(
     *,
-    plc_family: object | None = None,
+    plc_profile: object | None = None,
     family: object | None = None,
 ) -> object | None:
-    if plc_family is not None and family is not None:
-        raise ValueError("Pass either plc_family or family, not both.")
-    if plc_family is not None:
-        defaults = _resolve_plc_family_defaults(plc_family)
+    if plc_profile is not None and family is not None:
+        raise ValueError("Pass either plc_profile or family, not both.")
+    if plc_profile is not None:
+        defaults = _resolve_plc_profile_defaults(plc_profile)
         return None if defaults is None else defaults.device_family
     if family is not None:
         return _normalize_device_family_hint(family)
@@ -506,7 +506,7 @@ def _effective_device_family(
 def parse_address(
     address: str | DeviceRef,
     *,
-    plc_family: object | None = None,
+    plc_profile: object | None = None,
     family: object | None = None,
 ) -> SlmpAddress:
     """Parse public SLMP helper-layer address notation.
@@ -519,7 +519,7 @@ def parse_address(
         text = str(address)
         return SlmpAddress(text=text, base_device=text, dtype="U")
 
-    effective_family = _effective_device_family(plc_family=plc_family, family=family)
+    effective_family = _effective_device_family(plc_profile=plc_profile, family=family)
     raw_text = address.strip()
     base, dtype, bit_index = _parse_address(raw_text)
     device = _parse_device_for_family(base, effective_family)
@@ -554,13 +554,13 @@ def parse_address(
 def try_parse_address(
     address: str | DeviceRef,
     *,
-    plc_family: object | None = None,
+    plc_profile: object | None = None,
     family: object | None = None,
 ) -> SlmpAddress | None:
     """Return parsed address information, or ``None`` when parsing fails."""
 
     try:
-        return parse_address(address, plc_family=plc_family, family=family)
+        return parse_address(address, plc_profile=plc_profile, family=family)
     except Exception:
         return None
 
@@ -568,15 +568,15 @@ def try_parse_address(
 def format_address(
     address: SlmpAddress | str | DeviceRef,
     *,
-    plc_family: object | None = None,
+    plc_profile: object | None = None,
     family: object | None = None,
 ) -> str:
     """Return canonical public SLMP address text."""
 
     if not isinstance(address, SlmpAddress):
-        return parse_address(address, plc_family=plc_family, family=family).text
+        return parse_address(address, plc_profile=plc_profile, family=family).text
 
-    canonical_base = normalize_address(address.base_device, plc_family=plc_family, family=family)
+    canonical_base = normalize_address(address.base_device, plc_profile=plc_profile, family=family)
     if address.dtype == "BIT_IN_WORD":
         if address.bit_index is None or not 0 <= address.bit_index <= 15:
             raise ValueError("bit-in-word address requires bit_index 0-F")
@@ -591,7 +591,7 @@ def format_address(
 def normalize_address(
     address: str | DeviceRef,
     *,
-    plc_family: object | None = None,
+    plc_profile: object | None = None,
     family: object | None = None,
 ) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
@@ -604,7 +604,7 @@ def normalize_address(
     if not isinstance(address, str):
         return str(address)
 
-    effective_family = _effective_device_family(plc_family=plc_family, family=family)
+    effective_family = _effective_device_family(plc_profile=plc_profile, family=family)
 
     text = address.strip()
     if ":" not in text and "." not in text:
@@ -1457,7 +1457,7 @@ async def open_and_connect(
         options.port,
         transport=options.transport,
         timeout=options.timeout,
-        plc_family=options.plc_family,
+        plc_profile=options.plc_profile,
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
@@ -1486,7 +1486,7 @@ def open_and_connect_sync(
         options.port,
         transport=options.transport,
         timeout=options.timeout,
-        plc_family=options.plc_family,
+        plc_profile=options.plc_profile,
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,

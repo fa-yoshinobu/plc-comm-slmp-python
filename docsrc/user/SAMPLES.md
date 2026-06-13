@@ -7,7 +7,7 @@ The recommended sample entry points are the two buildable high-level examples in
 Run:
 
 ```powershell
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 ```
 
 What it demonstrates:
@@ -39,7 +39,7 @@ Example scenarios inside the sample:
 Run:
 
 ```powershell
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 ```
 
 What it demonstrates:
@@ -60,7 +60,7 @@ What it demonstrates:
 
 Example scenarios inside the sample:
 
-- connect with an explicit `plc_family`
+- connect with an explicit `plc_profile`
 - read and write typed scalar values
 - read large arrays with explicit chunked helpers
 - update one flag inside a word

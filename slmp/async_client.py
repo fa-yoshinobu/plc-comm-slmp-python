@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -74,7 +75,7 @@ class AsyncSlmpClient:
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
-        plc_family: object | None = None,
+        plc_profile: object | None = None,
         plc_series: PLCSeries | str | None = None,
         frame_type: FrameType | str | None = None,
         default_target: SlmpTarget | None = None,
@@ -86,7 +87,7 @@ class AsyncSlmpClient:
     ) -> None:
         """Initialize the asynchronous SLMP client.
 
-        The standard async client route requires ``plc_family`` and fixes the
+        The standard async client route requires ``plc_profile`` and fixes the
         frame type, access profile, and address/range handling from that one
         explicit family.
         """
@@ -97,23 +98,23 @@ class AsyncSlmpClient:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
         if not _allow_manual_profile:
-            if plc_family is None and all(value is None for value in (plc_series, frame_type, device_family)):
+            if plc_profile is None and all(value is None for value in (plc_series, frame_type, device_family)):
                 raise ValueError(
-                    "plc_family is required for the standard AsyncSlmpClient route "
+                    "plc_profile is required for the standard AsyncSlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if plc_family is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
+            if plc_profile is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
                 raise ValueError(
-                    "plc_family is the only supported PLC selector for the standard AsyncSlmpClient route."
+                    "plc_profile is the only supported PLC selector for the standard AsyncSlmpClient route."
                 )
         (
-            self.plc_family,
+            self.plc_profile,
             self.plc_series,
             self.frame_type,
             self.device_family,
             self.device_range_family,
         ) = _resolve_connection_profile(
-            plc_family=plc_family,
+            plc_profile=plc_profile,
             plc_series=plc_series,
             frame_type=frame_type,
             device_family=device_family,
@@ -154,6 +155,9 @@ class AsyncSlmpClient:
                     self._reader, self._writer = await asyncio.wait_for(fut, timeout=self.timeout)
                 except asyncio.TimeoutError as err:
                     raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
+                raw_socket = self._writer.get_extra_info("socket")
+                if raw_socket is not None:
+                    raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             else:
                 if self._udp_transport is not None:
                     return
@@ -737,7 +741,7 @@ class AsyncSlmpClient:
     async def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for this client's explicit PLC family."""
         if self.device_range_family is None:
-            raise ValueError("read_device_range_catalog() requires explicit plc_family on the client.")
+            raise ValueError("read_device_range_catalog() requires explicit plc_profile on the client.")
         return await self.read_device_range_catalog_for_family(self.device_range_family)
 
     async def read_cpu_operation_state(self) -> CpuOperationState:
@@ -749,12 +753,9 @@ class AsyncSlmpClient:
         request = _operations.build_remote_run_request(force=force, clear_mode=clear_mode)
         await self.request(request.command, request.subcommand, request.payload)
 
-    async def remote_stop(self, *, force: bool = False) -> None:
-        """Remote stop the PLC.
-
-        The force flag is kept for API compatibility; Remote STOP always sends the manual fixed data.
-        """
-        request = _operations.build_remote_stop_request(force=force)
+    async def remote_stop(self) -> None:
+        """Remote stop the PLC."""
+        request = _operations.build_remote_stop_request()
         await self.request(request.command, request.subcommand, request.payload)
 
     async def remote_pause(self, *, force: bool = False) -> None:

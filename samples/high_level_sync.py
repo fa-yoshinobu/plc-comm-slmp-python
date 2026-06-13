@@ -7,7 +7,7 @@ Run against a real PLC or the GX Works3 simulator.
 
 Usage
 -----
-    python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+    python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
     python samples/high_level_sync.py --host 192.168.250.100 --port 1027 --transport udp
 
 Common port values
@@ -70,10 +70,20 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument(
-        "--plc-family",
-        choices=("iq-f", "iq-r", "iq-l", "mx-f", "mx-r", "qcpu", "lcpu", "qnu", "qnudv"),
-        default="iq-r",
-        help="Canonical high-level PLC family (default iq-r)",
+        "--plc-profile",
+        choices=(
+            "melsec:iq-f",
+            "melsec:iq-r",
+            "melsec:iq-l",
+            "melsec:mx-f",
+            "melsec:mx-r",
+            "melsec:qcpu",
+            "melsec:lcpu",
+            "melsec:qnu",
+            "melsec:qnudv",
+        ),
+        default="melsec:iq-r",
+        help="Canonical high-level PLC profile (default melsec:iq-r)",
     )
     p.add_argument(
         "--timeout",
@@ -107,13 +117,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     parsed = parse_address("d200:f")
-    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_family=args.plc_family)}")
+    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
     print(f"[format_address] parsed -> {format_address(parsed)}")
 
     # SlmpConnectionOptions:
     #   host             - PLC IP / hostname
-    #   plc_family       - canonical high-level PLC family; derives frame,
+    #   plc_profile      - canonical high-level PLC profile; derives frame,
     #                      access profile, and X/Y/range handling
     #   port             - SLMP port; depends on PLC hardware and firmware settings
     #   transport        - "tcp" (default) or "udp"
@@ -123,7 +133,7 @@ def main() -> None:
     #   trace_hook       - optional callback(SlmpTraceFrame) for protocol tracing
     options = SlmpConnectionOptions(
         host=args.host,
-        plc_family=args.plc_family,
+        plc_profile=args.plc_profile,
         port=args.port,
         transport="tcp",
         timeout=args.timeout,
@@ -131,7 +141,7 @@ def main() -> None:
     )
 
     with open_and_connect_sync(options) as client:
-        print(f"Connected to {args.host}:{args.port} ({args.plc_family})")
+        print(f"Connected to {args.host}:{args.port} ({args.plc_profile})")
 
         # ---------------------------------------------------------------
         # 1. read_typed_sync / write_typed_sync

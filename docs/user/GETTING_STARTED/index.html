@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -912,7 +912,8 @@
 <p>Recommended first path:</p>
 <ol>
 <li>Install <code>slmp-connect-python</code>.</li>
-<li>Set <code>plc_series</code> and <code>frame_type</code> explicitly.</li>
+<li>Set canonical <code>plc_family</code>.</li>
+<li>Let the library derive the fixed frame type, access profile, and range rules.</li>
 <li>Open one connection with <code>open_and_connect</code>.</li>
 <li>Read one safe <code>D</code> word.</li>
 <li>Write only to a known-safe test word or bit after the first read is stable.</li>
@@ -930,18 +931,103 @@
 <ul>
 <li>module/extension routing</li>
 <li>large chunked reads</li>
-<li>future-tracked families such as <code>G</code>, <code>HG</code>, <code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, <code>LSTC</code>, <code>LCS</code>, <code>LCC</code>, <code>LZ</code></li>
+<li>module-buffer families such as <code>G</code> and <code>HG</code></li>
 </ul>
 <h2 id="minimal-connection-pattern">Minimal Connection Pattern</h2>
 <pre><code class="language-python">from slmp import SlmpConnectionOptions
 
 options = SlmpConnectionOptions(
     host=&quot;192.168.250.100&quot;,
+    plc_family=&quot;iq-f&quot;,
     port=1025,
-    plc_series=&quot;iqr&quot;,
-    frame_type=&quot;4e&quot;,
 )
 </code></pre>
+<p>These settings mean different things:</p>
+<ul>
+<li><code>plc_family</code>: the only high-level PLC selector for application code</li>
+<li>derived <code>frame_type</code>: fixed by <code>plc_family</code></li>
+<li>derived <code>access_profile</code>: fixed by <code>plc_family</code></li>
+<li>derived string/range rules: fixed by <code>plc_family</code></li>
+</ul>
+<p>Current fixed mapping:</p>
+<table>
+<thead>
+<tr>
+<th><code>plc_family</code></th>
+<th><code>frame_type</code></th>
+<th><code>access_profile</code></th>
+<th><code>X</code> / <code>Y</code> text</th>
+<th>range family</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>iq-f</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>octal</td>
+<td><code>iq-f</code></td>
+</tr>
+<tr>
+<td><code>iq-r</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>iq-r</code></td>
+</tr>
+<tr>
+<td><code>iq-l</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>iq-l</code></td>
+</tr>
+<tr>
+<td><code>mx-f</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>mx-f</code></td>
+</tr>
+<tr>
+<td><code>mx-r</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>mx-r</code></td>
+</tr>
+<tr>
+<td><code>qcpu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qcpu</code></td>
+</tr>
+<tr>
+<td><code>lcpu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>lcpu</code></td>
+</tr>
+<tr>
+<td><code>qnu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qnu</code></td>
+</tr>
+<tr>
+<td><code>qnudv</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qnudv</code></td>
+</tr>
+</tbody>
+</table>
+<p>This library does not auto-detect the public helper profile.
+Short aliases are rejected.</p>
 <h2 id="first-successful-run">First Successful Run</h2>
 <p>Recommended order:</p>
 <ol>
@@ -953,9 +1039,8 @@ options = SlmpConnectionOptions(
 <p>If the first read fails, check these in order:</p>
 <ul>
 <li>correct host and port</li>
-<li>correct frame type</li>
-<li>correct PLC series</li>
-<li>start with <code>D</code> instead of a routed, module, or future-tracked family</li>
+<li>correct <code>plc_family</code></li>
+<li>start with <code>D</code> instead of a routed or module-buffer family</li>
 </ul>
 <h2 id="next-pages">Next Pages</h2>
 <ul>

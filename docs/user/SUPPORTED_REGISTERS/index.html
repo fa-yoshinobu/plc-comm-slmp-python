@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -906,14 +906,14 @@
 <tr>
 <td><code>X</code></td>
 <td>bit</td>
-<td><code>X20</code></td>
-<td>hexadecimal</td>
+<td><code>X20</code> / <code>X100</code></td>
+<td>explicit family required; non-<code>iQ-F</code> text is hexadecimal, <code>iQ-F</code> text is octal</td>
 </tr>
 <tr>
 <td><code>Y</code></td>
 <td>bit</td>
-<td><code>Y20</code></td>
-<td>hexadecimal</td>
+<td><code>Y20</code> / <code>Y100</code></td>
+<td>explicit family required; non-<code>iQ-F</code> text is hexadecimal, <code>iQ-F</code> text is octal</td>
 </tr>
 <tr>
 <td><code>M</code></td>
@@ -958,6 +958,18 @@
 <td>decimal</td>
 </tr>
 <tr>
+<td><code>LTS</code></td>
+<td>bit</td>
+<td><code>LTS10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
+<td><code>LTC</code></td>
+<td>bit</td>
+<td><code>LTC10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
 <td><code>STS</code></td>
 <td>bit</td>
 <td><code>STS10</code></td>
@@ -967,6 +979,18 @@
 <td><code>STC</code></td>
 <td>bit</td>
 <td><code>STC10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
+<td><code>LSTS</code></td>
+<td>bit</td>
+<td><code>LSTS10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
+<td><code>LSTC</code></td>
+<td>bit</td>
+<td><code>LSTC10</code></td>
 <td>decimal</td>
 </tr>
 <tr>
@@ -982,6 +1006,18 @@
 <td>decimal</td>
 </tr>
 <tr>
+<td><code>LCS</code></td>
+<td>bit</td>
+<td><code>LCS10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
+<td><code>LCC</code></td>
+<td>bit</td>
+<td><code>LCC10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
 <td><code>SB</code></td>
 <td>bit</td>
 <td><code>SB20</code></td>
@@ -991,13 +1027,13 @@
 <td><code>DX</code></td>
 <td>bit</td>
 <td><code>DX20</code></td>
-<td>hexadecimal</td>
+<td>hexadecimal; not accepted for <code>plc_family="iq-f"</code></td>
 </tr>
 <tr>
 <td><code>DY</code></td>
 <td>bit</td>
 <td><code>DY20</code></td>
-<td>hexadecimal</td>
+<td>hexadecimal; not accepted for <code>plc_family="iq-f"</code></td>
 </tr>
 </tbody>
 </table>
@@ -1079,6 +1115,12 @@
 <td>decimal</td>
 </tr>
 <tr>
+<td><code>LZ</code></td>
+<td>word</td>
+<td><code>LZ10</code></td>
+<td>decimal</td>
+</tr>
+<tr>
 <td><code>R</code></td>
 <td>word</td>
 <td><code>R100</code></td>
@@ -1143,20 +1185,23 @@
 <h2 id="addressing-notes">Addressing Notes</h2>
 <ul>
 <li>Start with <code>D</code> for the first smoke test.</li>
-<li><code>X</code>, <code>Y</code>, <code>B</code>, <code>W</code>, <code>SB</code>, <code>SW</code>, <code>DX</code>, and <code>DY</code> use hexadecimal device numbers.</li>
+<li><code>B</code>, <code>W</code>, <code>SB</code>, <code>SW</code>, <code>DX</code>, and <code>DY</code> use hexadecimal device numbers.</li>
+<li><code>DX</code> and <code>DY</code> are rejected before transport when <code>plc_family="iq-f"</code>.</li>
+<li><code>X</code> and <code>Y</code> require explicit <code>plc_family</code> for communication.</li>
+<li>device-range catalog reads follow the fixed family rule derived from <code>plc_family</code>.</li>
+<li>non-<code>iQ-F</code> <code>X</code> / <code>Y</code> text such as <code>X20</code> uses hexadecimal numbering.</li>
+<li><code>iQ-F</code> / FX5 <code>X</code> / <code>Y</code> text such as <code>X100</code> uses manual octal notation and is converted to the binary numeric value before transmission.</li>
+<li>canonical <code>plc_family</code> values are <code>iq-f</code>, <code>iq-r</code>, <code>iq-l</code>, <code>mx-f</code>, <code>mx-r</code>, <code>qcpu</code>, <code>lcpu</code>, <code>qnu</code>, and <code>qnudv</code>.</li>
 <li>Most other families use decimal numbers.</li>
 <li><code>.bit</code> is valid only on word devices such as <code>D50.3</code>.</li>
-<li><code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> default to 32-bit current-value access in the public high-level helpers.</li>
+<li><code>LTN</code>, <code>LSTN</code>, <code>LCN</code>, and <code>LZ</code> default to 32-bit current-value access in the public high-level helpers.</li>
+<li><code>LCN</code> current-value reads and writes use random dword access in the high-level helpers.</li>
+<li><code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, and <code>LSTC</code> state reads use the long timer 4-word decode helpers.</li>
+<li><code>LCS</code> and <code>LCC</code> state reads use direct bit read.</li>
+<li>High-level state writes for <code>LTS</code>/<code>LTC</code>/<code>LSTS</code>/<code>LSTC</code>/<code>LCS</code>/<code>LCC</code> use random bit write (<code>0x1402</code>).</li>
 </ul>
 <h2 id="not-currently-in-the-public-surface">Not Currently in the Public Surface</h2>
 <ul>
-<li><code>LTS</code></li>
-<li><code>LTC</code></li>
-<li><code>LSTS</code></li>
-<li><code>LSTC</code></li>
-<li><code>LCS</code></li>
-<li><code>LCC</code></li>
-<li><code>LZ</code></li>
 <li><code>G</code></li>
 <li><code>HG</code></li>
 </ul>

@@ -3,11 +3,11 @@
 SLMP High-Level Asynchronous Utilities Sample
 ==============================================
 Demonstrates every high-level *async* helper shipped with the slmp package,
-including explicit `plc_family` selection and QueuedAsyncSlmpClient for concurrent-safe multi-task usage.
+including explicit `plc_profile` selection and QueuedAsyncSlmpClient for concurrent-safe multi-task usage.
 
 Usage
 -----
-    python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+    python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 
 Common port values
 ------------------
@@ -75,10 +75,20 @@ def parse_args() -> argparse.Namespace:
         help="Socket timeout in seconds (default 3.0)",
     )
     p.add_argument(
-        "--plc-family",
-        choices=("iq-f", "iq-r", "iq-l", "mx-f", "mx-r", "qcpu", "lcpu", "qnu", "qnudv"),
-        default="iq-r",
-        help="Canonical high-level PLC family (default iq-r)",
+        "--plc-profile",
+        choices=(
+            "melsec:iq-f",
+            "melsec:iq-r",
+            "melsec:iq-l",
+            "melsec:mx-f",
+            "melsec:mx-r",
+            "melsec:qcpu",
+            "melsec:lcpu",
+            "melsec:qnu",
+            "melsec:qnudv",
+        ),
+        default="melsec:iq-r",
+        help="Canonical high-level PLC profile (default melsec:iq-r)",
     )
     p.add_argument(
         "--poll-count",
@@ -94,16 +104,16 @@ def parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 
-def build_options(host: str, port: int, timeout: float, plc_family: str) -> SlmpConnectionOptions:
+def build_options(host: str, port: int, timeout: float, plc_profile: str) -> SlmpConnectionOptions:
     return SlmpConnectionOptions(
         host=host,
-        plc_family=plc_family,
+        plc_profile=plc_profile,
         port=port,
         timeout=timeout,
     )
 
 
-async def demo_explicit_connect(host: str, port: int, timeout: float, plc_family: str) -> None:
+async def demo_explicit_connect(host: str, port: int, timeout: float, plc_profile: str) -> None:
     """
     Explicit connection settings for one SLMP session.
 
@@ -111,14 +121,14 @@ async def demo_explicit_connect(host: str, port: int, timeout: float, plc_family
         host    - PLC IP / hostname
         port    - SLMP port (for example 1025 for iQ-R hardware or 5007 for Q/L hardware)
         timeout - connection timeout in seconds
-        plc_family - canonical high-level PLC family such as "iq-r" or "iq-f"
+        plc_profile - canonical high-level PLC profile such as "melsec:iq-r" or "melsec:iq-f"
 
     Use case: application code and validation scripts where the PLC profile is
               known and should remain stable for the full session.
     """
-    options = build_options(host, port, timeout, plc_family)
+    options = build_options(host, port, timeout, plc_profile)
     client = await open_and_connect(options)
-    print(f"[connect] plc_family={client.plc_family}  frame={client.frame_type!s}  series={client.plc_series!s}")
+    print(f"[connect] plc_profile={client.plc_profile}  frame={client.frame_type!s}  series={client.plc_series!s}")
     await client.close()
 
 
@@ -244,7 +254,7 @@ async def demo_poll(client, count: int) -> None:
         pass
 
 
-async def demo_queued_client(host: str, port: int, timeout: float, plc_family: str) -> None:
+async def demo_queued_client(host: str, port: int, timeout: float, plc_profile: str) -> None:
     """
     QueuedAsyncSlmpClient - thread-safe wrapper for shared async use.
 
@@ -255,7 +265,7 @@ async def demo_queued_client(host: str, port: int, timeout: float, plc_family: s
     Use case: any asyncio application where more than one task needs to
               issue SLMP requests on the same connection simultaneously.
     """
-    async with await open_and_connect(build_options(host, port, timeout, plc_family)) as queued:
+    async with await open_and_connect(build_options(host, port, timeout, plc_profile)) as queued:
 
         async def task_a() -> None:
             first = await read_named(queued, ["D100", "D200:F"])
@@ -275,15 +285,15 @@ async def demo_queued_client(host: str, port: int, timeout: float, plc_family: s
 
 async def run(args: argparse.Namespace) -> None:
     parsed = parse_address("d200:f")
-    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_family=args.plc_family)}")
+    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
     print(f"[format_address] parsed -> {format_address(parsed)}")
 
     # 1. Connect once with explicit stable settings
-    await demo_explicit_connect(args.host, args.port, args.timeout, args.plc_family)
+    await demo_explicit_connect(args.host, args.port, args.timeout, args.plc_profile)
 
     # 2-5. high-level helpers - connect once, run all demos
-    async with await open_and_connect(build_options(args.host, args.port, args.timeout, args.plc_family)) as client:
+    async with await open_and_connect(build_options(args.host, args.port, args.timeout, args.plc_profile)) as client:
         await demo_typed_rw(client)
         await demo_contiguous_reads(client)
         await demo_bit_in_word(client)
@@ -291,7 +301,7 @@ async def run(args: argparse.Namespace) -> None:
         await demo_poll(client, args.poll_count)
 
     # 6. QueuedAsyncSlmpClient
-    await demo_queued_client(args.host, args.port, args.timeout, args.plc_family)
+    await demo_queued_client(args.host, args.port, args.timeout, args.plc_profile)
 
     print("Done.")
 
