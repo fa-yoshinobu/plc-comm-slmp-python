@@ -98,12 +98,12 @@ class AsyncSlmpClient:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
         if not _allow_manual_profile:
-            if plc_profile is None and all(value is None for value in (plc_series, frame_type, device_family)):
+            if plc_profile is None:
                 raise ValueError(
                     "plc_profile is required for the standard AsyncSlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if plc_profile is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
+            if any(value is not None for value in (plc_series, frame_type, device_family)):
                 raise ValueError(
                     "plc_profile is the only supported PLC selector for the standard AsyncSlmpClient route."
                 )

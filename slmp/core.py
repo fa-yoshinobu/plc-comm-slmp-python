@@ -147,7 +147,7 @@ def _normalize_plc_profile_hint(family: object | None) -> str | None:
     if family is None:
         return None
     raw = getattr(family, "value", family)
-    normalized = str(raw).strip().lower()
+    normalized = str(raw).strip()
     if not normalized:
         return None
     if normalized in _PLC_PROFILES:

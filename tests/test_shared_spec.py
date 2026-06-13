@@ -35,7 +35,7 @@ class CaptureClient(SlmpClient):
     def __init__(self, response_data: bytes) -> None:
         super().__init__(
             "127.0.0.1",
-            plc_series=PLCSeries.IQR,
+            plc_profile="melsec:iq-r",
             monitoring_timer=0x0010,
             raise_on_error=True,
         )

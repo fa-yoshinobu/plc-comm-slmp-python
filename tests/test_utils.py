@@ -139,6 +139,10 @@ class TestParseAddress(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             parse_address("x100", plc_profile="iq-f")
 
+    def test_public_parse_address_rejects_noncanonical_profile_case(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+            parse_address("x100", plc_profile="MELSEC:IQ-F")
+
     def test_read_named_sync_rejects_xy_without_device_family(self):
         client = MagicMock()
         client.device_family = None
@@ -626,6 +630,14 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
     def test_connection_options_reject_short_plc_profile_alias(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             SlmpConnectionOptions("127.0.0.1", plc_profile="iq-l", port=1025)
+
+    def test_connection_options_require_explicit_plc_profile(self):
+        with self.assertRaisesRegex(ValueError, "plc_profile is required"):
+            SlmpConnectionOptions("127.0.0.1", plc_profile=None, port=1025)
+
+    def test_connection_options_reject_noncanonical_profile_case(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+            SlmpConnectionOptions("127.0.0.1", plc_profile="MELSEC:IQ-L", port=1025)
 
 
 # ---------------------------------------------------------------------------
