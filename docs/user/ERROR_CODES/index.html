@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -982,7 +982,7 @@
 <pre><code class="language-python">from slmp import SlmpClient
 from slmp.errors import SlmpError
 
-with SlmpClient(&quot;192.168.250.100&quot;, port=1025, transport=&quot;tcp&quot;, plc_series=&quot;iqr&quot;) as cli:
+with SlmpClient(&quot;192.168.250.100&quot;, port=1025, transport=&quot;tcp&quot;, plc_family=&quot;iq-r&quot;) as cli:
     try:
         cli.read_devices(&quot;D100&quot;, 1)
     except SlmpError as e:

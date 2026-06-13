@@ -36,11 +36,10 @@ def run_test(ip: str, port: int, frame_type: FrameType) -> None:
     """Run a connection test with the specified frame type."""
     print(f"=== Testing with {frame_type.value.upper()} Frame ===")
 
-    # Switching between 3E/4E is done using the frame_type argument
+    # This is a low-level frame/profile sample, so it opts out of plc_profile.
     client = SlmpClient(
         host=ip,
         port=port,
-        plc_family="qnu",
         frame_type=frame_type,
         plc_series=PLCSeries.QL,  # 3E is common for Q/L series
         timeout=2.0,

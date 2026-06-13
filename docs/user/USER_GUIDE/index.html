@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -469,10 +469,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#async-connection-with-explicit-profile-selection" class="md-nav__link">
+  <a href="#async-connection-with-explicit-plc-family-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async connection with explicit profile selection
+        Async connection with explicit PLC family selection
       
     </span>
   </a>
@@ -501,11 +501,28 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#address-normalization" class="md-nav__link">
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-plc-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Address normalization
+        High-Level PLC Selection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High-Level PLC Selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#address-parse-normalize-and-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Address parse, normalize, and format
       
     </span>
   </a>
@@ -1027,10 +1044,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#async-connection-with-explicit-profile-selection" class="md-nav__link">
+  <a href="#async-connection-with-explicit-plc-family-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Async connection with explicit profile selection
+        Async connection with explicit PLC family selection
       
     </span>
   </a>
@@ -1059,11 +1076,28 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#address-normalization" class="md-nav__link">
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-plc-selection" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Address normalization
+        High-Level PLC Selection
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High-Level PLC Selection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#address-parse-normalize-and-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Address parse, normalize, and format
       
     </span>
   </a>
@@ -1298,7 +1332,7 @@
 <p>This guide documents the recommended high-level helper APIs.</p>
 <p>For normal application code, start here instead of the low-level protocol methods.</p>
 <h2 id="recommended-entry-points">Recommended Entry Points</h2>
-<h3 id="async-connection-with-explicit-profile-selection">Async connection with explicit profile selection</h3>
+<h3 id="async-connection-with-explicit-plc-family-selection">Async connection with explicit PLC family selection</h3>
 <pre><code class="language-python">import asyncio
 
 from slmp import SlmpConnectionOptions, open_and_connect, read_named
@@ -1307,9 +1341,8 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named
 async def main() -&gt; None:
     options = SlmpConnectionOptions(
         host=&quot;192.168.250.100&quot;,
+        plc_family=&quot;iq-f&quot;,
         port=1025,
-        plc_series=&quot;iqr&quot;,
-        frame_type=&quot;4e&quot;,
     )
     async with await open_and_connect(options) as client:
         snapshot = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;, &quot;D50.3&quot;])
@@ -1321,7 +1354,7 @@ asyncio.run(main())
 <p>Use this when:</p>
 <ul>
 <li>you are writing an async application</li>
-<li>you already know the target frame/profile pair</li>
+<li>you already know the target PLC family</li>
 <li>you want the shortest path to <code>read_named</code>, <code>write_typed</code>, and <code>poll</code></li>
 </ul>
 <h3 id="async-shared-connection">Async shared connection</h3>
@@ -1334,8 +1367,7 @@ async def main() -&gt; None:
     inner = AsyncSlmpClient(
         &quot;192.168.250.100&quot;,
         port=1025,
-        plc_series=&quot;iqr&quot;,
-        frame_type=&quot;4e&quot;,
+        plc_family=&quot;iq-r&quot;,
     )
     async with QueuedAsyncSlmpClient(inner) as client:
         first = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
@@ -1352,9 +1384,8 @@ asyncio.run(main())
 
 options = SlmpConnectionOptions(
     host=&quot;192.168.250.100&quot;,
+    plc_family=&quot;iq-f&quot;,
     port=1025,
-    plc_series=&quot;iqr&quot;,
-    frame_type=&quot;4e&quot;,
 )
 
 with open_and_connect_sync(options) as client:
@@ -1366,12 +1397,136 @@ with open_and_connect_sync(options) as client:
 <li>open a <code>SlmpClient</code></li>
 <li>use the <code>*_sync</code> helper functions</li>
 </ol>
-<h3 id="address-normalization">Address normalization</h3>
-<pre><code class="language-python">from slmp import normalize_address
+<h2 id="high-level-plc-selection">High-Level PLC Selection</h2>
+<p>For the recommended high-level helper layer, <code>plc_family</code> is the only PLC selector.</p>
+<ul>
+<li>the library derives <code>frame_type</code></li>
+<li>the library derives <code>access_profile</code></li>
+<li>the library derives the <code>X</code> / <code>Y</code> text rule</li>
+<li>the library derives the device-range family</li>
+<li>the library does not auto-detect them at runtime</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><code>plc_family</code></th>
+<th><code>frame_type</code></th>
+<th><code>access_profile</code></th>
+<th><code>X</code> / <code>Y</code> text</th>
+<th>range family</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>iq-f</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>octal</td>
+<td><code>iq-f</code></td>
+<td>live-validated</td>
+</tr>
+<tr>
+<td><code>iq-r</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>iq-r</code></td>
+<td>live-validated</td>
+</tr>
+<tr>
+<td><code>iq-l</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>iq-l</code></td>
+<td>live-validated on <code>L16HCPU</code></td>
+</tr>
+<tr>
+<td><code>mx-f</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>mx-f</code></td>
+<td>provisional</td>
+</tr>
+<tr>
+<td><code>mx-r</code></td>
+<td><code>4e</code></td>
+<td><code>iqr</code></td>
+<td>hexadecimal</td>
+<td><code>mx-r</code></td>
+<td>provisional</td>
+</tr>
+<tr>
+<td><code>qcpu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qcpu</code></td>
+<td>retained path</td>
+</tr>
+<tr>
+<td><code>lcpu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>lcpu</code></td>
+<td>retained path</td>
+</tr>
+<tr>
+<td><code>qnu</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qnu</code></td>
+<td>retained path</td>
+</tr>
+<tr>
+<td><code>qnudv</code></td>
+<td><code>3e</code></td>
+<td><code>ql</code></td>
+<td>hexadecimal</td>
+<td><code>qnudv</code></td>
+<td>retained path</td>
+</tr>
+</tbody>
+</table>
+<p>Only canonical <code>plc_family</code> values are accepted:</p>
+<ul>
+<li><code>iq-f</code></li>
+<li><code>iq-r</code></li>
+<li><code>iq-l</code></li>
+<li><code>mx-f</code></li>
+<li><code>mx-r</code></li>
+<li><code>qcpu</code></li>
+<li><code>lcpu</code></li>
+<li><code>qnu</code></li>
+<li><code>qnudv</code></li>
+</ul>
+<p>Short aliases such as <code>iqf</code>, <code>iqr</code>, <code>q</code>, <code>l</code>, and <code>qnudvcpu</code> are rejected.</p>
+<h3 id="address-parse-normalize-and-format">Address parse, normalize, and format</h3>
+<pre><code class="language-python">from slmp import format_address, normalize_address, parse_address, try_parse_address
 
 assert normalize_address(&quot;x20&quot;) == &quot;X20&quot;
 assert normalize_address(&quot;d200&quot;) == &quot;D200&quot;
+assert normalize_address(&quot;x100&quot;, plc_family=&quot;iq-f&quot;) == &quot;X100&quot;
+
+typed = parse_address(&quot;d200:f&quot;)
+assert typed.text == &quot;D200:F&quot;
+assert typed.base_device == &quot;D200&quot;
+assert typed.dtype == &quot;F&quot;
+assert format_address(typed) == &quot;D200:F&quot;
+
+bit = parse_address(&quot;d50.a&quot;)
+assert bit.text == &quot;D50.A&quot;
+assert bit.bit_index == 10
+
+assert try_parse_address(&quot;m100.0&quot;) is None
 </code></pre>
+<p><code>X</code> / <code>Y</code> string addresses require explicit <code>plc_family</code> during communication.
+The library does not auto-detect the PLC family for <code>X</code> / <code>Y</code>.
+Device-range catalog reads follow the same fixed family mapping derived from <code>plc_family</code>.</p>
 <h2 id="high-level-helper-set">High-Level Helper Set</h2>
 <h3 id="read_typed-read_typed_sync"><code>read_typed</code> / <code>read_typed_sync</code></h3>
 <p>Read one logical value with type conversion.</p>
@@ -1478,11 +1633,15 @@ await write_bit_in_word(client, &quot;D50&quot;, bit_index=3, value=False)
 )
 </code></pre>
 <p>Use <code>.bit</code> notation only with word devices such as <code>D50.3</code>.
-Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X20</code>, or <code>Y20</code>.</p>
+Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X20</code>, or <code>Y20</code>.
+For <code>X</code> / <code>Y</code>, set <code>plc_family</code> explicitly.
+Use manual octal text such as <code>X100</code> / <code>Y100</code> for <code>iQ-F</code> / FX5, and hexadecimal text such as <code>X20</code> / <code>Y20</code> for non-<code>iQ-F</code> families.</p>
 <p>Long-device notes for the high-level helper layer:</p>
 <ul>
-<li><code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> default to 32-bit current-value access</li>
+<li><code>LTN</code>, <code>LSTN</code>, <code>LCN</code>, and <code>LZ</code> default to 32-bit current-value access</li>
+<li><code>LCN</code> current-value reads and writes use random dword access in the high-level helpers</li>
 <li><code>LTS</code>, <code>LTC</code>, <code>LSTS</code>, and <code>LSTC</code> are resolved through the corresponding <code>LTN</code> / <code>LSTN</code> helper-backed 4-word decode instead of direct state reads</li>
+<li><code>LCS</code> and <code>LCC</code> use direct bit read, and high-level state writes use random bit write (<code>0x1402</code>)</li>
 </ul>
 <p>This is the most useful helper for dashboards, logging, and application polling.</p>
 <h3 id="write_named-write_named_sync"><code>write_named</code> / <code>write_named_sync</code></h3>
@@ -1499,7 +1658,7 @@ Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X2
     },
 )
 </code></pre>
-<p>Plain <code>LTN</code>, <code>LSTN</code>, and <code>LCN</code> addresses are treated as 32-bit current values in the high-level write helper too.</p>
+<p>Plain <code>LTN</code>, <code>LSTN</code>, <code>LCN</code>, and <code>LZ</code> addresses are treated as 32-bit values in the high-level write helper too.</p>
 <h3 id="read_words_single_request-read_words_single_request_sync"><code>read_words_single_request</code> / <code>read_words_single_request_sync</code></h3>
 <p>Read a contiguous word range using exactly one PLC request.</p>
 <pre><code class="language-python">words = await read_words_single_request(client, &quot;D0&quot;, 10)
@@ -1559,7 +1718,7 @@ Address bit devices directly as <code>M1000</code>, <code>M1001</code>, <code>X2
 history_dwords = await read_dwords_chunked(client, &quot;D2000&quot;, 240)
 </code></pre>
 <h3 id="example-4-one-shared-async-connection">Example 4: one shared async connection</h3>
-<pre><code class="language-python">inner = AsyncSlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_series=&quot;iqr&quot;, frame_type=&quot;4e&quot;)
+<pre><code class="language-python">inner = AsyncSlmpClient(&quot;192.168.250.100&quot;, port=1025, plc_family=&quot;iq-r&quot;)
 async with QueuedAsyncSlmpClient(inner) as client:
     a = await read_named(client, [&quot;D100&quot;, &quot;D200:F&quot;])
     b = await read_named(client, [&quot;D300&quot;, &quot;D50.3&quot;])
@@ -1572,8 +1731,8 @@ async with QueuedAsyncSlmpClient(inner) as client:
 </ul>
 <p>They are designed to be directly runnable and syntax-check clean.</p>
 <p>Run them from the repository root:</p>
-<pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --series iqr --frame-type 4e
+<pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
 </code></pre>
 <p>See also:</p>
 <ul>

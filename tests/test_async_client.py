@@ -145,7 +145,7 @@ async def test_async_connect_and_read_model() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
             info = await cli.read_type_name()
             assert info.model == "MOCK-PLC"
             assert info.model_code == 0x1234
@@ -160,7 +160,7 @@ async def test_async_read_devices() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
             val = await cli.read_devices("D100", 1)
             assert val == [1]
     finally:
@@ -170,7 +170,7 @@ async def test_async_read_devices() -> None:
 @pytest.mark.asyncio
 async def test_async_read_devices_xy_requires_explicit_device_family_for_string_addresses() -> None:
     cli = FakeAsyncClient()
-    with pytest.raises(ValueError, match="plc_family"):
+    with pytest.raises(ValueError, match="plc_profile"):
         await cli.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
     assert cli.last_request is None
 
@@ -202,10 +202,10 @@ async def test_async_remote_run_default_clear_mode_does_not_clear_devices() -> N
 
 
 @pytest.mark.asyncio
-async def test_async_remote_stop_force_uses_manual_fixed_mode() -> None:
+async def test_async_remote_stop_uses_manual_fixed_mode() -> None:
     cli = FakeAsyncClient()
 
-    await cli.remote_stop(force=True)
+    await cli.remote_stop()
 
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.REMOTE_STOP)
@@ -225,7 +225,7 @@ def test_async_client_rejects_device_family_alias() -> None:
 
 @pytest.mark.asyncio
 async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
-    cli = FakeAsyncClient(plc_family="iq-f")
+    cli = FakeAsyncClient(plc_profile="melsec:iq-f")
     cli.next_response_data = b"\x10"
 
     values = await cli.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
@@ -237,15 +237,15 @@ async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
     assert cli.last_request[2] == b"\x8f\x00\x00\x00\x9d\x00\x02\x00"
 
 
-def test_async_client_rejects_invalid_plc_family() -> None:
-    with pytest.raises(ValueError, match="Unsupported plc_family"):
-        FakeAsyncClient(plc_family="iqf")
+def test_async_client_rejects_invalid_plc_profile() -> None:
+    with pytest.raises(ValueError, match="Unsupported plc_profile"):
+        FakeAsyncClient(plc_profile="bad-profile")
 
 
-def test_async_client_plc_family_derives_fixed_profile_defaults() -> None:
-    cli = FakeAsyncClient(plc_family="iq-l")
+def test_async_client_plc_profile_derives_fixed_profile_defaults() -> None:
+    cli = FakeAsyncClient(plc_profile="melsec:iq-l")
 
-    assert cli.plc_family == "iq-l"
+    assert cli.plc_profile == "melsec:iq-l"
     assert cli.plc_series == PLCSeries.IQR
     assert cli.frame_type.value == "4e"
     assert cli.device_family == "iq-r"
@@ -259,7 +259,7 @@ async def test_async_concurrency() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_family="iq-r") as cli:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
             # Send 5 requests concurrently
             tasks = [cli.read_devices(f"D{i}", 1) for i in range(5)]
             results = await asyncio.gather(*tasks)
@@ -275,7 +275,7 @@ async def test_async_concurrency() -> None:
 async def test_async_timeout() -> None:
     """Test timeout behavior."""
     # Specify a port that is not listening
-    cli = AsyncSlmpClient("127.0.0.1", 1, plc_family="iq-r", timeout=0.1)
+    cli = AsyncSlmpClient("127.0.0.1", 1, plc_profile="melsec:iq-r", timeout=0.1)
     with pytest.raises(ConnectionError):
         await cli.connect()
 
@@ -285,7 +285,7 @@ async def test_async_udp_read() -> None:
     """Test device reading over UDP (using a simple mock)."""
     # Note: Mocking UDP server is slightly different, but for simplicity
     # we test the client setup and a simulated timeout to verify the UDP path.
-    cli = AsyncSlmpClient("127.0.0.1", 9999, plc_family="iq-r", transport="udp", timeout=0.1)
+    cli = AsyncSlmpClient("127.0.0.1", 9999, plc_profile="melsec:iq-r", transport="udp", timeout=0.1)
     await cli.connect()
     try:
         with pytest.raises(SlmpError, match="UDP communication timeout"):

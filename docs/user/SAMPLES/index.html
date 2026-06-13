@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -844,7 +844,7 @@
 <p>The recommended sample entry points are the two buildable high-level examples in <code>samples/</code>.</p>
 <h2 id="sampleshigh_level_syncpy"><code>samples/high_level_sync.py</code></h2>
 <p>Run:</p>
-<pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --series iqr
+<pre><code class="language-powershell">python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
 </code></pre>
 <p>What it demonstrates:</p>
 <ul>
@@ -872,7 +872,7 @@
 </ul>
 <h2 id="sampleshigh_level_asyncpy"><code>samples/high_level_async.py</code></h2>
 <p>Run:</p>
-<pre><code class="language-powershell">python samples/high_level_async.py --host 192.168.250.100 --port 1025
+<pre><code class="language-powershell">python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
 </code></pre>
 <p>What it demonstrates:</p>
 <ul>
@@ -892,7 +892,7 @@
 </ul>
 <p>Example scenarios inside the sample:</p>
 <ul>
-<li>connect with an explicit frame/profile pair</li>
+<li>connect with an explicit <code>plc_family</code></li>
 <li>read and write typed scalar values</li>
 <li>read large arrays with explicit chunked helpers</li>
 <li>update one flag inside a word</li>

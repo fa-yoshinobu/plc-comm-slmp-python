@@ -31,5 +31,5 @@ This file tracks the remaining tasks and unresolved issues for the SLMP Python l
 
 - [x] **Keep helper naming aligned with the managed stacks**: Preserve the shared high-level contract around `open_and_connect`, `read_typed`, `write_typed`, `write_bit_in_word`, `read_named`, and `poll`.
 - [x] **Review public address helper exposure**: Decide whether the address parse/normalize/format helpers should be elevated into an explicit public utility API so applications do not need private string-parsing copies.
-- [x] **Keep `plc_family` as the only high-level PLC selector**: Raw `frame_type`, access-profile, and range-family knobs should stay low-level only unless new live evidence forces a public exception.
+- [x] **Finalize `PlcProfile` naming alignment**: The standard public route now uses `plc_profile`, derives frame type / PLC series / address handling from that profile, and accepts only canonical saved/displayed values such as `melsec:iq-r`. Short names such as `iq-r`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected.
 - [x] **Preserve semantic atomicity by default**: Do not silently split reads or writes that callers would reasonably treat as one logical value or one logical block. Protocol-defined boundaries are acceptable, but fallback retries that change semantics should be opt-in and explicitly named.

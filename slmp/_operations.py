@@ -437,11 +437,8 @@ def build_remote_run_request(*, force: bool, clear_mode: int) -> OperationReques
     return OperationRequest(Command.REMOTE_RUN, 0x0000, payload)
 
 
-def build_remote_stop_request(*, force: bool) -> OperationRequest:
-    # Remote Stop has no force-mode branch in SH-080931-R p.132; keep the
-    # force argument only for API compatibility.
-    mode = 0x0001
-    return OperationRequest(Command.REMOTE_STOP, 0x0000, mode.to_bytes(2, "little"))
+def build_remote_stop_request() -> OperationRequest:
+    return OperationRequest(Command.REMOTE_STOP, 0x0000, b"\x01\x00")
 
 
 def build_remote_pause_request(*, force: bool) -> OperationRequest:

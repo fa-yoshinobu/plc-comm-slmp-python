@@ -125,8 +125,8 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertEqual(entries["LCS"].point_count, 64)
         self.assertEqual(entries["LCS"].address_range, "LCS0-LCS63")
 
-    def test_read_device_range_catalog_uses_client_plc_family_defaults(self) -> None:
-        client = _FakeSyncClient(plc_family="iq-l")
+    def test_read_device_range_catalog_uses_client_plc_profile_defaults(self) -> None:
+        client = _FakeSyncClient(plc_profile="melsec:iq-l")
         client.next_response_data = _build_word_block(
             260,
             50,
@@ -141,7 +141,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
         catalog = client.read_device_range_catalog()
 
         self.assertEqual(catalog.family, SlmpDeviceRangeFamily.IqL)
-        self.assertEqual(client.plc_family, "iq-l")
+        self.assertEqual(client.plc_profile, "melsec:iq-l")
         self.assertEqual(
             client.last_request,
             (

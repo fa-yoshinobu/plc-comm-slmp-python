@@ -50,7 +50,7 @@ class SlmpClient:
 
     Examples:
         >>> from slmp.client import SlmpClient
-        >>> with SlmpClient("192.168.250.100", 1025, plc_family="iq-r") as client:
+        >>> with SlmpClient("192.168.250.100", 1025, plc_profile="melsec:iq-r") as client:
         ...     values = client.read_devices("D100", 5)
         ...     print(values)
         [0, 0, 0, 0, 0]
@@ -63,7 +63,7 @@ class SlmpClient:
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
-        plc_family: object | None = None,
+        plc_profile: object | None = None,
         plc_series: PLCSeries | str | None = None,
         frame_type: FrameType | str | None = None,
         default_target: SlmpTarget | None = None,
@@ -80,7 +80,7 @@ class SlmpClient:
             port: PLC port number. Defaults to 5000.
             transport: Transport protocol ('tcp' or 'udp'). Defaults to 'tcp'.
             timeout: Socket timeout in seconds. Defaults to 3.0.
-            plc_family: Canonical high-level PLC family. The standard client
+            plc_profile: Canonical high-level PLC profile. The standard client
                 route requires this and derives frame type, access profile,
                 and address/range handling from it.
             default_target: Default target station routing information.
@@ -95,21 +95,21 @@ class SlmpClient:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.timeout = timeout
         if not _allow_manual_profile:
-            if plc_family is None and all(value is None for value in (plc_series, frame_type, device_family)):
+            if plc_profile is None and all(value is None for value in (plc_series, frame_type, device_family)):
                 raise ValueError(
-                    "plc_family is required for the standard SlmpClient route "
+                    "plc_profile is required for the standard SlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if plc_family is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
-                raise ValueError("plc_family is the only supported PLC selector for the standard SlmpClient route.")
+            if plc_profile is not None and any(value is not None for value in (plc_series, frame_type, device_family)):
+                raise ValueError("plc_profile is the only supported PLC selector for the standard SlmpClient route.")
         (
-            self.plc_family,
+            self.plc_profile,
             self.plc_series,
             self.frame_type,
             self.device_family,
             self.device_range_family,
         ) = _resolve_connection_profile(
-            plc_family=plc_family,
+            plc_profile=plc_profile,
             plc_series=plc_series,
             frame_type=frame_type,
             device_family=device_family,
@@ -146,6 +146,7 @@ class SlmpClient:
         sock = socket.socket(socket.AF_INET, sock_type)
         sock.settimeout(self.timeout)
         if self.transport == "tcp":
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.connect((self.host, self.port))
         self._sock = sock
 
@@ -1058,14 +1059,9 @@ class SlmpClient:
         request = _operations.build_remote_run_request(force=force, clear_mode=clear_mode)
         self.request(request.command, request.subcommand, request.payload)
 
-    def remote_stop(self, *, force: bool = False) -> None:
-        """Remote STOP.
-
-        Args:
-            force: Kept for API compatibility. Remote STOP always sends the manual fixed data.
-
-        """
-        request = _operations.build_remote_stop_request(force=force)
+    def remote_stop(self) -> None:
+        """Remote STOP."""
+        request = _operations.build_remote_stop_request()
         self.request(request.command, request.subcommand, request.payload)
 
     def remote_pause(self, *, force: bool = False) -> None:
@@ -1400,7 +1396,7 @@ class SlmpClient:
     def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for this client's explicit PLC family."""
         if self.device_range_family is None:
-            raise ValueError("read_device_range_catalog() requires explicit plc_family on the client.")
+            raise ValueError("read_device_range_catalog() requires explicit plc_profile on the client.")
         return self.read_device_range_catalog_for_family(self.device_range_family)
 
     def read_cpu_operation_state(self) -> CpuOperationState:

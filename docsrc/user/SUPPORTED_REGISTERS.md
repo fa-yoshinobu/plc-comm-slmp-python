@@ -27,8 +27,8 @@ This page is the canonical public register table for the Python high-level API.
 | `LCS` | bit | `LCS10` | decimal |
 | `LCC` | bit | `LCC10` | decimal |
 | `SB` | bit | `SB20` | hexadecimal |
-| `DX` | bit | `DX20` | hexadecimal; not accepted for `plc_family="iq-f"` |
-| `DY` | bit | `DY20` | hexadecimal; not accepted for `plc_family="iq-f"` |
+| `DX` | bit | `DX20` | hexadecimal; not accepted for `plc_profile="melsec:iq-f"` |
+| `DY` | bit | `DY20` | hexadecimal; not accepted for `plc_profile="melsec:iq-f"` |
 
 ## Supported Word Devices
 
@@ -65,12 +65,12 @@ This page is the canonical public register table for the Python high-level API.
 
 - Start with `D` for the first smoke test.
 - `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
-- `DX` and `DY` are rejected before transport when `plc_family="iq-f"`.
-- `X` and `Y` require explicit `plc_family` for communication.
-- device-range catalog reads follow the fixed family rule derived from `plc_family`.
+- `DX` and `DY` are rejected before transport when `plc_profile="melsec:iq-f"`.
+- `X` and `Y` require explicit `plc_profile` for communication.
+- device-range catalog reads follow the fixed range-family rule derived from `plc_profile`.
 - non-`iQ-F` `X` / `Y` text such as `X20` uses hexadecimal numbering.
 - `iQ-F` / FX5 `X` / `Y` text such as `X100` uses manual octal notation and is converted to the binary numeric value before transmission.
-- canonical `plc_family` values are `iq-f`, `iq-r`, `iq-l`, `mx-f`, `mx-r`, `qcpu`, `lcpu`, `qnu`, and `qnudv`.
+- canonical `plc_profile` values are `melsec:iq-f`, `melsec:iq-r`, `melsec:iq-l`, `melsec:mx-f`, `melsec:mx-r`, `melsec:qcpu`, `melsec:lcpu`, `melsec:qnu`, and `melsec:qnudv`.
 - Most other families use decimal numbers.
 - `.bit` is valid only on word devices such as `D50.3`.
 - `LTN`, `LSTN`, `LCN`, and `LZ` default to 32-bit current-value access in the public high-level helpers.

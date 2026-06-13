@@ -5,8 +5,11 @@ All notable changes to this project will be documented in this file.
 ## 0.1.16 - 2026-06-12
 
 ### Changed
-- Aligned Remote STOP with the manual fixed request data `01 00`; `remote_stop(force=True)` remains accepted for API compatibility but sends the same payload as the default STOP.
+- Removed the non-manual Remote STOP `force` argument from sync and async high-level APIs; Remote STOP now exposes only the manual fixed request data `01 00`.
+- Restricted `plc_profile` text parsing to canonical `melsec:...` profile names; short aliases such as `iq-r`, `iqr`, `q`, and `qnudvcpu` are now rejected.
 - Aligned Self Test loopback input validation with the manual: 1..960 bytes, ASCII `0`-`9`/`A`-`F` only.
+- Enabled TCP_NODELAY for sync and async TCP transports to avoid delayed-ACK latency spikes.
+- Added manual point-limit preflight checks for continuous, random, block, memory, and helper-layer requests so oversized requests fail before transport.
 - Republished the Python package metadata with the current README and release workflow badge state.
 - Removed the obsolete duplicate automated-release badge from the packaged long description.
 
@@ -14,7 +17,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
-- Added forced remote STOP support through `remote_stop(force=True)` on both sync and async clients.
 
 ### Changed
 - Removed `retry_mixed_on_error` from sync and async `write_block()`; mixed block-write failures now return the PLC end code unchanged, and only explicit `split_mixed_blocks=True` sends separate block writes.

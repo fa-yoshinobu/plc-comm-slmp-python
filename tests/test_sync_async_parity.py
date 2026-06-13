@@ -321,8 +321,8 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "remote_stop",
-            lambda c: c.remote_stop(force=True),
-            lambda c: c.remote_stop(force=True),
+            lambda c: c.remote_stop(),
+            lambda c: c.remote_stop(),
             [b""],
         ),
         _ParityCase(
@@ -350,15 +350,27 @@ def _parity_cases() -> list[_ParityCase]:
             [],
         ),
         _ParityCase(
-            "remote_password_lock",
-            lambda c: c.remote_password_lock("ABC"),
-            lambda c: c.remote_password_lock("ABC"),
+            "remote_password_lock_iqr",
+            lambda c: c.remote_password_lock("secret1", series=PLCSeries.IQR),
+            lambda c: c.remote_password_lock("secret1", series=PLCSeries.IQR),
             [b""],
         ),
         _ParityCase(
-            "remote_password_unlock",
-            lambda c: c.remote_password_unlock("ABC"),
-            lambda c: c.remote_password_unlock("ABC"),
+            "remote_password_unlock_iqr",
+            lambda c: c.remote_password_unlock("secret1", series=PLCSeries.IQR),
+            lambda c: c.remote_password_unlock("secret1", series=PLCSeries.IQR),
+            [b""],
+        ),
+        _ParityCase(
+            "remote_password_lock_ql",
+            lambda c: c.remote_password_lock("ABCD", series=PLCSeries.QL),
+            lambda c: c.remote_password_lock("ABCD", series=PLCSeries.QL),
+            [b""],
+        ),
+        _ParityCase(
+            "remote_password_unlock_ql",
+            lambda c: c.remote_password_unlock("ABCD", series=PLCSeries.QL),
+            lambda c: c.remote_password_unlock("ABCD", series=PLCSeries.QL),
             [b""],
         ),
         _ParityCase(
@@ -457,7 +469,7 @@ def _parity_cases() -> list[_ParityCase]:
 class TestSyncAsyncRequestFrameParity(unittest.IsolatedAsyncioTestCase):
     async def test_sync_async_request_frames_match_for_representative_commands(self) -> None:
         profiles: Sequence[tuple[str, dict[str, object]]] = (
-            ("iqr_4e", {"plc_family": "iq-r"}),
+            ("iqr_4e", {"plc_profile": "melsec:iq-r"}),
             (
                 "ql_3e",
                 {

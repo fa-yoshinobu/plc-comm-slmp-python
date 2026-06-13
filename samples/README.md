@@ -9,7 +9,7 @@ This folder contains runnable examples for the recommended high-level helper API
 ### `high_level_sync.py`
 
 ```powershell
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 ```
 
 Included examples:
@@ -23,7 +23,7 @@ Included examples:
 ### `high_level_async.py`
 
 ```powershell
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-family iq-r
+python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 ```
 
 Included examples:

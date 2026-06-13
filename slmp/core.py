@@ -109,60 +109,58 @@ _DEVICE_FAMILIES = frozenset(
         "qnudv",
     }
 )
-_PLC_FAMILIES = frozenset(
+_PLC_PROFILES = frozenset(
     {
-        "iq-f",
-        "iq-r",
-        "iq-l",
-        "mx-f",
-        "mx-r",
-        "qcpu",
-        "lcpu",
-        "qnu",
-        "qnudv",
+        "melsec:iq-f",
+        "melsec:iq-r",
+        "melsec:iq-l",
+        "melsec:mx-f",
+        "melsec:mx-r",
+        "melsec:qcpu",
+        "melsec:lcpu",
+        "melsec:qnu",
+        "melsec:qnudv",
     }
 )
-
-
 @dataclass(frozen=True)
-class _PlcFamilyDefaults:
+class _PlcProfileDefaults:
     frame_type: FrameType
     plc_series: PLCSeries
     device_family: str
     range_family: str
 
 
-_PLC_FAMILY_DEFAULTS: dict[str, _PlcFamilyDefaults] = {
-    "iq-f": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "iq-f", "iq-f"),
-    "iq-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
-    "iq-l": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-l"),
-    "mx-f": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-f", "mx-f"),
-    "mx-r": _PlcFamilyDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-r", "mx-r"),
-    "qcpu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qcpu", "qcpu"),
-    "lcpu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "lcpu", "lcpu"),
-    "qnu": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnu", "qnu"),
-    "qnudv": _PlcFamilyDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnudv", "qnudv"),
+_PLC_PROFILE_DEFAULTS: dict[str, _PlcProfileDefaults] = {
+    "melsec:iq-f": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "iq-f", "iq-f"),
+    "melsec:iq-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-r"),
+    "melsec:iq-l": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "iq-r", "iq-l"),
+    "melsec:mx-f": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-f", "mx-f"),
+    "melsec:mx-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "mx-r", "mx-r"),
+    "melsec:qcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qcpu", "qcpu"),
+    "melsec:lcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "lcpu", "lcpu"),
+    "melsec:qnu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnu", "qnu"),
+    "melsec:qnudv": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "qnudv", "qnudv"),
 }
 
 
-def _normalize_plc_family_hint(family: object | None) -> str | None:
+def _normalize_plc_profile_hint(family: object | None) -> str | None:
     if family is None:
         return None
     raw = getattr(family, "value", family)
     normalized = str(raw).strip().lower()
     if not normalized:
         return None
-    if normalized in _PLC_FAMILIES:
+    if normalized in _PLC_PROFILES:
         return normalized
-    supported = ", ".join(sorted(_PLC_FAMILIES))
-    raise ValueError(f"Unsupported plc_family {family!r}. Supported families: {supported}")
+    supported = ", ".join(sorted(_PLC_PROFILES))
+    raise ValueError(f"Unsupported plc_profile {family!r}. Supported profiles: {supported}")
 
 
-def _resolve_plc_family_defaults(family: object | None) -> _PlcFamilyDefaults | None:
-    normalized = _normalize_plc_family_hint(family)
+def _resolve_plc_profile_defaults(family: object | None) -> _PlcProfileDefaults | None:
+    normalized = _normalize_plc_profile_hint(family)
     if normalized is None:
         return None
-    return _PLC_FAMILY_DEFAULTS[normalized]
+    return _PLC_PROFILE_DEFAULTS[normalized]
 
 
 def _normalize_device_family_hint(family: object | None) -> str | None:
@@ -180,21 +178,21 @@ def _normalize_device_family_hint(family: object | None) -> str | None:
 
 def _resolve_connection_profile(
     *,
-    plc_family: object | None,
+    plc_profile: object | None,
     plc_series: PLCSeries | str | None,
     frame_type: FrameType | str | None,
     device_family: object | None,
 ) -> tuple[str | None, PLCSeries, FrameType, str | None, str | None]:
-    defaults = _resolve_plc_family_defaults(plc_family)
+    defaults = _resolve_plc_profile_defaults(plc_profile)
     if defaults is not None:
         if plc_series is not None or frame_type is not None or device_family is not None:
             raise ValueError(
-                "plc_family already determines frame_type, access_profile, and address/range handling. "
+                "plc_profile already determines frame_type, access_profile, and address/range handling. "
                 "Do not also pass plc_series, frame_type, or device_family."
             )
-        normalized_plc_family = _normalize_plc_family_hint(plc_family)
+        normalized_plc_profile = _normalize_plc_profile_hint(plc_profile)
         return (
-            normalized_plc_family,
+            normalized_plc_profile,
             defaults.plc_series,
             defaults.frame_type,
             defaults.device_family,
@@ -219,7 +217,7 @@ def _resolve_device_radix(code: str, family: object | None = None) -> int:
 def _ensure_device_supported_for_family(code: str, family: object | None = None) -> None:
     normalized_family = _normalize_device_family_hint(family)
     if normalized_family == "iq-f" and code in {"DX", "DY"}:
-        raise SlmpUnsupportedDeviceError(f"SLMP device code '{code}' is not supported for plc_family 'iq-f'.")
+        raise SlmpUnsupportedDeviceError(f"SLMP device code '{code}' is not supported for plc_profile 'melsec:iq-f'.")
 
 
 def _apply_device_family_hint(value: DeviceRef, family: object | None = None) -> DeviceRef:
@@ -248,8 +246,8 @@ def _require_explicit_device_family_for_xy(
     if ref.code not in _IQF_OCTAL_DEVICE_CODES:
         return ref
     raise ValueError(
-        "X/Y string addresses require explicit plc_family. "
-        "Use plc_family='iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F family, "
+        "X/Y string addresses require explicit plc_profile. "
+        "Use plc_profile='melsec:iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F profile, "
         "or pass a numeric DeviceRef."
     )
 
@@ -1382,9 +1380,9 @@ def _label_array_data_bytes(unit_specification: int, array_data_length: int) -> 
 def _encode_remote_password_payload(password: str, *, series: PLCSeries) -> bytes:
     raw = password.encode("ascii")
     if series == PLCSeries.IQR:
-        if len(raw) > 32:
-            raise ValueError("iQ-R password text must be <= 32 bytes")
+        if len(raw) < 6 or len(raw) > 32:
+            raise ValueError("iQ-R password text must be 6..32 bytes")
         return len(raw).to_bytes(2, "little") + raw
-    if len(raw) > 8:
-        raise ValueError("Q/L password text must be <= 8 bytes")
-    return raw.ljust(8, b"\x00")
+    if len(raw) != 4:
+        raise ValueError("Q/L password text must be exactly 4 bytes")
+    return len(raw).to_bytes(2, "little") + raw

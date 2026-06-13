@@ -39,20 +39,20 @@ The same rule applies to `B`, `X`, and `Y`.
 | `Y` | explicit family required: non-`iQ-F` text = hexadecimal, `iQ-F` text = octal | `Y20` / `Y100` |
 
 For communication, this library does not auto-detect the PLC family for `X` / `Y`.
-Set canonical `plc_family` explicitly.
+Set canonical `plc_profile` explicitly.
 
-The device-range catalog follows the fixed family rule derived from `plc_family`.
-Only these `plc_family` values are accepted:
+The device-range catalog follows the fixed range-family rule derived from `plc_profile`.
+Only these `plc_profile` values are accepted:
 
-- `iq-f`
-- `iq-r`
-- `iq-l`
-- `mx-f`
-- `mx-r`
-- `qcpu`
-- `lcpu`
-- `qnu`
-- `qnudv`
+- `melsec:iq-f`
+- `melsec:iq-r`
+- `melsec:iq-l`
+- `melsec:mx-f`
+- `melsec:mx-r`
+- `melsec:qcpu`
+- `melsec:lcpu`
+- `melsec:qnu`
+- `melsec:qnudv`
 
 - non-`iQ-F`: text such as `X20` / `Y20` is interpreted as hexadecimal
 - `iQ-F` / FX5: text such as `X100` / `Y100` is interpreted as manual octal notation
@@ -118,8 +118,8 @@ Commonly addressed through `read_named`, `write_named`, `read_typed`, and `write
 | V | Edge relay | Decimal | |
 | B | Link relay | Hex | |
 | SB | Link special relay | Hex | |
-| DX | Direct input | Hex | rejected for `plc_family="iq-f"` |
-| DY | Direct output | Hex | rejected for `plc_family="iq-f"` |
+| DX | Direct input | Hex | rejected for `plc_profile="melsec:iq-f"` |
+| DY | Direct output | Hex | rejected for `plc_profile="melsec:iq-f"` |
 | TS | Timer contact | Decimal | |
 | TC | Timer coil | Decimal | |
 | STS | Retentive timer contact | Decimal | |
@@ -251,7 +251,7 @@ By default, requests target the directly connected PLC (own station). To route t
 from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
 # Constructor default: all requests go to Network 1, Station 1
-client = SlmpClient("192.168.250.100", plc_family="iq-r", default_target=SlmpTarget(network=0x01, station=0x01))
+client = SlmpClient("192.168.250.100", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0x01, station=0x01))
 
 # Per-call override
 target = SlmpTarget(network=0x01, station=0x01)
