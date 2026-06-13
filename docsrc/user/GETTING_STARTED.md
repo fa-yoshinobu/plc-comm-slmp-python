@@ -1,88 +1,107 @@
-# Getting Started
+# Getting started
 
-## Start Here
+## Start here
 
-Use this package when you want the shortest Python path to Mitsubishi SLMP communication through the public high-level API.
+Use this page to make your first safe SLMP read and write with the high-level API. Start with one `D` register before trying routed devices, module buffers, or long timer families.
 
-Recommended first path:
+## Prerequisites
 
-1. Install `slmp-connect-python`.
-2. Set canonical `plc_profile`.
-3. Let the library derive the fixed frame type, access profile, and range rules.
-4. Open one connection with `open_and_connect`.
-5. Read one safe `D` word.
-6. Write only to a known-safe test word or bit after the first read is stable.
+| Requirement | Value |
+| --- | --- |
+| Python | `>=3.10` |
+| PLC host | `192.168.250.100` |
+| TCP port | `1025` |
+| First profile | `melsec:iq-r` |
+| First read target | `D100` |
 
-## First PLC Registers To Try
+## Install
 
-Start with these first:
+```bash
+pip install slmp-connect-python
+```
 
-- `D100`
-- `D200:F`
-- `D300:L`
-- `D50.3`
-- `M1000`
+## Choose your PLC profile
 
-Do not start with these:
-
-- module/extension routing
-- large chunked reads
-- module-buffer families such as `G` and `HG`
-
-## Minimal Connection Pattern
+`plc_profile` in `SlmpConnectionOptions` is the only required PLC selector for the public helper layer. The library derives the frame type and access mode from it.
 
 ```python
-from slmp import SlmpConnectionOptions
-
 options = SlmpConnectionOptions(
     host="192.168.250.100",
-    plc_profile="melsec:iq-f",
     port=1025,
+    plc_profile="melsec:iq-r",
 )
 ```
 
-These settings mean different things:
+## First read
 
-- `plc_profile`: the only high-level PLC selector for application code
-- derived `frame_type`: fixed by `plc_profile`
-- derived `access_profile`: fixed by `plc_profile`
-- derived string/range rules: fixed by `plc_profile`
+```python
+import asyncio
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed
 
-Current fixed mapping:
 
-| `plc_profile` | `frame_type` | `access_profile` | `X` / `Y` text | range family |
-| --- | --- | --- | --- | --- |
-| `melsec:iq-f` | `3e` | `ql` | octal | `iq-f` |
-| `melsec:iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` |
-| `melsec:iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` |
-| `melsec:mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` |
-| `melsec:mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` |
-| `melsec:qcpu` | `3e` | `ql` | hexadecimal | `qcpu` |
-| `melsec:lcpu` | `3e` | `ql` | hexadecimal | `lcpu` |
-| `melsec:qnu` | `3e` | `ql` | hexadecimal | `qnu` |
-| `melsec:qnudv` | `3e` | `ql` | hexadecimal | `qnudv` |
+async def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    async with await open_and_connect(options) as client:
+        value = await read_typed(client, "D100", "U")
+        print(f"D100={value}")
 
-This library does not auto-detect the public helper profile.
-Short aliases are rejected.
 
-## First Successful Run
+asyncio.run(main())
+```
 
-Recommended order:
+Expected output:
 
-1. `read_typed(client, "D100", "U")`
-2. `write_typed(client, "D100", "U", value)` only on a safe test word
-3. `read_named(client, ["D100", "D200:F", "D50.3"])`
+```text
+D100=0
+```
 
-## Common Beginner Checks
+Your value may be different because it is read from your PLC.
 
-If the first read fails, check these in order:
+## First write
 
-- correct host and port
-- correct `plc_profile`
-- start with `D` instead of a routed or module-buffer family
+Only write to an address that your PLC program reserves for testing.
 
-## Next Pages
+```python
+import asyncio
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_typed
 
-- [Supported PLC Registers](./SUPPORTED_REGISTERS.md)
-- [Latest Communication Verification](./LATEST_COMMUNICATION_VERIFICATION.md)
-- [User Guide](./USER_GUIDE.md)
+
+async def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    async with await open_and_connect(options) as client:
+        await write_typed(client, "D100", "U", 42)
+        value = await read_typed(client, "D100", "U")
+        print(f"D100={value}")
+
+
+asyncio.run(main())
+```
+
+Expected output:
+
+```text
+D100=42
+```
+
+## Confirm success
+
+1. Confirm your PLC accepts a TCP connection to `192.168.250.100:1025`.
+2. Confirm `plc_profile` matches your PLC family.
+3. Confirm the first read uses a simple word register such as `D100`.
+4. Confirm writes use only a known-safe test address.
+5. Confirm the value read back matches the test value you wrote.
+
+## If it does not work
+
+| Symptom | Check |
+| --- | --- |
+| The PLC returns an end code error | `plc_profile` must match the actual PLC hardware. A wrong profile can cause end code errors. |
+| The connection uses the wrong frame | Do not set `frame_type` manually. It is derived from `plc_profile`. |
+| The first read fails on an advanced family | Start with `D` word reads. Do not start with `G`, `HG`, `LTN`, or `LCN`. |
+
+## Next pages
+
+| Page | Link |
+| --- | --- |
+| Usage guide | [USAGE_GUIDE.md](USAGE_GUIDE.md) |
+| Supported registers | [SUPPORTED_REGISTERS.md](SUPPORTED_REGISTERS.md) |

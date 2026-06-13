@@ -1,14 +1,16 @@
 # SLMP Connect Python
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/LICENSE)
 
-Modern Python library for Mitsubishi PLC communication through a high-level helper-first public API.
+Python library for Mitsubishi SLMP (Binary 3E/4E) PLC communication.
 
-## Start Here
+## Start here
 
 - [Getting Started](user/GETTING_STARTED.md)
+- [Usage Guide](user/USAGE_GUIDE.md)
 - [Supported PLC Registers](user/SUPPORTED_REGISTERS.md)
+- [PLC Profiles](user/PROFILES.md)
+- [Gotchas](user/GOTCHAS.md)
 - [Latest Communication Verification](user/LATEST_COMMUNICATION_VERIFICATION.md)
-- [User Guide](user/USER_GUIDE.md)
 - [API Docs](api/client.md)

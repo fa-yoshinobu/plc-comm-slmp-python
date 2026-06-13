@@ -250,11 +250,12 @@ By default, requests target the directly connected PLC (own station). To route t
 ```python
 from slmp import SlmpClient, SlmpTarget, ModuleIONo
 
-# Constructor default: all requests go to Network 1, Station 1.
+# Constructor default: all requests go to Network 1, Station 1
+client = SlmpClient("192.168.250.100", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0x01, station=0x01))
+
+# Per-call override
 target = SlmpTarget(network=0x01, station=0x01)
-with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r", default_target=target) as client:
-    values = client.read_devices("D100", 10, bit_unit=False)
-    print(values)
+values = client.read_words("D100", 10, target=target)
 ```
 
 `SlmpTarget` fields:
@@ -289,6 +290,6 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 
 ## Related Documents
 
-- [Usage guide](USAGE_GUIDE.md)
-- [Supported registers](SUPPORTED_REGISTERS.md)
-
+- [User Guide](USER_GUIDE.md)
+- Maintainer-only protocol and testing notes are kept in the source checkout
+  under `internal_docs/maintainer/`.

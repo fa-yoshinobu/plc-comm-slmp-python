@@ -22,6 +22,8 @@ from slmp.async_client import AsyncSlmpClient
 
 async def read_one_plc(host: str, port: int) -> dict[str, object]:
     """Connect to a single PLC and return a snapshot of several devices."""
+    # The standard client route requires plc_profile so frame and address rules
+    # are derived from one explicit PLC family.
     async with AsyncSlmpClient(host, port, plc_profile="melsec:iq-r") as cli:
         info = await cli.read_type_name()
         d100 = await cli.read_devices("D100", 1)
@@ -32,18 +34,18 @@ async def read_one_plc(host: str, port: int) -> dict[str, object]:
 async def main() -> None:
     """Demonstrate reading from multiple PLCs concurrently."""
     # --- Target configuration ------------------------------------------------
-    # Edit these to match your environment.  The script accepts an optional
+    # Edit these to match your environment. The script accepts an optional
     # list of HOST:PORT pairs on the command line:
     #   python samples/08_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
     targets: list[tuple[str, int]] = []
 
     for arg in sys.argv[1:]:
         host, _, port_str = arg.partition(":")
-        targets.append((host.strip(), int(port_str) if port_str else 5000))
+        targets.append((host.strip(), int(port_str) if port_str else 1025))
 
     if not targets:
-        # Default: two local simulator instances on different ports
-        targets = [("127.0.0.1", 5000), ("127.0.0.1", 5001)]
+        # Default: one standard TCP example target.
+        targets = [("192.168.250.100", 1025)]
 
     # --- Read all PLCs concurrently ------------------------------------------
     # Each read_one_plc() call opens its OWN connection.  asyncio.gather lets
