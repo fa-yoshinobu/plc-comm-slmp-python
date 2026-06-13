@@ -70,6 +70,7 @@ class SlmpClient(_StandardSlmpClient):
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
         device_family: object | None = None,
+        _allow_manual_profile: bool = True,
     ) -> None:
         super().__init__(
             host,
@@ -1635,6 +1636,7 @@ def _probe_target_model_and_series(
                 plc_series=candidate,
                 default_target=target,
                 monitoring_timer=monitoring_timer,
+                _allow_manual_profile=True,
             ) as client:
                 info = client.read_type_name()
         except Exception:  # noqa: BLE001
@@ -1723,6 +1725,7 @@ def _probe_device_read_with_frame_and_series(
                 frame_type=frame_type,
                 default_target=target,
                 monitoring_timer=monitoring_timer,
+                _allow_manual_profile=True,
             ) as client:
                 values = client.read_devices(device, points, bit_unit=bit_unit, series=series)
         except Exception as exc:  # noqa: BLE001
@@ -1754,6 +1757,7 @@ def _read_type_name_with_frame_and_series(
         frame_type=frame_type,
         default_target=target,
         monitoring_timer=monitoring_timer,
+        _allow_manual_profile=True,
     ) as client:
         return client.read_type_name()
 
@@ -2683,6 +2687,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
                 default_target=target,
                 monitoring_timer=args.monitoring_timer,
                 trace_hook=_trace_hook,
+                _allow_manual_profile=True,
             ) as client:
                 sm400_series, sm400_values = _probe_sm400_series(client)
                 resolved_access_profile = sm400_series
@@ -2963,6 +2968,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
         default_target=target,
         monitoring_timer=args.monitoring_timer,
         trace_hook=trace_hook,
+        _allow_manual_profile=True,
     ) as cli:
         info = cli.read_type_name()
         model = info.model or "unknown_target"
@@ -3170,6 +3176,7 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
         default_target=target,
         monitoring_timer=args.monitoring_timer,
         trace_hook=_trace_hook,
+        _allow_manual_profile=True,
     ) as cli:
         info = cli.read_type_name()
         model = info.model or "unknown_target"
@@ -3588,6 +3595,7 @@ def device_range_probe_main(argv: Sequence[str] | None = None) -> int:
         plc_series=args.series,
         default_target=target,
         monitoring_timer=args.monitoring_timer,
+        _allow_manual_profile=True,
     ) as client:
         for spec in specs:
             try:
@@ -3793,6 +3801,7 @@ def register_boundary_probe_main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         plc_series=args.series,
         default_target=target,
+        _allow_manual_profile=True,
     ) as client:
         for spec in specs:
             next_device = _increment_device_text(spec.edge_device)
@@ -4078,6 +4087,7 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
                 default_target=current_target,
                 monitoring_timer=args.monitoring_timer,
                 trace_hook=trace_hook,
+                _allow_manual_profile=True,
             ) as cli:
                 model = "unknown_target"
                 try:
@@ -4236,6 +4246,7 @@ def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         plc_series=args.series,
         default_target=target,
+        _allow_manual_profile=True,
     ) as cli:
         for dev in ("LSTC0", "LSTS0", "LTC0", "LTS0"):
             try:
@@ -4349,6 +4360,7 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
         plc_series=args.series,
         default_target=target,
         monitoring_timer=args.monitoring_timer,
+        _allow_manual_profile=True,
     ) as cli:
         array_read_results: list[LabelArrayReadResult] | None = None
         try:
@@ -4646,6 +4658,7 @@ def manual_write_verification_main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         plc_series=args.series,
         default_target=target,
+        _allow_manual_profile=True,
     ) as cli:
         for index, row in enumerate(selected, start=1):
             item = f"{row.device_code} {row.device}"
@@ -4807,6 +4820,7 @@ def manual_label_verification_main(argv: Sequence[str] | None = None) -> int:
         plc_series=args.series,
         default_target=target,
         monitoring_timer=args.monitoring_timer,
+        _allow_manual_profile=True,
     ) as client:
         for label in random_labels:
             processed += 1
@@ -5022,6 +5036,7 @@ def read_soak_main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         plc_series=args.series,
         default_target=target,
+        _allow_manual_profile=True,
     ) as cli:
         for iteration in range(args.rounds):
             device = (
@@ -5143,6 +5158,7 @@ def mixed_read_load_main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         plc_series=args.series,
         default_target=target,
+        _allow_manual_profile=True,
     ) as cli:
         for cycle in range(args.rounds):
             base_offset = cycle % args.rotate_span if args.rotate_span > 0 else 0
@@ -5320,6 +5336,7 @@ def tcp_concurrency_main(argv: Sequence[str] | None = None) -> int:
                     timeout=args.timeout,
                     plc_series=args.series,
                     default_target=target,
+                    _allow_manual_profile=True,
                 ) as cli:
                     try:
                         _barrier.wait(timeout=max(args.timeout * 4.0, 5.0))

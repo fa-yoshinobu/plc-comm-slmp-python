@@ -882,6 +882,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -894,6 +895,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 type(self).init_calls.append((self.frame_type.value, self.plc_series.value))
 
@@ -957,6 +959,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -969,6 +972,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 type(self).init_calls.append((self.frame_type.value, self.plc_series.value))
 
@@ -1050,6 +1054,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -1062,6 +1067,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
 
             def connect(self) -> None:
@@ -1125,6 +1131,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -1137,6 +1144,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
 
             def connect(self) -> None:
@@ -1194,6 +1202,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -1206,6 +1215,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 type(self).init_calls.append((self.frame_type.value, self.plc_series.value))
 
@@ -1288,6 +1298,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -1299,6 +1310,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 type(self).init_monitoring_timers.append(monitoring_timer)
 
@@ -1419,6 +1431,7 @@ class TestCli(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -1430,6 +1443,7 @@ class TestCli(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 type(self).init_monitoring_timers.append(monitoring_timer)
 
@@ -2424,6 +2438,7 @@ class TestDeviceApi(unittest.TestCase):
                 monitoring_timer: int = 0x0010,
                 raise_on_error: bool = True,
                 trace_hook=None,
+                _allow_manual_profile: bool = True,
             ) -> None:
                 super().__init__(
                     host,
@@ -2436,6 +2451,7 @@ class TestDeviceApi(unittest.TestCase):
                     monitoring_timer=monitoring_timer,
                     raise_on_error=raise_on_error,
                     trace_hook=trace_hook,
+                    _allow_manual_profile=_allow_manual_profile,
                 )
                 assert default_target is not None
                 type(self).init_calls.append(

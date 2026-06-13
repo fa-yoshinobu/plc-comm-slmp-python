@@ -103,6 +103,8 @@ class SlmpConnectionOptions:
     device_range_family: str = field(init=False)
 
     def __post_init__(self) -> None:
+        if self.plc_profile is None:
+            raise ValueError("plc_profile is required. Use an explicit canonical PLC profile such as 'melsec:iq-r'.")
         (
             normalized_plc_profile,
             plc_series,
