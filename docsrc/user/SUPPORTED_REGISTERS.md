@@ -1,87 +1,80 @@
-# Supported PLC Registers
+# Supported registers
 
-This page is the canonical public register table for the Python high-level API.
+This table lists the device families accepted by the current parser and explains how the high-level helper layer treats them.
 
-## Supported Bit Devices
+## Bit device families
 
-| Family | Kind | Example | Numbering |
+| Family | Unit | Numbering | Notes |
 | --- | --- | --- | --- |
-| `SM` | bit | `SM400` | decimal |
-| `X` | bit | `X20` / `X100` | explicit family required; non-`iQ-F` text is hexadecimal, `iQ-F` text is octal |
-| `Y` | bit | `Y20` / `Y100` | explicit family required; non-`iQ-F` text is hexadecimal, `iQ-F` text is octal |
-| `M` | bit | `M1000` | decimal |
-| `L` | bit | `L100` | decimal |
-| `F` | bit | `F10` | decimal |
-| `V` | bit | `V10` | decimal |
-| `B` | bit | `B20` | hexadecimal |
-| `TS` | bit | `TS10` | decimal |
-| `TC` | bit | `TC10` | decimal |
-| `LTS` | bit | `LTS10` | decimal |
-| `LTC` | bit | `LTC10` | decimal |
-| `STS` | bit | `STS10` | decimal |
-| `STC` | bit | `STC10` | decimal |
-| `LSTS` | bit | `LSTS10` | decimal |
-| `LSTC` | bit | `LSTC10` | decimal |
-| `CS` | bit | `CS10` | decimal |
-| `CC` | bit | `CC10` | decimal |
-| `LCS` | bit | `LCS10` | decimal |
-| `LCC` | bit | `LCC10` | decimal |
-| `SB` | bit | `SB20` | hexadecimal |
-| `DX` | bit | `DX20` | hexadecimal; not accepted for `plc_profile="melsec:iq-f"` |
-| `DY` | bit | `DY20` | hexadecimal; not accepted for `plc_profile="melsec:iq-f"` |
+| `SM` | Bit | Decimal | Special relay. |
+| `X` | Bit | Profile-dependent | Octal text for `melsec:iq-f`; hexadecimal text for every other profile. |
+| `Y` | Bit | Profile-dependent | Octal text for `melsec:iq-f`; hexadecimal text for every other profile. |
+| `M` | Bit | Decimal | Internal relay. |
+| `L` | Bit | Decimal | Latch relay. |
+| `F` | Bit | Decimal | Annunciator. |
+| `V` | Bit | Decimal | Edge relay. |
+| `B` | Bit | Hexadecimal | Link relay. |
+| `TS` | Bit | Decimal | Timer contact. |
+| `TC` | Bit | Decimal | Timer coil. |
+| `LTS` | Bit | Decimal | Long timer contact. |
+| `LTC` | Bit | Decimal | Long timer coil. |
+| `STS` | Bit | Decimal | Retentive timer contact. |
+| `STC` | Bit | Decimal | Retentive timer coil. |
+| `LSTS` | Bit | Decimal | Long retentive timer contact. |
+| `LSTC` | Bit | Decimal | Long retentive timer coil. |
+| `CS` | Bit | Decimal | Counter contact. |
+| `CC` | Bit | Decimal | Counter coil. |
+| `LCS` | Bit | Decimal | Long counter contact. |
+| `LCC` | Bit | Decimal | Long counter coil. |
+| `SB` | Bit | Hexadecimal | Link special relay. |
+| `DX` | Bit | Hexadecimal | Direct input; not valid for `melsec:iq-f`. |
+| `DY` | Bit | Hexadecimal | Direct output; not valid for `melsec:iq-f`. |
 
-## Supported Word Devices
+## Word device families
 
-| Family | Kind | Example | Numbering |
+| Family | Unit | Numbering | Notes |
 | --- | --- | --- | --- |
-| `SD` | word | `SD100` | decimal |
-| `D` | word | `D100` | decimal |
-| `W` | word | `W20` | hexadecimal |
-| `TN` | word | `TN10` | decimal |
-| `LTN` | word | `LTN10` | decimal |
-| `STN` | word | `STN10` | decimal |
-| `LSTN` | word | `LSTN10` | decimal |
-| `CN` | word | `CN10` | decimal |
-| `LCN` | word | `LCN10` | decimal |
-| `SW` | word | `SW20` | hexadecimal |
-| `Z` | word | `Z10` | decimal |
-| `LZ` | word | `LZ10` | decimal |
-| `R` | word | `R100` | decimal |
-| `ZR` | word | `ZR100` | decimal |
-| `RD` | word | `RD100` | decimal |
+| `SD` | Word | Decimal | Special register. |
+| `D` | Word | Decimal | Data register and recommended first read family. |
+| `W` | Word | Hexadecimal | Link register. |
+| `TN` | Word | Decimal | Timer current value. |
+| `LTN` | Word | Decimal | Long timer current value; use 32-bit `:D` or `:L` intent. |
+| `STN` | Word | Decimal | Retentive timer current value. |
+| `LSTN` | Word | Decimal | Long retentive timer current value; use 32-bit `:D` or `:L` intent. |
+| `CN` | Word | Decimal | Counter current value. |
+| `LCN` | Word | Decimal | Long counter current value; use 32-bit `:D` or `:L` intent. |
+| `SW` | Word | Hexadecimal | Link special register. |
+| `Z` | Word | Decimal | Index register. |
+| `LZ` | Word | Decimal | Long index register; use 32-bit `:D` or `:L` intent. |
+| `R` | Word | Decimal | File register. |
+| `ZR` | Word | Decimal | Extended file register. |
+| `RD` | Word | Decimal | Refresh data register. |
+| `G` | Word | Decimal | Module buffer family; use raw or extended-device API only. |
+| `HG` | Word | Decimal | Extended module buffer family; use raw or extended-device API only. |
 
-## High-Level Views
+## Type suffixes
 
-| Form | Example | Meaning |
-| --- | --- | --- |
-| plain word | `D100` | unsigned 16-bit word |
-| signed view | `D100:S` | signed 16-bit value |
-| dword view | `D200:D` | unsigned 32-bit value |
-| long view | `D300:L` | signed 32-bit value |
-| float view | `D200:F` | float32 value |
-| bit in word | `D50.3` | one bit inside a word |
+| Suffix | Example | Meaning | Words |
+| --- | --- | --- | --- |
+| Plain | `D100` | Unsigned 16-bit value for normal word devices | 1 |
+| `:U` | `D100:U` | Unsigned 16-bit value | 1 |
+| `:S` | `D100:S` | Signed 16-bit value | 1 |
+| `:D` | `D200:D` | Unsigned 32-bit value | 2 |
+| `:L` | `D202:L` | Signed 32-bit value | 2 |
+| `:F` | `D204:F` | IEEE-754 float32 value | 2 |
+| `.n` | `D50.3` | One bit inside a word device | 1 word read-modify-write |
 
-## Addressing Notes
+## Addressing notes
 
-- Start with `D` for the first smoke test.
-- `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal device numbers.
-- `DX` and `DY` are rejected before transport when `plc_profile="melsec:iq-f"`.
-- `X` and `Y` require explicit `plc_profile` for communication.
-- device-range catalog reads follow the fixed range-family rule derived from `plc_profile`.
-- non-`iQ-F` `X` / `Y` text such as `X20` uses hexadecimal numbering.
-- `iQ-F` / FX5 `X` / `Y` text such as `X100` uses manual octal notation and is converted to the binary numeric value before transmission.
-- canonical `plc_profile` values are `melsec:iq-f`, `melsec:iq-r`, `melsec:iq-l`, `melsec:mx-f`, `melsec:mx-r`, `melsec:qcpu`, `melsec:lcpu`, `melsec:qnu`, and `melsec:qnudv`.
-- Most other families use decimal numbers.
-- `.bit` is valid only on word devices such as `D50.3`.
-- `LTN`, `LSTN`, `LCN`, and `LZ` default to 32-bit current-value access in the public high-level helpers.
-- `LCN` current-value reads and writes use random dword access in the high-level helpers.
-- `LTS`, `LTC`, `LSTS`, and `LSTC` state reads use the long timer 4-word decode helpers.
-- `LCS` and `LCC` state reads use direct bit read.
-- High-level state writes for `LTS`/`LTC`/`LSTS`/`LSTC`/`LCS`/`LCC` use random bit write (`0x1402`).
+| Topic | Rule |
+| --- | --- |
+| Long current families | `LTN`, `LSTN`, `LCN`, and `LZ` are 32-bit families. Do not request 16-bit word views; use `:D` or `:L`. |
+| iQ-F direct devices | `DX` and `DY` are not valid for `melsec:iq-f`. |
+| Module buffers | `G` and `HG` are raw or extended-device API families, not public high-level helper families. |
+| `X`/`Y` numbering | `melsec:iq-f` uses octal text for `X` and `Y`; every other profile uses hexadecimal text. |
+| First smoke test | Start with a simple `D` word read such as `D100`. |
+| Bit-in-word notation | `.n` is valid only on word devices and uses one hexadecimal bit index from `0` to `F`. |
 
-## Not Currently in the Public Surface
+## Profiles
 
-- `G`
-- `HG`
-
-If a family is not listed above, do not treat it as publicly supported by the current high-level API.
+See [PROFILES.md](PROFILES.md) for the canonical `plc_profile` strings and profile-specific cautions.

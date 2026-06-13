@@ -1,58 +1,31 @@
-[![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://fa-yoshinobu.github.io/samples/)
+# Samples
 
-# SLMP Python Samples
+This folder contains runnable examples for the public high-level helpers and a few protocol-focused lower-level demonstrations.
 
-This folder contains runnable examples for the recommended high-level helper APIs.
+## How to run
 
-## Recommended Samples
-
-### `high_level_sync.py`
-
-```powershell
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
-```
-
-Included examples:
-
-- typed scalar reads and writes
-- explicit `single_request` and `chunked` contiguous reads
-- bit-in-word updates
-- mixed `read_named_sync` / `write_named_sync`
-- periodic polling
-
-### `high_level_async.py`
+Run samples from the repository root. Use TCP port `1025` for the standard getting-started target and UDP port `1035` when you explicitly choose UDP.
 
 ```powershell
 python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
+python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
+python samples/08_async_sample.py 192.168.250.100:1025
 ```
 
-Included examples:
+## Sample index
 
-- `SlmpConnectionOptions` plus `open_and_connect`
-- typed scalar reads and writes
-- explicit `single_request` and `chunked` contiguous reads
-- bit-in-word updates
-- mixed `read_named` / `write_named`
-- `poll`
-- shared queued connection usage
+| File | Focus | API level |
+| --- | --- | --- |
+| `high_level_async.py` | Async connection, typed reads and writes, named snapshots, polling, queued shared connection use. | High-level helpers |
+| `high_level_sync.py` | Sync connection, typed reads and writes, named snapshots, polling, contiguous reads. | High-level helpers |
+| `08_async_sample.py` | Async client reads from one or more PLC endpoints concurrently. | Async client |
+| `01_read_type_name.py` | Read PLC type name and model code. | Sync client |
+| `02_device_reads.py` | Read normal word and bit devices. | Sync client |
+| `03_random_and_block.py` | Read random devices and block groups. | Sync client |
+| `05_target_header.py` | Use an explicit SLMP target header. | Sync client |
+| `06_label_reads.py` | Read random labels and array labels. | Sync client |
+| `07_verify_3e_4e.py` | Compare manually selected 3E and 4E frames with trace output. | Low-level client |
 
-## Why these two samples are the primary path
+## Recommended first sample
 
-They use the same helper set described in the user guide:
-
-- `SlmpConnectionOptions`
-- `open_and_connect` / `open_and_connect_sync`
-- `QueuedAsyncSlmpClient`
-- `normalize_address`
-- `parse_address` / `try_parse_address` / `format_address`
-- `read_typed` / `write_typed`
-- `read_words_single_request` / `read_dwords_single_request`
-- `read_words_chunked` / `read_dwords_chunked`
-- `write_bit_in_word`
-- `read_named` / `write_named`
-- `poll`
-
-## Other Files
-
-Older numbered sample files remain in this folder for protocol-focused demonstrations.
-They are no longer the main user-facing examples.
+Start with `high_level_async.py` against `D100`, then use `high_level_sync.py` if your application is synchronous.

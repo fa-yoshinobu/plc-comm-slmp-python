@@ -1,0 +1,217 @@
+[![CI](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://fa-yoshinobu.github.io/plc-comm-slmp-python/)
+[![PyPI](https://img.shields.io/pypi/v/slmp-connect-python.svg)](https://pypi.org/project/slmp-connect-python/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Static Analysis: Ruff](https://img.shields.io/badge/Lint-Ruff-black.svg)](https://github.com/astral-sh/ruff)
+
+# SLMP Protocol for Python
+
+![Illustration](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-slmp-python/main/docsrc/assets/melsec.png)
+
+[![Release](https://img.shields.io/github/v/release/fa-yoshinobu/plc-comm-slmp-python?label=release)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/releases/latest)
+
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![MkDocs](https://img.shields.io/badge/MkDocs-526CFE?logo=materialformkdocs&logoColor=white)](https://www.mkdocs.org/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?logo=githubpages&logoColor=white)](https://pages.github.com/)
+
+High-level SLMP helpers for Mitsubishi PLC communication over Binary 3E and 4E frames.
+
+This repository treats the high-level helper layer as the recommended user surface:
+
+- `SlmpConnectionOptions`
+- `open_and_connect` / `open_and_connect_sync`
+- `AsyncSlmpClient`
+- `QueuedAsyncSlmpClient`
+- `SlmpClient`
+- `normalize_address`
+- `parse_address` / `try_parse_address` / `format_address`
+- `read_typed` / `write_typed`
+- `read_words_single_request` / `read_dwords_single_request`
+- `read_words_chunked` / `read_dwords_chunked`
+- `write_bit_in_word`
+- `read_named` / `write_named`
+- `poll`
+
+## Installation
+
+```bash
+pip install slmp-connect-python
+```
+
+The latest release lives at <https://pypi.org/project/slmp-connect-python/>, where wheel and tarball downloads and metadata are available.
+
+## Quick Start
+
+Recommended async path:
+
+```python
+import asyncio
+
+from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_typed
+
+
+async def main() -> None:
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        plc_profile="melsec:iq-f",
+        port=1025,
+    )
+    async with await open_and_connect(options) as client:
+        before = await read_named(client, ["D100", "D200:F", "D50.3"])
+        print("before:", before)
+
+        await write_typed(client, "D100", "U", 42)
+
+        after = await read_named(client, ["D100", "D200:F", "D50.3"])
+        print("after:", after)
+
+
+asyncio.run(main())
+```
+
+Choose canonical `plc_profile` explicitly.
+In the recommended high-level helper layer, the only PLC selector is `plc_profile`.
+
+## High-Level PLC Selection
+
+For normal application code:
+
+- set `plc_profile`
+- let the library derive the fixed frame type, access profile, `X` / `Y` text rule, and device-range family
+- do not pass raw `frame_type`, `plc_series`, or `device_family`
+
+| `plc_profile` | Derived `frame_type` | Derived `access_profile` | `X` / `Y` text | Derived range family | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `melsec:iq-f` | `3e` | `ql` | octal | `iq-f` | live-validated |
+| `melsec:iq-r` | `4e` | `iqr` | hexadecimal | `iq-r` | live-validated |
+| `melsec:iq-l` | `4e` | `iqr` | hexadecimal | `iq-l` | live-validated on `L16HCPU` |
+| `melsec:mx-f` | `4e` | `iqr` | hexadecimal | `mx-f` | fixed family mapping |
+| `melsec:mx-r` | `4e` | `iqr` | hexadecimal | `mx-r` | fixed family mapping |
+| `melsec:qcpu` | `3e` | `ql` | hexadecimal | `qcpu` | retained path |
+| `melsec:lcpu` | `3e` | `ql` | hexadecimal | `lcpu` | retained path |
+| `melsec:qnu` | `3e` | `ql` | hexadecimal | `qnu` | retained path |
+| `melsec:qnudv` | `3e` | `ql` | hexadecimal | `qnudv` | retained path |
+
+Low-level compatibility tools may still work with raw `frame_type` / `plc_series`, but that is not the normal public helper path.
+
+High-level accepted `plc_profile` values:
+
+| Canonical | Typical target | Notes |
+| --- | --- | --- |
+| `melsec:iq-f` | FX5 / iQ-F | `X` / `Y` use manual octal text |
+| `melsec:iq-r` | iQ-R | `X` / `Y` use hexadecimal text |
+| `melsec:iq-l` | iQ-L | independent iQ-L range rules; live-validated on `L16HCPU` |
+| `melsec:mx-f` | MX-F | fixed high-level family mapping |
+| `melsec:mx-r` | MX-R | fixed high-level family mapping |
+| `melsec:qcpu` | QCPU | `3e/ql` fixed profile |
+| `melsec:lcpu` | LCPU | `3e/ql` fixed profile |
+| `melsec:qnu` | QnU | `3e/ql` fixed profile |
+| `melsec:qnudv` | QnUDV | `3e/ql` fixed profile |
+
+Practical rules:
+
+- non-`iQ-F` `X` / `Y`: text such as `X20` / `Y20` is interpreted as hexadecimal
+- `iQ-F` / FX5 `X` / `Y`: text such as `X100` / `Y100` is interpreted as manual octal notation and encoded to the binary numeric value
+- example: `X100` on `iQ-F` becomes binary device number `0x40`
+- if you pass a numeric `DeviceRef`, string notation is already resolved, so `plc_profile` is not needed for that one address
+- short aliases such as `iq-f`, `iqr`, `q`, `l`, and `qnudvcpu` are rejected; use canonical `melsec:...` strings
+
+## Supported PLC Registers
+
+Start with these public high-level families first:
+
+- word devices: `D`, `SD`, `R`, `ZR`, `TN`, `CN`
+- bit devices: `M`, `X`, `Y`, `SM`, `B`
+- typed forms: `D200:F`, `D300:L`, `D100:S`
+- mixed snapshot forms: `D50.3`, `D100`, `D200:F`
+- current-value long families: `LTN`, `LSTN`, `LCN`
+- 32-bit index register: `LZ`
+
+High-level address syntax is shared across the PLC helper libraries:
+
+- use `:` for data types and special views: `D100:U`, `D100:S`, `D100:D`,
+  `D100:L`, `D100:F`, `D100:STR`
+- use `.` only for bit-in-word access: `D50.0` through `D50.F`
+- `D50.D` is bit `0xD` / bit 13, not a 32-bit data type request
+- low-level SLMP routes still encode word/dword/float access internally; the
+  `:D` / `:F` spelling is the public helper-layer form
+
+Long-family route notes:
+
+- `LTN`, `LSTN`, `LCN`, and `LZ` default to 32-bit `:D` access in high-level helpers.
+- `LCN` current-value reads and writes use random dword access in the high-level helpers.
+- `LTS`, `LTC`, `LSTS`, and `LSTC` state reads use the long timer 4-word decode helpers.
+- `LCS` and `LCC` state reads use direct bit read.
+- High-level state writes for `LTS`/`LTC`/`LSTS`/`LSTC`/`LCS`/`LCC` use random bit write (`0x1402`).
+- Low-level direct bit writes and direct word writes to these long-family logical forms are guarded before transport.
+
+See the full public table in [Supported PLC Registers](docsrc/user/SUPPORTED_REGISTERS.md).
+
+## Public Documentation
+
+- [Getting Started](docsrc/user/GETTING_STARTED.md)
+- [Supported PLC Registers](docsrc/user/SUPPORTED_REGISTERS.md)
+- [Latest Communication Verification](docsrc/user/LATEST_COMMUNICATION_VERIFICATION.md)
+- [User Guide](docsrc/user/USER_GUIDE.md)
+- [Samples](docsrc/user/SAMPLES.md)
+- [Error Codes](docsrc/user/ERROR_CODES.md)
+
+Maintainer-only notes and retained evidence live under `internal_docs/`.
+
+## High-Level API Guide
+
+### Address Normalization
+
+```python
+from slmp import format_address, normalize_address, parse_address
+
+print(normalize_address("x20"))   # X20
+print(normalize_address("d200"))  # D200
+print(normalize_address("x100", plc_profile="melsec:iq-f"))  # X100
+
+parsed = parse_address("d200:f")
+print(parsed.base_device, parsed.dtype)  # D200 F
+print(format_address(parsed))            # D200:F
+```
+
+### Single Typed Values
+
+```python
+from slmp import read_typed, write_typed
+
+temperature = await read_typed(client, "D200", "F")
+counter = await read_typed(client, "D300", "L")
+await write_typed(client, "D100", "U", 1234)
+```
+
+Use `.bit` notation only with word devices such as `D50.3`.
+Address bit devices directly as `M1000`, `M1001`, `X20`, or `Y20`.
+For communication, `X` / `Y` string addresses require explicit `plc_profile`.
+
+### Device Range Catalog
+
+Use `plc_profile` and read the derived family SD block once.
+
+```python
+from slmp import SlmpClient
+
+with SlmpClient("192.168.250.100", 1025, plc_profile="melsec:qnu") as client:
+    catalog = client.read_device_range_catalog()
+    for entry in catalog.entries:
+        print(entry.device, entry.point_count, entry.address_range)
+```
+
+This path does not call `read_type_name()`. The client uses the fixed range family derived from `plc_profile`.
+
+## Development
+
+```bash
+run_ci.bat
+build_docs.bat
+release_check.bat
+```
+
+## License
+
+Distributed under the [MIT License](LICENSE).

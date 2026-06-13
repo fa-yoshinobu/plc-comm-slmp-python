@@ -8,12 +8,12 @@ Run against a real PLC or the GX Works3 simulator.
 Usage
 -----
     python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
-    python samples/high_level_sync.py --host 192.168.250.100 --port 1027 --transport udp
+    python samples/high_level_sync.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
 
 Common port values
 ------------------
   1025  iQ-R / iQ-F built-in Ethernet SLMP port, TCP (default)
-  1027  iQ-R / iQ-F built-in Ethernet SLMP port, UDP
+  1035  iQ-R / iQ-F built-in Ethernet SLMP port, UDP
   5000  GX Works3 / GX Works2 simulator
   5007  Q/L series built-in Ethernet SLMP port
 """
@@ -65,9 +65,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "SLMP port number\n"
             "  1025  iQ-R/iQ-F built-in Ethernet SLMP (default)\n"
+            "  1035  iQ-R/iQ-F built-in Ethernet SLMP over UDP\n"
             "  5000  GX Works3/GX Works2 simulator\n"
             "  5007  Q/L series built-in Ethernet"
         ),
+    )
+    p.add_argument(
+        "--transport",
+        choices=("tcp", "udp"),
+        default="tcp",
+        help="Transport protocol (default tcp)",
     )
     p.add_argument(
         "--plc-profile",
@@ -126,7 +133,8 @@ def main() -> None:
     #   plc_profile      - canonical high-level PLC profile; derives frame,
     #                      access profile, and X/Y/range handling
     #   port             - SLMP port; depends on PLC hardware and firmware settings
-    #   transport        - "tcp" (default) or "udp"
+    #   transport        - "tcp" (default) or "udp"; use port 1035 for the
+    #                      standard UDP example target in this repository
     #   timeout          - socket timeout in seconds; increase on slow networks
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
@@ -135,7 +143,7 @@ def main() -> None:
         host=args.host,
         plc_profile=args.plc_profile,
         port=args.port,
-        transport="tcp",
+        transport=args.transport,
         timeout=args.timeout,
         monitoring_timer=args.monitoring_timer,
     )
