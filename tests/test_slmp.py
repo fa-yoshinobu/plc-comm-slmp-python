@@ -2185,7 +2185,7 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
             client.self_test_loopback("HELLO")
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
-            client.self_test_loopback(b"\x00\xFF")
+            client.self_test_loopback(b"\x00\xff")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):

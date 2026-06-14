@@ -1,7 +1,7 @@
 site_dir: _site
 docs_dir: docsrc
 site_name: SLMP Connect Python (slmp) API Reference
-site_url: https://fa-yoshinobu.github.io/plc-comm-slmp-python/
+site_url: https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/
 repo_url: https://github.com/fa-yoshinobu/plc-comm-slmp-python
 repo_name: GitHub
 theme:

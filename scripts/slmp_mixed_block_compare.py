@@ -672,10 +672,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         f"- Word block: {args.word_device} x{len(args.word_values)} -> {_format_values(list(args.word_values))}",
         f"- Bit block: {args.bit_device} x{len(args.bit_values)} packed -> {_format_values(list(args.bit_values))}",
-        (
-            "- Mixed write options: "
-            f"split_mixed_blocks={args.split_mixed_blocks}"
-        ),
+        (f"- Mixed write options: split_mixed_blocks={args.split_mixed_blocks}"),
         f"- Keep written value: {args.keep_written_value}",
         (
             "- First-pass comparison recommendation: keep split_mixed_blocks "

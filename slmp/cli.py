@@ -3013,9 +3013,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
 
     summary = Counter(status for _, status, _ in rows)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    default_direct_memory_text = (
-        "auto" if args.direct_memory == DIRECT_MEMORY_NORMAL else f"0x{args.direct_memory:02X}"
-    )
+    default_direct_memory_text = "auto" if args.direct_memory == DIRECT_MEMORY_NORMAL else f"0x{args.direct_memory:02X}"
     header_lines = [
         f"- Date: {now}",
         f"- Host: {args.host}",
