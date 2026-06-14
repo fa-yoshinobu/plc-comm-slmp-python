@@ -43,7 +43,7 @@ class UltraStableMonitor:
     def __init__(self) -> None:
         """Initialize the monitor."""
         self.host = "127.0.0.1"
-        self.port = 5000
+        self.port = 1025
         self.series = "iqr"
         self.targets: list[dict[str, Any]] = []
         self.prev_values: dict[str, Any] = {}
@@ -116,7 +116,7 @@ class UltraStableMonitor:
         run_c = BG_GRN if self.plc_running else BG_RED
         hb_icon = "*" if self.heartbeat else "."
 
-        # [SLMP] [ONLINE] | R08CPU * [ RUN ] 127.0.0.1:5000
+        # [SLMP] [ONLINE] | R08CPU * [ RUN ] 127.0.0.1:5511
         h_l = f" SLMP | {self.status} | {self.plc_model} {hb_icon} "
         h_r = f"[{run_l}]"
         h_mid = f" {self.host}:{self.port}"

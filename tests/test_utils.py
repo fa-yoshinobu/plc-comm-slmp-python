@@ -627,6 +627,13 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(options.address_profile, "melsec:iq-l")
         self.assertEqual(options.range_profile, "melsec:iq-l")
 
+    def test_connection_options_default_port_tracks_transport(self):
+        tcp = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r")
+        udp = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r", transport="udp")
+
+        self.assertEqual(tcp.port, 1025)
+        self.assertEqual(udp.port, 1035)
+
     def test_connection_options_reject_short_plc_profile_alias(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             SlmpConnectionOptions("127.0.0.1", plc_profile="iq-l", port=1025)

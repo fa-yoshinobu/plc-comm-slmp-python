@@ -6,8 +6,9 @@ This is the minimum release checklist for this repository.
 
 Check these before tagging:
 
-- [Overview](../../docsrc/index.md)
-- [User Guide](../../docsrc/user/USER_GUIDE.md)
+- [README](../../README.md)
+- [Getting Started](../../docsrc/user/GETTING_STARTED.md)
+- [Usage Guide](../../docsrc/user/USAGE_GUIDE.md)
 - [Testing Guide](TESTING_GUIDE.md)
 - [Change Log](../../CHANGELOG.md)
 - [Protocol Spec](PROTOCOL_SPEC.md)

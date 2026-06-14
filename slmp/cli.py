@@ -47,6 +47,7 @@ from .core import (
     parse_device,
     resolve_device_subcommand,
     resolve_extended_device_and_extension,
+    _resolve_port,
     unpack_bit_values,
 )
 from .errors import SlmpPracticalPathWarning
@@ -58,7 +59,7 @@ class SlmpClient(_StandardSlmpClient):
     def __init__(
         self,
         host: str,
-        port: int = 5000,
+        port: int | None = None,
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
@@ -2265,7 +2266,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
     """Perform SLMP binary connection check."""
     parser = argparse.ArgumentParser(description="SLMP binary connection check")
     parser.add_argument("--host", required=True, help="PLC IP address or host name")
-    parser.add_argument("--port", type=int, default=5000, help="SLMP port (default: 5000)")
+    parser.add_argument("--port", type=int, default=None, help="SLMP port (default: 1025 for TCP, 1035 for UDP)")
     parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
@@ -2341,6 +2342,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
         help="use indirect specification flag (@)",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
+    args.port = _resolve_port(args.port, args.transport)
 
     target = SlmpTarget(
         network=args.network,

@@ -9,12 +9,13 @@ Usage
 -----
     python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
     python samples/high_level_async.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
+    python samples/high_level_async.py --host 127.0.0.1 --port 5511 --plc-profile melsec:iq-r
 
 Common port values
 ------------------
   1025  iQ-R / iQ-F built-in Ethernet SLMP port (default)
   1035  iQ-R / iQ-F built-in Ethernet SLMP port, UDP
-  5000  GX Works3 / GX Works2 simulator
+  5511  GX Works3 simulator on 127.0.0.1
   5007  Q/L series built-in Ethernet SLMP port
 """
 
@@ -69,7 +70,7 @@ def parse_args() -> argparse.Namespace:
             "SLMP port number\n"
             "  1025  iQ-R/iQ-F built-in Ethernet SLMP (default)\n"
             "  1035  iQ-R/iQ-F built-in Ethernet SLMP over UDP\n"
-            "  5000  GX Works3/GX Works2 simulator\n"
+            "  5511  GX Works3 simulator on 127.0.0.1\n"
             "  5007  Q/L series built-in Ethernet"
         ),
     )

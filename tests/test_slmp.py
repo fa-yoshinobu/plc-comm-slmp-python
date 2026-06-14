@@ -773,7 +773,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -850,7 +850,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -945,7 +945,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -1022,7 +1022,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -1093,7 +1093,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -1190,7 +1190,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -1323,7 +1323,7 @@ class TestCli(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,
@@ -2262,7 +2262,7 @@ class TestDeviceApi(unittest.TestCase):
             def __init__(
                 self,
                 host: str,
-                port: int = 5000,
+                port: int | None = None,
                 *,
                 transport: str = "tcp",
                 timeout: float = 3.0,

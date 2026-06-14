@@ -126,7 +126,7 @@ def main() -> None:
     parser = ArgumentParser(description="World's best SLMP device monitor")
     parser.add_argument("host", help="PLC IP Address")
     parser.add_argument("devices", nargs="+", help="Devices to monitor (e.g. D100 D200-210 M0)")
-    parser.add_argument("--port", type=int, default=5000, help="Port number (default: 5000)")
+    parser.add_argument("--port", type=int, default=1025, help="Port number (default: 1025)")
     parser.add_argument("--series", default="iqr", choices=["ql", "iqr"], help="PLC Series")
     parser.add_argument("--transport", default="tcp", choices=["tcp", "udp"], help="Transport protocol")
     parser.add_argument("--interval", type=float, default=0.5, help="Refresh interval in seconds")

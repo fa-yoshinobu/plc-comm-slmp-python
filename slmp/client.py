@@ -29,6 +29,7 @@ from .core import (
     _raise_response_error,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
+    _resolve_port,
     build_device_modification_flags,
     decode_cpu_operation_state,
     decode_response,
@@ -60,7 +61,7 @@ class SlmpClient:
     def __init__(
         self,
         host: str,
-        port: int = 5000,
+        port: int | None = None,
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
@@ -78,7 +79,7 @@ class SlmpClient:
 
         Args:
             host: PLC IP address.
-            port: PLC port number. Defaults to 5000.
+            port: PLC port number. Defaults to 1025 for TCP and 1035 for UDP.
             transport: Transport protocol ('tcp' or 'udp'). Defaults to 'tcp'.
             timeout: Socket timeout in seconds. Defaults to 3.0.
             plc_profile: Canonical high-level PLC profile. The standard client
@@ -90,10 +91,10 @@ class SlmpClient:
             trace_hook: Optional callback for tracing requests and responses.
         """
         self.host = host
-        self.port = port
         self.transport = transport.lower()
         if self.transport not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
+        self.port = _resolve_port(port, self.transport)
         self.timeout = timeout
         if not _allow_manual_profile:
             if plc_profile is None:

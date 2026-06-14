@@ -4,7 +4,7 @@
 
 | Entry point | Signature | Use |
 | --- | --- | --- |
-| `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int = 5000, transport: str = "tcp", timeout: float = 3.0, default_target: SlmpTarget | None = None, monitoring_timer: int = 16, raise_on_error: bool = True, trace_hook: Any | None = None)` | Store stable connection settings. |
+| `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int \| None = None, transport: str = "tcp", timeout: float = 3.0, default_target: SlmpTarget \| None = None, monitoring_timer: int = 16, raise_on_error: bool = True, trace_hook: Any \| None = None)` | Store stable connection settings. Omitted ports resolve to `1025` for TCP and `1035` for UDP. |
 | `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> QueuedAsyncSlmpClient` | Open one queued async connection. |
 | `open_and_connect_sync` | `def open_and_connect_sync(options: SlmpConnectionOptions) -> SlmpClient` | Open one synchronous connection. |
 | `read_typed` | `async def read_typed(client, device, dtype) -> int | float` | Read one typed value. |

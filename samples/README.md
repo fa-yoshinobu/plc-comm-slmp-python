@@ -29,3 +29,30 @@ python samples/08_async_sample.py 192.168.250.100:1025
 ## Recommended first sample
 
 Start with `high_level_async.py` against `D100`, then use `high_level_sync.py` if your application is synchronous.
+
+## High-level helper coverage
+
+`high_level_async.py` demonstrates:
+
+- `SlmpConnectionOptions`
+- `open_and_connect`
+- `read_typed` / `write_typed`
+- `read_words_single_request` / `read_dwords_single_request`
+- `read_words_chunked` / `read_dwords_chunked`
+- `write_bit_in_word`
+- `read_named` / `write_named`
+- `poll`
+- queued shared connection usage
+
+`high_level_sync.py` demonstrates the synchronous equivalents:
+
+- `open_and_connect_sync`
+- `read_typed_sync` / `write_typed_sync`
+- `read_words_single_request_sync` / `read_dwords_single_request_sync`
+- `read_words_chunked_sync` / `read_dwords_chunked_sync`
+- `write_bit_in_word_sync`
+- `read_named_sync` / `write_named_sync`
+- `poll_sync`
+
+The older numbered samples remain for protocol-focused demonstrations. The
+recommended user path is the high-level helper layer.

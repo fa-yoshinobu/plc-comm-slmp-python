@@ -65,7 +65,7 @@ def run_test(ip: str, port: int, frame_type: FrameType) -> None:
 if __name__ == "__main__":
     # Specify the target IP address and port
     PLC_IP = "192.168.250.100"
-    PLC_PORT = 5000
+    PLC_PORT = 1025
 
     if len(sys.argv) > 1:
         PLC_IP = sys.argv[1]

@@ -39,6 +39,24 @@ from .errors import (
     SlmpUnsupportedDeviceError,
 )
 
+DEFAULT_TCP_PORT = 1025
+DEFAULT_UDP_PORT = 1035
+
+
+def _default_port_for_transport(transport: str) -> int:
+    normalized = transport.lower()
+    if normalized == "tcp":
+        return DEFAULT_TCP_PORT
+    if normalized == "udp":
+        return DEFAULT_UDP_PORT
+    raise ValueError("transport must be 'tcp' or 'udp'")
+
+
+def _resolve_port(port: int | None, transport: str) -> int:
+    if port is None:
+        return _default_port_for_transport(transport)
+    return port
+
 
 @dataclass(frozen=True)
 class SlmpTarget:

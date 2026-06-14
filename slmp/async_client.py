@@ -30,6 +30,7 @@ from .core import (
     _raise_response_error,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
+    _resolve_port,
     build_device_modification_flags,
     decode_cpu_operation_state,
     decode_response,
@@ -72,7 +73,7 @@ class AsyncSlmpClient:
     def __init__(
         self,
         host: str,
-        port: int = 5000,
+        port: int | None = None,
         *,
         transport: str = "tcp",
         timeout: float = 3.0,
@@ -93,10 +94,10 @@ class AsyncSlmpClient:
         explicit family.
         """
         self.host = host
-        self.port = port
         self.transport_type = transport.lower()
         if self.transport_type not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
+        self.port = _resolve_port(port, self.transport_type)
         self.timeout = timeout
         if not _allow_manual_profile:
             if plc_profile is None:

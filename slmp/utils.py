@@ -17,6 +17,7 @@ from .core import (
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     _resolve_plc_profile_defaults,
+    _resolve_port,
     _validate_direct_dword_read_device,
     parse_device,
 )
@@ -75,7 +76,8 @@ class SlmpConnectionOptions:
         host: PLC hostname or IP address.
         plc_profile: Canonical high-level PLC profile. This is the only
             application-level PLC selector for the recommended helper layer.
-        port: TCP or UDP port used by the SLMP endpoint.
+        port: TCP or UDP port used by the SLMP endpoint. Defaults to
+            ``1025`` for TCP and ``1035`` for UDP when omitted.
         transport: Transport name such as ``"tcp"`` or ``"udp"``.
         timeout: Socket timeout in seconds.
         default_target: Optional routing target applied to requests.
@@ -90,7 +92,7 @@ class SlmpConnectionOptions:
 
     host: str
     plc_profile: object
-    port: int = 5000
+    port: int | None = None
     transport: str = "tcp"
     timeout: float = 3.0
     default_target: SlmpTarget | None = None
@@ -105,6 +107,8 @@ class SlmpConnectionOptions:
     def __post_init__(self) -> None:
         if self.plc_profile is None:
             raise ValueError("plc_profile is required. Use an explicit canonical PLC profile such as 'melsec:iq-r'.")
+        transport = self.transport.lower()
+        port = _resolve_port(self.port, transport)
         (
             normalized_plc_profile,
             plc_series,
@@ -117,6 +121,8 @@ class SlmpConnectionOptions:
             frame_type=None,
             address_profile=None,
         )
+        object.__setattr__(self, "transport", transport)
+        object.__setattr__(self, "port", port)
         object.__setattr__(self, "plc_profile", normalized_plc_profile)
         object.__setattr__(self, "plc_series", plc_series)
         object.__setattr__(self, "frame_type", frame_type)
