@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 class SlmpClient:
     """Synchronous SLMP client supporting 3E and 4E frames (binary).
 
-    This client provides high-level typed APIs for interacting with Mitsubishi
+    This client provides high-level typed APIs for interacting with MELSEC
     and compatible PLCs using the SLMP protocol.
 
     Examples:

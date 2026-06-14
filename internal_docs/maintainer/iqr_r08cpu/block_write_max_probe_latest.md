@@ -1,7 +1,7 @@
 # Block Write Maximum Probe Report
 
 - Date: 2026-03-13 16:23:00
-- PLC: Mitsubishi MELSEC iQ-R `R08CPU`
+- PLC: MELSEC iQ-R `R08CPU`
 - Host: `192.168.250.100`
 - Transport: `TCP`
 - Port: `1025`

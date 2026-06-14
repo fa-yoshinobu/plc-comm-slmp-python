@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """SLMP Ultra Fast Device Monitor (Asynchronous)
-The most convenient CLI tool to monitor Mitsubishi PLC devices in real-time.
+The most convenient CLI tool to monitor MELSEC PLC devices in real-time.
 """
 
 from __future__ import annotations

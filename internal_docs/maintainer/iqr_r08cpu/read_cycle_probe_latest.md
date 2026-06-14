@@ -1,7 +1,7 @@
 # Read Cycle Probe Report
 
 - Date: 2026-03-13 17:05:00
-- PLC: Mitsubishi MELSEC iQ-R `R08CPU`
+- PLC: MELSEC iQ-R `R08CPU`
 - Host: `192.168.250.100`
 - Series: `iqr`
 - Device: `SD420`

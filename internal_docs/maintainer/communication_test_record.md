@@ -3,7 +3,7 @@
 ## Test Target
 
 - date: 2026-03-14
-- PLC: Mitsubishi MELSEC iQ-R `R08CPU`
+- PLC: MELSEC iQ-R `R08CPU`
 - host: `192.168.250.100`
 - ports: `TCP 1025`, `UDP 1027`
 - library mode: `4E`, binary, `series=iqr`

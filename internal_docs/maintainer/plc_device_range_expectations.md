@@ -3,7 +3,7 @@
 ## Scope
 
 - Date: 2026-03-13
-- PLC: Mitsubishi MELSEC iQ-R (`R08CPU`)
+- PLC: MELSEC iQ-R (`R08CPU`)
 - Host: `192.168.250.100`
 - Source of configured ranges: current PLC device-setting screen provided by the user
 - Library policy: do not hard-code these PLC-setting-dependent limits in the client

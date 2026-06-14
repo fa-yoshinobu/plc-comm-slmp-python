@@ -639,7 +639,7 @@ def _compatibility_endpoint_note(label: str, detected_models: Sequence[str]) -> 
     if upper_label.startswith("RJ71EN71") or upper_label.startswith("QJ71E71"):
         return "Ethernet module endpoint; `0101` reflects the attached CPU path rather than the module part number."
     if upper_label.endswith("_MC") or upper_label.startswith("KV"):
-        return "Third-party MC-compatible endpoint; results describe MC compatibility, not Mitsubishi native identity."
+        return "Third-party MC-compatible endpoint; results describe MC compatibility, not MELSEC native identity."
     if not detected_models:
         return "No stable type-name identity was returned; the operator label is the only endpoint identifier here."
     if all(model == "unknown_target" for model in detected_models):

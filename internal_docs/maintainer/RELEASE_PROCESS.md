@@ -102,4 +102,4 @@ Then:
 ## 8. Current Baseline
 
 - package version: `0.1.6`
-- validated target: Mitsubishi MELSEC iQ-R `R08CPU`
+- validated target: MELSEC iQ-R `R08CPU`

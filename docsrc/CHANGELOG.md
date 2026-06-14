@@ -116,7 +116,7 @@ Initial packaged release for the current repository scope.
 
 ### Validated Environment
 
-- Mitsubishi MELSEC iQ-R `R08CPU`
+- MELSEC iQ-R `R08CPU`
 - Host `192.168.250.100`
 - `TCP 1025`
 - `UDP 1027`

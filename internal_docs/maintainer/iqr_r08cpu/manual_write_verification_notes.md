@@ -4,7 +4,7 @@ This note records how to run the interactive temporary write check for the curre
 
 ## Target
 
-- PLC: Mitsubishi MELSEC iQ-R `R08CPU`
+- PLC: MELSEC iQ-R `R08CPU`
 - Host: `192.168.250.100`
 - Transport: `TCP`
 - Port: `1025`

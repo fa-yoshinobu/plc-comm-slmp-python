@@ -82,7 +82,7 @@ python scripts/slmp_regression_suite.py --include-live-connection-check --host 1
 
 Current project example target:
 
-- PLC: Mitsubishi MELSEC iQ-R `R08CPU`
+- PLC: MELSEC iQ-R `R08CPU`
 - host: `192.168.250.100`
 - TCP: `1025`
 - UDP: `1027`

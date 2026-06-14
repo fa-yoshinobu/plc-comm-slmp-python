@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/LICENSE)
 
-Python library for Mitsubishi SLMP (Binary 3E/4E) PLC communication.
+Python library for MELSEC SLMP (Binary 3E/4E) PLC communication.
 
 ## Start here
 
