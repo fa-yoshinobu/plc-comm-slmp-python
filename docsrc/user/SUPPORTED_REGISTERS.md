@@ -47,8 +47,8 @@ This table lists the device families accepted by the current parser and explains
 | `Z` | Word | Decimal | Index register. |
 | `LZ` | Word | Decimal | Long index register; use 32-bit `:D` or `:L` intent. |
 | `R` | Word | Decimal | File register. |
-| `ZR` | Word | Decimal | Extended file register. |
-| `RD` | Word | Decimal | Refresh data register. |
+| `ZR` | Word | Decimal | Extended file register; the device-range catalog reports it unsupported for `melsec:iq-f`. |
+| `RD` | Word | Decimal | Refresh data register; the device-range catalog reports it unsupported for `melsec:iq-f`, `melsec:qcpu`, `melsec:lcpu`, `melsec:qnu`, and `melsec:qnudv`. |
 | `G` | Word | Decimal | Module buffer family; use raw or extended-device API only. |
 | `HG` | Word | Decimal | Extended module buffer family; use raw or extended-device API only. |
 

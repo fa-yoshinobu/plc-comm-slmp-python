@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+- Add 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`
+- Add `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`
+
 ## 0.8.0 - 2026-06-14
 
 - Bumped release metadata to 0.8.0 for the unified PLC communication library release.
