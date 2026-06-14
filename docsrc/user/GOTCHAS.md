@@ -163,7 +163,7 @@ asyncio.run(main())
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Connection setup raises `ValueError` before any PLC request is sent. | `plc_profile` is required and only canonical strings are accepted. There is no model-name auto-detection fallback. | Set an exact canonical value such as `melsec:iq-r`. |
+| Connection setup raises `ValueError` before any PLC request is sent. | `plc_profile` is required and only canonical profiles are accepted. There is no model-name auto-detection fallback. | Set an exact canonical profile such as `melsec:iq-r`. |
 
 ```python
 from slmp import SlmpConnectionOptions

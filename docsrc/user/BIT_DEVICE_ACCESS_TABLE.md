@@ -1,4 +1,4 @@
-﻿# Bit Device Access Table
+# Bit Device Access Table
 
 This note explains how bit-device groups such as `M`, `B`, `X`, and `Y` behave across the main read forms used in this project.
 
@@ -44,7 +44,7 @@ Set canonical `plc_profile` explicitly.
 The device-range catalog follows the fixed range profile derived from `plc_profile`.
 Only these `plc_profile` values are accepted:
 
-| Profile string | `X`/`Y` text rule |
+| Canonical profile | `X`/`Y` text rule |
 |---|---|
 | `melsec:iq-f` | Octal text such as `X100` / `Y100`; binary frames carry the converted numeric value, so `X100` becomes device number `0x40`. |
 | `melsec:iq-r` | Hexadecimal text such as `X20` / `Y20`. |

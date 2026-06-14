@@ -80,4 +80,4 @@ This table lists the device families accepted by the current parser and explains
 
 ## Profiles
 
-See [PROFILES.md](PROFILES.md) for the canonical `plc_profile` strings and profile-specific cautions.
+See [PROFILES.md](PROFILES.md) for canonical profiles and profile-specific cautions.
