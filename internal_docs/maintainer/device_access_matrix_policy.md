@@ -2,6 +2,9 @@
 
 This note defines how `device_access_matrix.csv` should be used for each target model folder under `internal_docsrc/<series>_<model>/`.
 
+The matrix is a live-verification record for maintainers. It is not a source for
+library code generation, PLC profile selection, or device range catalogs.
+
 ## Purpose
 
 - keep a per-model device support sheet in a format that opens directly in Excel
@@ -19,6 +22,7 @@ The human-readable Markdown file:
 - `device_access_matrix.md`
 
 is a report snapshot, not the preferred editing format for routine model-by-model support management.
+Neither file is used as an implementation source.
 
 ## Column Policy
 
@@ -92,6 +96,7 @@ Examples:
 ## Editing Rule
 
 - edit `device_access_matrix.csv` directly in Excel or another spreadsheet tool
+- do not generate library source from this sheet
 - keep `device` on a representative verification address that is safe for temporary checks
 - keep `unsupported` blank until a human reviewer decides to mark it
 - update `manual_write` and `manual_write_note` when a human temporary write verification result becomes part of the current model state

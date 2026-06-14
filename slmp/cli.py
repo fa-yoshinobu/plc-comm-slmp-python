@@ -2079,7 +2079,7 @@ def _render_model_docs_readme(*, series: str, model: str, folder_name: str) -> s
             "## Expected Files",
             "",
             "- `device_access_matrix.csv`",
-            "  - Excel-friendly device support management sheet and canonical editable source",
+            "  - Excel-friendly live verification sheet; not a source for library code generation",
             "- `device_access_matrix.md`",
             "  - human-readable device access snapshot generated from the CSV when maintained",
             "- `manual_write_verification_latest.md`",
