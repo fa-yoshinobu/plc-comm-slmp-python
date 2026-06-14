@@ -70,6 +70,7 @@ class SlmpClient(_StandardSlmpClient):
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
         address_profile: object | None = None,
+        _allow_manual_profile: bool = True,
     ) -> None:
         super().__init__(
             host,
@@ -84,7 +85,7 @@ class SlmpClient(_StandardSlmpClient):
             raise_on_error=raise_on_error,
             trace_hook=trace_hook,
             address_profile=address_profile,
-            _allow_manual_profile=True,
+            _allow_manual_profile=_allow_manual_profile,
         )
 
 

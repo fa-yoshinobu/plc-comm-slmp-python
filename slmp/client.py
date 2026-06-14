@@ -101,7 +101,9 @@ class SlmpClient:
                     "plc_profile is required for the standard SlmpClient route "
                     "unless you explicitly opt into a low-level frame/profile path."
                 )
-            if plc_profile is not None and any(value is not None for value in (plc_series, frame_type, address_profile)):
+            if plc_profile is not None and any(
+                value is not None for value in (plc_series, frame_type, address_profile)
+            ):
                 raise ValueError("plc_profile is the only supported PLC selector for the standard SlmpClient route.")
         (
             self.plc_profile,
@@ -132,7 +134,11 @@ class SlmpClient:
         device: str | DeviceRef,
         extension: ExtensionSpec,
     ) -> tuple[DeviceRef, ExtensionSpec]:
-        ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=self.address_profile)
+        ref, effective_extension = resolve_extended_device_and_extension(
+            device,
+            extension,
+            plc_profile=self.address_profile,
+        )
         return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref), effective_extension
 
     def connect(self) -> None:

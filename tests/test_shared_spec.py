@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from slmp.client import SlmpClient
-from slmp.constants import PLCSeries
 from slmp.utils import _parse_address, normalize_address
 
 _SHARED_SPEC_DIR = Path(__file__).resolve().parent / "shared-spec"

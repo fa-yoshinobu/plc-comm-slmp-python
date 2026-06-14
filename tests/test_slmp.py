@@ -293,7 +293,11 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(str(parse_device("XFF")), "XFF")
         self.assertEqual(str(parse_device("SWFF")), "SWFF")
         self.assertEqual(str(parse_device("Y220", plc_profile="melsec:iq-f")), "Y220")
-        self.assertEqual(parse_device("Y220", plc_profile="melsec:iq-f").number - parse_device("Y217", plc_profile="melsec:iq-f").number, 1)
+        self.assertEqual(
+            parse_device("Y220", plc_profile="melsec:iq-f").number
+            - parse_device("Y217", plc_profile="melsec:iq-f").number,
+            1,
+        )
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
             parse_device("DX10", plc_profile="melsec:iq-f")
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
