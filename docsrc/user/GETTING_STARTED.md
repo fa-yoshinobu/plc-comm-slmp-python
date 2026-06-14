@@ -26,11 +26,15 @@ pip install slmp-connect-python
 This is intentional. `ReadTypeName` and model-code data are diagnostic only because some PLCs or communication paths cannot return a useful type name. If a model-to-profile conversion guesses wrong, the library can use the wrong address grammar or device-range catalog. Let a human, configuration file, or UI choose the canonical `plc_profile`.
 
 ```python
-options = SlmpConnectionOptions(
-    host="192.168.250.100",
-    port=1025,
-    plc_profile="melsec:iq-r",
-)
+from slmp import SlmpConnectionOptions
+
+
+def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    print(options.plc_profile)
+
+
+main()
 ```
 
 ## First read

@@ -19,9 +19,19 @@ Use one canonical `plc_profile` string for each connection. The profile selects 
 ## How to select
 
 ```python
-options = SlmpConnectionOptions(
-    host="192.168.250.100", port=1025, plc_profile="melsec:iq-r"
-)
+import asyncio
+
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed
+
+
+async def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    async with await open_and_connect(options) as client:
+        value = await read_typed(client, "D100", "U")
+        print(f"D100={value}")
+
+
+asyncio.run(main())
 ```
 
 ## Profile-specific cautions

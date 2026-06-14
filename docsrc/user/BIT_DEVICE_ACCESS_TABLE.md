@@ -44,19 +44,17 @@ Set canonical `plc_profile` explicitly.
 The device-range catalog follows the fixed range profile derived from `plc_profile`.
 Only these `plc_profile` values are accepted:
 
-- `melsec:iq-f`
-- `melsec:iq-r`
-- `melsec:iq-l`
-- `melsec:mx-f`
-- `melsec:mx-r`
-- `melsec:qcpu`
-- `melsec:lcpu`
-- `melsec:qnu`
-- `melsec:qnudv`
-
-- non-`iQ-F`: text such as `X20` / `Y20` is interpreted as hexadecimal
-- `iQ-F` / FX5: text such as `X100` / `Y100` is interpreted as manual octal notation
-- binary frames carry the converted numeric value, so `iQ-F` `X100` is encoded as device number `0x40`
+| Profile string | `X`/`Y` text rule |
+|---|---|
+| `melsec:iq-f` | Octal text such as `X100` / `Y100`; binary frames carry the converted numeric value, so `X100` becomes device number `0x40`. |
+| `melsec:iq-r` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:iq-l` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:mx-f` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:mx-r` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:qcpu` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:lcpu` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:qnu` | Hexadecimal text such as `X20` / `Y20`. |
+| `melsec:qnudv` | Hexadecimal text such as `X20` / `Y20`. |
 
 ## Access Mapping
 
@@ -86,7 +84,18 @@ Instead:
 The same packed-unit rule applies when you write one word value to a bit-device group:
 
 ```python
-await write_typed(client, "M1000", "U", 0x0005)
+import asyncio
+
+from slmp import SlmpConnectionOptions, open_and_connect, write_typed
+
+
+async def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    async with await open_and_connect(options) as client:
+        await write_typed(client, "M1000", "U", 0x0005)
+
+
+asyncio.run(main())
 ```
 
 This writes the packed pattern for `M1000..M1015`.
@@ -164,9 +173,17 @@ Accessed via `read_words()` / `write_words()`.
 These helpers read 4-word device blocks and return `LongTimerResult` objects.
 
 ```python
-results = client.read_long_timer(head_no=0, points=4)
-for r in results:
-    print(r.current_value, r.status_word, r.contact, r.coil)
+from slmp import SlmpClient
+
+
+def main() -> None:
+    with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
+        results = client.read_long_timer(head_no=0, points=4)
+        for result in results:
+            print(result.current_value, result.status_word, result.contact, result.coil)
+
+
+main()
 ```
 
 | Method | Reads | Returns |
@@ -200,8 +217,15 @@ Accessed via `read_devices_ext()` / `write_devices_ext()`.
 ```python
 from slmp import SlmpClient, ExtensionSpec
 
-values = client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
-client.write_devices_ext("U3\\G100", [1, 2, 3, 4], extension=ExtensionSpec())
+
+def main() -> None:
+    with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
+        values = client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
+        client.write_devices_ext("U3\\G100", [1, 2, 3, 4], extension=ExtensionSpec())
+        print(values)
+
+
+main()
 ```
 
 `Ux` is the slot number in hex (e.g. `U3`, `U3E0`). Direct `G` / `HG` access without `Ux\` prefix is not supported.
@@ -222,17 +246,17 @@ Accessed via `read_devices_ext()` / `write_devices_ext()`. Targets devices on a 
 ```python
 from slmp import SlmpClient, ExtensionSpec
 
-# Word read
-val = client.read_devices_ext("J2\\SW10", 1, extension=ExtensionSpec())
 
-# Bit read (16 points)
-bits = client.read_devices_ext("J1\\X10", 16, extension=ExtensionSpec(), bit_unit=True)
+def main() -> None:
+    with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
+        value = client.read_devices_ext("J2\\SW10", 1, extension=ExtensionSpec())
+        bits = client.read_devices_ext("J1\\X10", 16, extension=ExtensionSpec(), bit_unit=True)
+        client.write_devices_ext("J1\\SW14", [2], extension=ExtensionSpec())
+        client.write_devices_ext("J1\\X11", [True], extension=ExtensionSpec(), bit_unit=True)
+        print(value, bits)
 
-# Word write
-client.write_devices_ext("J1\\SW14", [2], extension=ExtensionSpec())
 
-# Bit write
-client.write_devices_ext("J1\\X11", [True], extension=ExtensionSpec(), bit_unit=True)
+main()
 ```
 
 Known limitations:
@@ -279,10 +303,20 @@ with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r", default
 | `STANDBY_SYSTEM_CPU` | `0x03D1` | Standby system CPU (redundant system) |
 
 ```python
-# Access Multiple CPU No.2 on own station
-target = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
-# Or by name string
-target = SlmpTarget(module_io="MULTIPLE_CPU_2")
+from slmp import ModuleIONo, SlmpClient, SlmpTarget
+
+
+def main() -> None:
+    target = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
+    with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r", default_target=target) as client:
+        values = client.read_devices("D100", 1, bit_unit=False)
+        print(values)
+
+    named_target = SlmpTarget(module_io="MULTIPLE_CPU_2")
+    print(named_target.module_io)
+
+
+main()
 ```
 
 ---
