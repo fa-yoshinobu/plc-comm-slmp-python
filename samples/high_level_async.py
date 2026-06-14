@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from typing import cast
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -46,6 +47,7 @@ from slmp import (
     write_named,
     write_typed,
 )
+from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
 # ---------------------------------------------------------------------------
@@ -277,13 +279,14 @@ async def demo_queued_client(host: str, port: int, transport: str, timeout: floa
               issue SLMP requests on the same connection simultaneously.
     """
     async with await open_and_connect(build_options(host, port, transport, timeout, plc_profile)) as queued:
+        queued_view = cast(AsyncSlmpClient, queued)
 
         async def task_a() -> None:
-            first = await read_named(queued, ["D100", "D200:F"])
+            first = await read_named(queued_view, ["D100", "D200:F"])
             print(f"[queued task-A] {first}")
 
         async def task_b() -> None:
-            second = await read_named(queued, ["D202:L", "D50.3"])
+            second = await read_named(queued_view, ["D202:L", "D50.3"])
             print(f"[queued task-B] {second}")
 
         await asyncio.gather(task_a(), task_b())

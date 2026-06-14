@@ -156,7 +156,9 @@ class AsyncSlmpClient:
                     self._reader, self._writer = await asyncio.wait_for(fut, timeout=self.timeout)
                 except asyncio.TimeoutError as err:
                     raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
-                raw_socket = self._writer.get_extra_info("socket")
+                writer = self._writer
+                assert writer is not None
+                raw_socket = writer.get_extra_info("socket")
                 if raw_socket is not None:
                     raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             else:
