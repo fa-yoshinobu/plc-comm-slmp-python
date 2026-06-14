@@ -315,7 +315,6 @@ The concrete byte-order difference between the old generic builder and the captu
 At the moment, `G/HG` is the only family with a confirmed dedicated Extended Specification builder branch in this repository.
 Current operational status is tracked in:
 1. `internal_docsrc/open_items.md`
-2. `internal_docsrc/iqr_r08cpu/device_access_matrix.md`
 
 Practical conclusion for this repository:
 - `G` should be documented and treated as a unit-qualified module-access device (`U\\G` style).

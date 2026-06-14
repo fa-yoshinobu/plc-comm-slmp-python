@@ -116,6 +116,5 @@ After PLC-side setting updates:
 - [manual_implementation_differences.md](manual_implementation_differences.md)
 - [iqr_r08cpu/pending_live_verification_latest.md](iqr_r08cpu/pending_live_verification_latest.md)
 - [iqr_r08cpu/special_device_probe_latest.md](iqr_r08cpu/special_device_probe_latest.md)
-- [iqr_r08cpu/manual_write_verification_latest.md](iqr_r08cpu/manual_write_verification_latest.md)
 - [iqr_r08cpu/manual_label_verification_latest.md](iqr_r08cpu/manual_label_verification_latest.md)
 - [iqr_r08cpu/mixed_block_compare_latest.md](iqr_r08cpu/mixed_block_compare_latest.md)

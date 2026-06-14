@@ -705,13 +705,12 @@ class TestCodec(unittest.TestCase):
             self.assertEqual(model_dir, Path(tmp) / "iqr_r08cpu")
             self.assertEqual(skipped, [])
             self.assertTrue((model_dir / "README.md").exists())
-            self.assertTrue((model_dir / "device_access_matrix.csv").exists())
             self.assertTrue((model_dir / "current_plc_boundary_specs_example.txt").exists())
             self.assertTrue((model_dir / "current_register_boundary_focus_specs_example.txt").exists())
             self.assertTrue((model_dir / "other_station_targets_example.txt").exists())
             self.assertTrue((model_dir / "wireshark" / "README.md").exists())
             self.assertTrue((model_dir / "frame_dumps_extended_device").exists())
-            self.assertGreaterEqual(len(created), 6)
+            self.assertGreaterEqual(len(created), 5)
 
             _, created2, skipped2 = cli._initialize_model_docs(
                 root=Path(tmp),
@@ -719,77 +718,7 @@ class TestCodec(unittest.TestCase):
                 model="R08CPU",
             )
             self.assertEqual(created2, [])
-            self.assertGreaterEqual(len(skipped2), 6)
-
-    def test_load_device_access_matrix_rows(self) -> None:
-        """Test test_load_device_access_matrix_rows."""
-        with TemporaryDirectory() as tmp:
-            path = Path(tmp) / "device_access_matrix.csv"
-            path.write_text(
-                "\n".join(
-                    [
-                        "device_code,device,kind,unsupported,read,write,note,manual_write,manual_write_note",
-                        "D,D1000,word,,OK,OK,representative verification address,OK,human confirmed",
-                        "LTC,LTC10,bit,YES,NG,SKIP,known direct-path issue,,",
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            rows = cli._load_device_access_matrix_rows(path)
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[0].device, "D1000")
-        self.assertEqual(rows[0].manual_write, "OK")
-        self.assertEqual(rows[1].unsupported, "YES")
-
-    def test_render_device_access_matrix_markdown(self) -> None:
-        """Test test_render_device_access_matrix_markdown."""
-        rows = [
-            cli.DeviceMatrixRow(
-                "D",
-                "D1000",
-                "word",
-                "",
-                "OK",
-                "OK",
-                "representative verification address",
-                "OK",
-                "human confirmed",
-            ),
-            cli.DeviceMatrixRow("LTC", "LTC10", "bit", "YES", "NG", "SKIP", "known direct-path issue"),
-        ]
-        output = cli._render_device_access_matrix_markdown(
-            rows,
-            source_path=Path("internal_docs/iqr_r08cpu/device_access_matrix.csv"),
-        )
-        self.assertIn("# Device Access Matrix", output)
-        self.assertIn("- word_read_OK: 1", output)
-        self.assertIn("- bit_write_SKIP: 1", output)
-        self.assertIn("- manual_write_OK: 1", output)
-        self.assertIn(
-            "| LTC | LTC10 | bit | YES | NG | SKIP |  | known direct-path issue |  |",
-            output,
-        )
-
-    def test_select_manual_write_rows_filters_unsupported_and_non_writable(self) -> None:
-        """Test test_select_manual_write_rows_filters_unsupported_and_non_writable."""
-        rows = [
-            cli.DeviceMatrixRow("D", "D1000", "word", "", "OK", "OK", ""),
-            cli.DeviceMatrixRow("G", "G0", "extension_cpu_buffer", "", "NG", "SKIP", ""),
-            cli.DeviceMatrixRow("M", "M1000", "bit", "YES", "OK", "OK", ""),
-            cli.DeviceMatrixRow("ZR", "ZR1000", "word", "", "TODO", "TODO", ""),
-        ]
-        selected = cli._select_manual_write_rows(rows)
-        self.assertEqual([row.device_code for row in selected], ["D", "ZR"])
-
-    def test_select_manual_write_rows_allows_explicit_lt_lst_special_case(self) -> None:
-        """Test test_select_manual_write_rows_allows_explicit_lt_lst_special_case."""
-        rows = [
-            cli.DeviceMatrixRow("LTC", "LTC10", "bit", "", "NG", "SKIP", "known direct-path issue"),
-            cli.DeviceMatrixRow("LSTS", "LSTS10", "bit", "", "NG", "SKIP", "known direct-path issue"),
-        ]
-        selected = cli._select_manual_write_rows(rows, device_codes={"LTC"})
-        self.assertEqual([row.device_code for row in selected], ["LTC"])
+            self.assertGreaterEqual(len(skipped2), 5)
 
     def test_parse_manual_verdict(self) -> None:
         """Test test_parse_manual_verdict."""
@@ -797,38 +726,6 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(cli._parse_manual_verdict("n"), "NG")
         self.assertEqual(cli._parse_manual_verdict("skip"), "SKIP")
         self.assertIsNone(cli._parse_manual_verdict("maybe"))
-
-    def test_load_processed_manual_write_items(self) -> None:
-        """Test test_load_processed_manual_write_items."""
-        with TemporaryDirectory() as tmp:
-            report = Path(tmp) / "manual_write_verification_latest.md"
-            report.write_text(
-                "\n".join(
-                    [
-                        "# Manual Write Verification Report",
-                        "",
-                        "| Item | Status | Detail |",
-                        "|---|---|---|",
-                        "| D D1000 | OK | before=0x0000, test=0x0001, restored=0x0000 |",
-                        "| M M1000 | SKIP | operator skipped before write |",
-                        "| W W100 | NG | temporary_write_failed=boom |",
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                cli._load_processed_manual_write_items(report),
-                {"D D1000", "M M1000", "W W100"},
-            )
-            self.assertEqual(
-                cli._load_manual_write_report_rows(report),
-                [
-                    ("D D1000", "OK", "before=0x0000, test=0x0001, restored=0x0000"),
-                    ("M M1000", "SKIP", "operator skipped before write"),
-                    ("W W100", "NG", "temporary_write_failed=boom"),
-                ],
-            )
 
     def test_parse_positive_int_list(self) -> None:
         """Test test_parse_positive_int_list."""
@@ -1985,73 +1882,6 @@ class TestDeviceApi(unittest.TestCase):
         client.write_block(word_blocks=[("D8000", [0] * 951)], series=PLCSeries.IQR)
         with self.assertRaisesRegex(ValueError, "total device points"):
             client.write_block(word_blocks=[("D8000", [0] * 952)], series=PLCSeries.IQR)
-
-    def test_manual_write_helpers_use_lt_lst_special_paths(self) -> None:
-        """Test test_manual_write_helpers_use_lt_lst_special_paths."""
-
-        class ManualProbeClient(FakeClient):
-            def read_ltc_states(self, *, head_no=0, points=1, series=None):  # type: ignore[override]
-                self.last_request = ("read_ltc_states", head_no, points, series)
-                return [True]
-
-            def read_lts_states(self, *, head_no=0, points=1, series=None):  # type: ignore[override]
-                self.last_request = ("read_lts_states", head_no, points, series)
-                return [False]
-
-            def read_lstc_states(self, *, head_no=0, points=1, series=None):  # type: ignore[override]
-                self.last_request = ("read_lstc_states", head_no, points, series)
-                return [True]
-
-            def read_lsts_states(self, *, head_no=0, points=1, series=None):  # type: ignore[override]
-                self.last_request = ("read_lsts_states", head_no, points, series)
-                return [False]
-
-        client = ManualProbeClient()
-        self.assertTrue(
-            cli._read_manual_row_value(
-                client,
-                cli.DeviceMatrixRow("LTC", "LTC10", "bit", "", "NG", "SKIP", ""),
-                series="iqr",
-            )
-        )
-        self.assertEqual(client.last_request, ("read_ltc_states", 10, 1, "iqr"))
-        self.assertFalse(
-            cli._read_manual_row_value(
-                client,
-                cli.DeviceMatrixRow("LTS", "LTS10", "bit", "", "NG", "SKIP", ""),
-                series="iqr",
-            )
-        )
-        self.assertEqual(client.last_request, ("read_lts_states", 10, 1, "iqr"))
-        self.assertTrue(
-            cli._read_manual_row_value(
-                client,
-                cli.DeviceMatrixRow("LSTC", "LSTC10", "bit", "", "NG", "SKIP", ""),
-                series="iqr",
-            )
-        )
-        self.assertEqual(client.last_request, ("read_lstc_states", 10, 1, "iqr"))
-        self.assertFalse(
-            cli._read_manual_row_value(
-                client,
-                cli.DeviceMatrixRow("LSTS", "LSTS10", "bit", "", "NG", "SKIP", ""),
-                series="iqr",
-            )
-        )
-        self.assertEqual(client.last_request, ("read_lsts_states", 10, 1, "iqr"))
-
-        cli._write_manual_row_value(
-            client,
-            cli.DeviceMatrixRow("LTC", "LTC10", "bit", "", "NG", "SKIP", ""),
-            True,
-            series="iqr",
-        )
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.DEVICE_WRITE_RANDOM)
-        self.assertEqual(subcommand, 0x0003)
-        self.assertEqual(payload[0], 1)
-        self.assertEqual(payload[1:4], b"\x0a\x00\x00")
-        self.assertEqual(payload[-2:], b"\x01\x00")
 
     def test_memory_read_words(self) -> None:
         """Test test_memory_read_words."""

@@ -26,7 +26,6 @@ Read these in order when you need current project truth:
 
 Supporting stable documents:
 
-- [device_access_matrix_policy.md](device_access_matrix_policy.md)
 - [plc_setting_change_log_template.md](plc_setting_change_log_template.md)
 - [plc_device_range_expectations.md](plc_device_range_expectations.md)
 - [API_UNIFICATION_POLICY.md](API_UNIFICATION_POLICY.md)
@@ -49,7 +48,6 @@ Tracked:
 
 - `*_latest.md` reports
 - stable Markdown documents
-- CSV/Markdown matrix files
 
 Do not commit:
 

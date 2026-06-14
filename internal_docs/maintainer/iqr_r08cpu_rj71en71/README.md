@@ -41,8 +41,6 @@ Unless live evidence proves otherwise, device-family accessibility should be tre
 
 ## Supporting Files
 
-- [device_access_matrix.csv](device_access_matrix.csv)
-- [device_access_matrix.md](device_access_matrix.md)
 - [current_plc_boundary_specs_example.txt](current_plc_boundary_specs_example.txt)
 - [current_register_boundary_focus_specs_example.txt](current_register_boundary_focus_specs_example.txt)
 - [other_station_targets_example.txt](other_station_targets_example.txt)

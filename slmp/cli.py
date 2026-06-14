@@ -918,14 +918,11 @@ def _default_regression_help_scripts() -> tuple[str, ...]:
         "slmp_connection_check.py",
         "slmp_device_range_probe.py",
         "slmp_register_boundary_probe.py",
-        "slmp_device_access_matrix_sync.py",
         "slmp_init_model_docs.py",
         "slmp_other_station_check.py",
         "slmp_open_items_recheck.py",
         "slmp_pending_live_verification.py",
-        "slmp_manual_write_verification.py",
         "slmp_manual_label_verification.py",
-        "slmp_supported_device_rw_probe.py",
         "slmp_special_device_probe.py",
         "slmp_read_soak.py",
         "slmp_mixed_read_load.py",
@@ -1152,21 +1149,6 @@ class ExtendedDeviceWordProbeSpec:
     device: str
     preferred_write_value: int
     direct_memory_specification: int
-
-
-@dataclass(frozen=True)
-class DeviceMatrixRow:
-    """A row in the device access matrix."""
-
-    device_code: str
-    device: str
-    kind: str
-    unsupported: str
-    read: str
-    write: str
-    note: str
-    manual_write: str = ""
-    manual_write_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -1792,223 +1774,6 @@ def _write_scaffold_file(path: Path, content: str, *, force: bool) -> bool:
     return True
 
 
-def _load_device_access_matrix_rows(path: str | Path) -> list[DeviceMatrixRow]:
-    csv_path = Path(path)
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"device access matrix has no header: {csv_path}")
-        expected = {"device_code", "device", "kind", "unsupported", "read", "write", "note"}
-        missing = sorted(expected - set(reader.fieldnames))
-        if missing:
-            raise ValueError(f"device access matrix is missing columns: {', '.join(missing)}")
-        rows: list[DeviceMatrixRow] = []
-        for raw in reader:
-            row = DeviceMatrixRow(
-                device_code=(raw.get("device_code") or "").strip(),
-                device=(raw.get("device") or "").strip(),
-                kind=(raw.get("kind") or "").strip(),
-                unsupported=(raw.get("unsupported") or "").strip(),
-                read=(raw.get("read") or "").strip(),
-                write=(raw.get("write") or "").strip(),
-                note=(raw.get("note") or "").strip(),
-                manual_write=(raw.get("manual_write") or "").strip(),
-                manual_write_note=(raw.get("manual_write_note") or "").strip(),
-            )
-            if not any(
-                (
-                    row.device_code,
-                    row.device,
-                    row.kind,
-                    row.unsupported,
-                    row.read,
-                    row.write,
-                    row.note,
-                    row.manual_write,
-                    row.manual_write_note,
-                )
-            ):
-                continue
-            rows.append(row)
-    if not rows:
-        raise ValueError(f"device access matrix has no rows: {csv_path}")
-    return rows
-
-
-def _escape_markdown_cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", "<br>")
-
-
-def _render_device_access_matrix_markdown(rows: Sequence[DeviceMatrixRow], *, source_path: Path) -> str:
-    summary: dict[str, int] = {}
-    for row in rows:
-        kind_key = row.kind.lower() or "unknown"
-        for label, value in (("read", row.read), ("write", row.write)):
-            status = value.strip()
-            if not status:
-                continue
-            key = f"{kind_key}_{label}_{status.upper()}"
-            summary[key] = summary.get(key, 0) + 1
-        manual_status = row.manual_write.strip()
-        if manual_status:
-            key = f"manual_write_{manual_status.upper()}"
-            summary[key] = summary.get(key, 0) + 1
-
-    lines = [
-        "# Device Access Matrix",
-        "",
-        f"- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- Source: `{source_path.as_posix()}`",
-        "",
-        "## Summary",
-        "",
-    ]
-    if summary:
-        for key in sorted(summary):
-            lines.append(f"- {key}: {summary[key]}")
-    else:
-        lines.append("- no populated read/write status values")
-
-    lines.extend(
-        [
-            "",
-            "## Results",
-            "",
-            "| Device Code | Device | Kind | Unsupported | Read | Write | Manual Write | Note | Manual Write Note |",
-            "|---|---|---|---|---|---|---|---|---|",
-        ]
-    )
-    for row in rows:
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    _escape_markdown_cell(row.device_code),
-                    _escape_markdown_cell(row.device),
-                    _escape_markdown_cell(row.kind),
-                    _escape_markdown_cell(row.unsupported),
-                    _escape_markdown_cell(row.read),
-                    _escape_markdown_cell(row.write),
-                    _escape_markdown_cell(row.manual_write),
-                    _escape_markdown_cell(row.note),
-                    _escape_markdown_cell(row.manual_write_note),
-                ]
-            )
-            + " |"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def _manual_yes(text: str) -> bool:
-    return text.strip().lower() in {"y", "yes", "true", "1", "unsupported"}
-
-
-_SPECIAL_MANUAL_WRITE_CODES = frozenset({"LTC", "LTS", "LSTC", "LSTS"})
-
-
-def _is_special_manual_write_row(row: DeviceMatrixRow) -> bool:
-    return row.device_code.upper() in _SPECIAL_MANUAL_WRITE_CODES
-
-
-def _select_manual_write_rows(
-    rows: Sequence[DeviceMatrixRow],
-    *,
-    device_codes: set[str] | None = None,
-    limit: int | None = None,
-) -> list[DeviceMatrixRow]:
-    selected: list[DeviceMatrixRow] = []
-    for row in rows:
-        explicit_request = bool(device_codes and row.device_code.upper() in device_codes)
-        if device_codes and not explicit_request:
-            continue
-        if not row.device or row.device.upper() == "N/A":
-            continue
-        if row.kind.lower() not in {"bit", "word", "dword"}:
-            continue
-        if _manual_yes(row.unsupported):
-            continue
-        if row.read.strip().upper() in {"NG", "SKIP", "NO"} and not (
-            explicit_request and _is_special_manual_write_row(row)
-        ):
-            continue
-        if row.write.strip().upper() in {"NG", "SKIP", "NO"} and not (
-            explicit_request and _is_special_manual_write_row(row)
-        ):
-            continue
-        selected.append(row)
-        if limit is not None and len(selected) >= limit:
-            break
-    return selected
-
-
-def _format_manual_value(kind: str, value: int | bool) -> str:
-    lowered = kind.lower()
-    if lowered == "bit":
-        return "ON" if bool(value) else "OFF"
-    if lowered == "dword":
-        return f"0x{int(value):08X} ({int(value)})"
-    return f"0x{int(value):04X} ({int(value)})"
-
-
-def _read_manual_row_value(client: _StandardSlmpClient, row: DeviceMatrixRow, *, series: str) -> int | bool:
-    code = row.device_code.upper()
-    number = parse_device(row.device).number
-    if code == "LTC":
-        return bool(client.read_ltc_states(head_no=number, points=1, series=series)[0])
-    if code == "LTS":
-        return bool(client.read_lts_states(head_no=number, points=1, series=series)[0])
-    if code == "LSTC":
-        return bool(client.read_lstc_states(head_no=number, points=1, series=series)[0])
-    if code == "LSTS":
-        return bool(client.read_lsts_states(head_no=number, points=1, series=series)[0])
-    kind = row.kind.lower()
-    if kind == "bit":
-        return bool(client.read_devices(row.device, 1, bit_unit=True, series=series)[0])
-    if kind == "word":
-        return int(client.read_devices(row.device, 1, bit_unit=False, series=series)[0])
-    if kind == "dword":
-        key = str(parse_device(row.device))
-        return int(client.read_random(dword_devices=[row.device], series=series).dword[key])
-    raise ValueError(f"unsupported manual-write row kind: {row.kind}")
-
-
-def _write_manual_row_value(
-    client: _StandardSlmpClient,
-    row: DeviceMatrixRow,
-    value: int | bool,
-    *,
-    series: str,
-) -> None:
-    code = row.device_code.upper()
-    if code in _SPECIAL_MANUAL_WRITE_CODES:
-        client.write_random_bits([(row.device, bool(value))], series=series)
-        return
-    kind = row.kind.lower()
-    if kind == "bit":
-        client.write_devices(row.device, [1 if bool(value) else 0], bit_unit=True, series=series)
-        return
-    if kind == "word":
-        client.write_devices(row.device, [int(value) & 0xFFFF], bit_unit=False, series=series)
-        return
-    if kind == "dword":
-        client.write_random_words(dword_values=[(row.device, int(value) & 0xFFFFFFFF)], series=series)
-        return
-    raise ValueError(f"unsupported manual-write row kind: {row.kind}")
-
-
-def _make_manual_test_value(row: DeviceMatrixRow, before: int | bool) -> int | bool:
-    kind = row.kind.lower()
-    if kind == "bit":
-        return not bool(before)
-    mask = 0x00000001 if kind == "dword" else 0x0001
-    before_int = int(before)
-    candidate = before_int ^ mask
-    if candidate == before_int:
-        return 1 if before_int == 0 else 0
-    return candidate
-
-
 def _parse_manual_verdict(text: str) -> str | None:
     lowered = text.strip().lower()
     if lowered in {"y", "yes"}:
@@ -2018,36 +1783,6 @@ def _parse_manual_verdict(text: str) -> str | None:
     if lowered in {"s", "skip"}:
         return "SKIP"
     return None
-
-
-def _load_processed_manual_write_items(report_path: Path) -> set[str]:
-    processed: set[str] = set()
-    for line in report_path.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("| "):
-            continue
-        parts = [part.strip() for part in line.strip().strip("|").split("|")]
-        if len(parts) < 3:
-            continue
-        item, status = parts[0], parts[1]
-        if item == "Item" or status not in {"OK", "NG", "SKIP"}:
-            continue
-        processed.add(item)
-    return processed
-
-
-def _load_manual_write_report_rows(report_path: Path) -> list[tuple[str, str, str]]:
-    rows: list[tuple[str, str, str]] = []
-    for line in report_path.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("| "):
-            continue
-        parts = [part.strip() for part in line.strip().strip("|").split("|")]
-        if len(parts) < 3:
-            continue
-        item, status, detail = parts[0], parts[1], parts[2]
-        if item == "Item" or status not in {"OK", "NG", "SKIP"}:
-            continue
-        rows.append((item, status, detail))
-    return rows
 
 
 def _parse_positive_int_list(text: str) -> tuple[int, ...]:
@@ -2079,12 +1814,6 @@ def _render_model_docs_readme(*, series: str, model: str, folder_name: str) -> s
             "",
             "## Expected Files",
             "",
-            "- `device_access_matrix.csv`",
-            "  - Excel-friendly live verification sheet; not a source for library code generation",
-            "- `device_access_matrix.md`",
-            "  - human-readable device access snapshot generated from the CSV when maintained",
-            "- `manual_write_verification_latest.md`",
-            "  - interactive human-confirmed temporary write verification report",
             "- `read_soak_latest.md`",
             "  - repeated single-command read soak result",
             "- `mixed_read_load_latest.md`",
@@ -2198,21 +1927,6 @@ def _render_model_other_station_targets_example() -> str:
     )
 
 
-def _render_model_device_access_matrix_csv() -> str:
-    return "\n".join(
-        [
-            "device_code,device,kind,unsupported,read,write,note,manual_write,manual_write_note",
-            "D,D1000,word,,TODO,TODO,representative verification address; avoid head addresses,,",
-            "M,M1000,bit,,TODO,TODO,fill unsupported manually if needed,,",
-            "W,W100,word,,TODO,TODO,fill unsupported manually if needed,,",
-            "B,B100,bit,,TODO,TODO,fill unsupported manually if needed,,",
-            "R,R1000,word,,TODO,TODO,fill unsupported manually if needed,,",
-            "ZR,ZR1000,word,,TODO,TODO,fill unsupported manually if needed,,",
-            "",
-        ]
-    )
-
-
 def _initialize_model_docs(
     *,
     root: Path,
@@ -2226,7 +1940,6 @@ def _initialize_model_docs(
     skipped: list[Path] = []
     files: list[tuple[Path, str]] = [
         (model_dir / "README.md", _render_model_docs_readme(series=series, model=model, folder_name=folder_name)),
-        (model_dir / "device_access_matrix.csv", _render_model_device_access_matrix_csv()),
         (model_dir / "current_plc_boundary_specs_example.txt", _render_model_boundary_specs_example()),
         (
             model_dir / "current_register_boundary_focus_specs_example.txt",
@@ -4523,213 +4236,6 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
     )
     print(f"[DONE] report={output_path}")
     return 0
-
-
-def device_access_matrix_sync_main(argv: Sequence[str] | None = None) -> int:
-    """Render device_access_matrix.md from device_access_matrix.csv."""
-    parser = argparse.ArgumentParser(description="Render device_access_matrix.md from device_access_matrix.csv")
-    parser.add_argument(
-        "--csv",
-        required=True,
-        help="path to device_access_matrix.csv",
-    )
-    parser.add_argument(
-        "--output",
-        help="optional markdown output path; default is the CSV path with .md suffix",
-    )
-    args = parser.parse_args(list(argv) if argv is not None else None)
-
-    csv_path = Path(args.csv)
-    output_path = Path(args.output) if args.output else csv_path.with_suffix(".md")
-    rows = _load_device_access_matrix_rows(csv_path)
-    content = _render_device_access_matrix_markdown(rows, source_path=csv_path)
-    _write_text_report(output_path, content)
-    print(f"[DONE] report={output_path}")
-    return 0
-
-
-def manual_write_verification_main(argv: Sequence[str] | None = None) -> int:
-    """Perform interactive manual device write verification with restore."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Write temporary test values to representative devices from device_access_matrix.csv, "
-            "let a human verify the effect, and then restore the original values"
-        )
-    )
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
-    parser.add_argument("--timeout", type=float, default=3.0)
-    parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
-    parser.add_argument(
-        "--matrix",
-        help=(
-            "path to device_access_matrix.csv; default is "
-            "internal_docs/<series>_<model>/device_access_matrix.csv after probing 0101"
-        ),
-    )
-    parser.add_argument(
-        "--device-code",
-        action="append",
-        help="device code filter, repeatable (example: D or ZR)",
-    )
-    parser.add_argument("--limit", type=int, help="optional maximum number of rows to process")
-    parser.add_argument(
-        "--output",
-        help=(
-            "optional markdown output path; default is "
-            "internal_docs/<series>_<model>/manual_write_verification_latest.md"
-        ),
-    )
-    parser.add_argument(
-        "--resume-from-report",
-        help="skip rows already present in an earlier manual_write_verification report",
-    )
-    parser.add_argument(
-        "--keep-written-value",
-        action="store_true",
-        help="do not restore the original value after the human judgement step",
-    )
-    args = parser.parse_args(list(argv) if argv is not None else None)
-
-    target = SlmpTarget(
-        network=args.network,
-        station=args.station,
-        module_io=args.module_io,
-        multidrop=args.multidrop,
-    )
-    model = _probe_target_model(
-        host=args.host,
-        port=args.port,
-        transport=args.transport,
-        timeout=args.timeout,
-        series=args.series,
-        target=target,
-    )
-    matrix_path = (
-        Path(args.matrix)
-        if args.matrix
-        else _model_folder_path(series=args.series, model=model) / "device_access_matrix.csv"
-    )
-    if not matrix_path.exists():
-        raise FileNotFoundError(f"device access matrix not found: {matrix_path}")
-    output_path = args.output or _default_report_output(
-        series=args.series,
-        model=model,
-        filename="manual_write_verification_latest.md",
-    )
-
-    rows = _load_device_access_matrix_rows(matrix_path)
-    selected = _select_manual_write_rows(
-        rows,
-        device_codes={code.upper() for code in args.device_code} if args.device_code else None,
-        limit=args.limit,
-    )
-    existing_report_rows: list[tuple[str, str, str]] = []
-    if args.resume_from_report:
-        resume_report_path = Path(args.resume_from_report)
-        processed = _load_processed_manual_write_items(resume_report_path)
-        existing_report_rows = _load_manual_write_report_rows(resume_report_path)
-        selected = [row for row in selected if f"{row.device_code} {row.device}" not in processed]
-    if not selected:
-        print(f"[SKIP] no manual-write candidates matched matrix={matrix_path}")
-        return 0
-
-    report_rows: list[tuple[str, str, str]] = list(existing_report_rows)
-    summary = {"OK": 0, "NG": 0, "SKIP": 0}
-    for _, status, _ in existing_report_rows:
-        summary[status] = summary.get(status, 0) + 1
-
-    def record(item: str, status: str, detail: str) -> None:
-        report_rows.append((item, status, detail))
-        summary[status] = summary.get(status, 0) + 1
-        print(f"[{status}] {item}: {detail}")
-
-    with SlmpClient(
-        args.host,
-        port=args.port,
-        transport=args.transport,
-        timeout=args.timeout,
-        plc_series=args.series,
-        default_target=target,
-        _allow_manual_profile=True,
-    ) as cli:
-        for index, row in enumerate(selected, start=1):
-            item = f"{row.device_code} {row.device}"
-            print("")
-            print(f"=== [{index}/{len(selected)}] {item} ({row.kind}) ===")
-            if row.note:
-                print(f"note: {row.note}")
-            try:
-                before = _read_manual_row_value(cli, row, series=args.series)
-            except Exception as exc:  # noqa: BLE001
-                record(item, "NG", f"read_before_failed={exc}")
-                continue
-
-            test_value = _make_manual_test_value(row, before)
-            before_text = _format_manual_value(row.kind, before)
-            test_text = _format_manual_value(row.kind, test_value)
-            print(f"temporary write: {row.device} {before_text} -> {test_text}")
-            start = input("Press Enter to write temporarily, or type 'skip' to skip this row: ").strip().lower()
-            if start in {"s", "skip"}:
-                record(item, "SKIP", "operator skipped before write")
-                continue
-
-            restore_detail = "not attempted"
-            try:
-                _write_manual_row_value(cli, row, test_value, series=args.series)
-                print("Temporary write completed. Verify the reflected value in your engineering tool.")
-                verdict: str | None = None
-                while verdict is None:
-                    verdict = _parse_manual_verdict(input("Human check result [Y/N/Skip]: "))
-                    if verdict is None:
-                        print("Enter Y, N, or Skip.")
-            except Exception as exc:  # noqa: BLE001
-                record(item, "NG", f"temporary_write_failed={exc}")
-                continue
-            finally:
-                if not args.keep_written_value:
-                    try:
-                        _write_manual_row_value(cli, row, before, series=args.series)
-                        restore_detail = f"restored={before_text}"
-                    except Exception as exc:  # noqa: BLE001
-                        restore_detail = f"restore_failed={exc}"
-
-            assert verdict is not None
-            detail = f"before={before_text}, test={test_text}, {restore_detail}"
-            if restore_detail.startswith("restore_failed="):
-                record(item, "NG", detail)
-            else:
-                record(item, verdict, detail)
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    _write_markdown_report(
-        output_path,
-        title="# Manual Write Verification Report",
-        header_lines=[
-            f"- Date: {now}",
-            f"- Host: {args.host}",
-            f"- Port: {args.port}",
-            f"- Transport: {args.transport}",
-            f"- Series: {args.series}",
-            f"- Target: network=0x{target.network:02X}, station=0x{target.station:02X}, "
-            f"module_io=0x{target.module_io:04X}, multidrop=0x{target.multidrop:02X}",
-            f"- Matrix: `{matrix_path.as_posix()}`",
-            f"- Rows processed: {len(selected)}",
-            (f"- Summary: OK={summary['OK']}, NG={summary['NG']}, SKIP={summary['SKIP']}"),
-            (
-                "- Behavior: each row writes a temporary value, waits for human confirmation, "
-                "and restores the original value unless --keep-written-value is set"
-            ),
-        ],
-        rows=report_rows,
-    )
-    print(f"[DONE] report={output_path}")
-    return 0 if summary["NG"] == 0 else 2
 
 
 def manual_label_verification_main(argv: Sequence[str] | None = None) -> int:

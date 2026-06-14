@@ -20,10 +20,6 @@ If you only need the current practical picture, read these first:
   - command-family live status
 - [manual_label_verification_latest.md](manual_label_verification_latest.md)
   - human-confirmed label read/write/restore results
-- [manual_write_verification_latest.md](manual_write_verification_latest.md)
-  - human-confirmed device write/read/restore results
-- [device_access_matrix.md](device_access_matrix.md)
-  - current per-device snapshot from the matrix CSV
 
 ## Current Practical Snapshot
 
@@ -46,15 +42,10 @@ If you only need the current practical picture, read these first:
 
 ### Human-confirmed verification
 
-- [manual_write_verification_latest.md](manual_write_verification_latest.md)
 - [manual_label_verification_latest.md](manual_label_verification_latest.md)
-- [manual_write_verification_notes.md](manual_write_verification_notes.md)
 
-### Matrix and device-family summaries
+### Device-family summaries
 
-- [device_access_matrix.csv](device_access_matrix.csv)
-- [device_access_matrix.md](device_access_matrix.md)
-- [supported_device_rw_probe_latest.md](supported_device_rw_probe_latest.md)
 - [bit_device_word_block_equivalence_latest.md](bit_device_word_block_equivalence_latest.md)
 
 ### Boundary and address-behavior reports

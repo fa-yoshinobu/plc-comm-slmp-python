@@ -29,7 +29,6 @@ If you need to validate unresolved behavior, use:
 
 If you need human confirmation, use:
 
-- `slmp_manual_write_verification.py`
 - `slmp_manual_label_verification.py`
 
 ## Script List by Purpose
@@ -41,8 +40,6 @@ If you need human confirmation, use:
   - Optional safe live connection smoke check is available by flag.
 - `slmp_init_model_docs.py`
   - Create `internal_docsrc/<series>_<model>/`.
-- `slmp_device_access_matrix_sync.py`
-  - Render `device_access_matrix.md` from `device_access_matrix.csv`.
 
 ### Safe connection and scope checks
 
@@ -74,15 +71,8 @@ If you need human confirmation, use:
 
 ### Human-in-the-loop verification
 
-- `slmp_manual_write_verification.py`
-  - Temporary write/restore check for representative devices from the matrix.
 - `slmp_manual_label_verification.py`
   - Temporary write/restore check for explicitly named labels.
-
-### Automated write/read/restore probes
-
-- `slmp_supported_device_rw_probe.py`
-  - Automated probe across currently supported writable device families.
 
 ### Boundary and range probes
 

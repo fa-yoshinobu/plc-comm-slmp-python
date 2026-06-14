@@ -56,14 +56,11 @@ python scripts/slmp_regression_suite.py --help
 python scripts/slmp_connection_check.py --help
 python scripts/slmp_device_range_probe.py --help
 python scripts/slmp_register_boundary_probe.py --help
-python scripts/slmp_device_access_matrix_sync.py --help
 python scripts/slmp_init_model_docs.py --help
 python scripts/slmp_other_station_check.py --help
 python scripts/slmp_open_items_recheck.py --help
 python scripts/slmp_pending_live_verification.py --help
-python scripts/slmp_manual_write_verification.py --help
 python scripts/slmp_manual_label_verification.py --help
-python scripts/slmp_supported_device_rw_probe.py --help
 python scripts/slmp_special_device_probe.py --help
 python scripts/slmp_read_soak.py --help
 python scripts/slmp_mixed_read_load.py --help
@@ -305,14 +302,6 @@ Frame dumps:
 
 - `internal_docsrc/<series>_<model>/frame_dumps_g_hg_extended_device_coverage/`
 
-### Supported-Device Write/Read/Restore Probe
-
-Use this for automated smoke checks of the currently supported writable families:
-
-```powershell
-python scripts/slmp_supported_device_rw_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
-```
-
 ### Mixed Block Comparison
 
 Use this when you want request/response hex plus before/after/restore details for the checklist-style `D300` + `M200` block scenarios:
@@ -353,29 +342,15 @@ python scripts/slmp_tcp_concurrency.py --host 192.168.250.100 --port 1025 --seri
 
 ## 9. Human-in-the-Loop Checks
 
-### Manual Write Verification
-
-Use this to temporarily write representative devices from the matrix:
-
-```powershell
-python scripts/slmp_manual_write_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --device-code D --device-code M
-```
-
-Resume from the last report:
-
-```powershell
-python scripts/slmp_manual_write_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --matrix internal_docsrc/iqr_r08cpu/device_access_matrix.csv --resume-from-report internal_docsrc/iqr_r08cpu/manual_write_verification_latest.md
-```
-
 ### Manual Label Verification
 
-Use this for explicit labels rather than the matrix:
+Use this for explicit labels:
 
 ```powershell
 python scripts/slmp_manual_label_verification.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --label-random LabelB --label-random LabelW --label-array DDD[0]:1:20
 ```
 
-Both scripts:
+The script:
 
 1. read the current value
 2. write a temporary value
@@ -454,7 +429,6 @@ Common tracked report outputs:
 - `internal_docsrc/<series>_<model>/open_items_recheck_latest.md`
 - `internal_docsrc/<series>_<model>/pending_live_verification_latest.md`
 - `internal_docsrc/<series>_<model>/register_boundary_probe_latest.md`
-- `internal_docsrc/<series>_<model>/manual_write_verification_latest.md`
 - `internal_docsrc/<series>_<model>/manual_label_verification_latest.md`
 
 Stable summaries live in:

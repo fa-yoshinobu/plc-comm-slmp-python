@@ -24,7 +24,6 @@ Focused verification:
 
 Human-in-the-loop verification:
 
-- `slmp_manual_write_verification.py`
 - `slmp_manual_label_verification.py`
 
 ## Key Script Groups
@@ -33,7 +32,6 @@ Human-in-the-loop verification:
 
 - `slmp_regression_suite.py`
 - `slmp_init_model_docs.py`
-- `slmp_device_access_matrix_sync.py`
 
 ### Safe connection and scope checks
 

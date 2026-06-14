@@ -6,7 +6,6 @@
 - Port: `1025`
 - Transport: `tcp`
 - Series: `iqr`
-- Source matrix: `internal_docsrc/iqr_r08cpu/device_access_matrix.csv`
 - Test packed word pattern for writable devices: `0xA55A`
 - Method:
   - compare `0401` word read and `0406` bit block read at the same base device
