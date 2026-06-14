@@ -1,20 +1,20 @@
 # Profiles
 
-Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, string address family, and device-range catalog family.
+Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
 
 ## Profiles
 
 | Canonical profile | Human label | Frame | Mode | Notes |
 | --- | --- | --- | --- | --- |
-| `melsec:iq-f` | MELSEC iQ-F | 3E | Legacy `ql` | Address profile `melsec:iq-f`; range profile `melsec:iq-f`; `X`/`Y` text is octal. |
-| `melsec:iq-r` | MELSEC iQ-R | 4E | iQR `iqr` | Address profile `melsec:iq-r`; range profile `melsec:iq-r`; `X`/`Y` text is hexadecimal. |
-| `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Address profile `melsec:iq-l`; range profile `melsec:iq-l`; currently uses iQ-R-compatible address rules. |
-| `melsec:mx-f` | MELSEC MX-F | 4E | iQR `iqr` | Address profile `melsec:mx-f`; range profile `melsec:mx-f`. |
-| `melsec:mx-r` | MELSEC MX-R | 4E | iQR `iqr` | Address profile `melsec:mx-r`; range profile `melsec:mx-r`. |
-| `melsec:qcpu` | MELSEC QCPU | 3E | Legacy `ql` | Address profile `melsec:qcpu`; range profile `melsec:qcpu`. |
-| `melsec:lcpu` | MELSEC LCPU | 3E | Legacy `ql` | Address profile `melsec:lcpu`; range profile `melsec:lcpu`. |
-| `melsec:qnu` | MELSEC QnU | 3E | Legacy `ql` | Address profile `melsec:qnu`; range profile `melsec:qnu`. |
-| `melsec:qnudv` | MELSEC QnUDV | 3E | Legacy `ql` | Address profile `melsec:qnudv`; range profile `melsec:qnudv`. |
+| `melsec:iq-f` | MELSEC iQ-F | 3E | Legacy `ql` | `X`/`Y` text is octal. |
+| `melsec:iq-r` | MELSEC iQ-R | 4E | iQR `iqr` | `X`/`Y` text is hexadecimal. |
+| `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Use for MELSEC iQ-L targets. |
+| `melsec:mx-f` | MELSEC MX-F | 4E | iQR `iqr` | Use for MELSEC MX-F targets. |
+| `melsec:mx-r` | MELSEC MX-R | 4E | iQR `iqr` | Use for MELSEC MX-R targets. |
+| `melsec:qcpu` | MELSEC QCPU | 3E | Legacy `ql` | Legacy Q CPU profile. |
+| `melsec:lcpu` | MELSEC LCPU | 3E | Legacy `ql` | Legacy L CPU profile. |
+| `melsec:qnu` | MELSEC QnU | 3E | Legacy `ql` | QnU profile. |
+| `melsec:qnudv` | MELSEC QnUDV | 3E | Legacy `ql` | QnUDV profile. |
 
 ## How to select
 
@@ -40,10 +40,10 @@ asyncio.run(main())
 | --- | --- |
 | `melsec:iq-f` | Frame 3E, legacy mode. `DX` and `DY` are not valid. `X`/`Y` addressing is octal. |
 | `melsec:iq-r` | Frame 4E, iQR mode. `X`/`Y` addressing is hexadecimal. |
-| `melsec:iq-l` | Frame 4E, iQR mode. Address parsing follows iQ-R rules while the range catalog uses iQ-L rules. |
+| `melsec:iq-l` | Frame 4E, iQR mode. |
 | `melsec:qcpu` | Frame 3E, legacy mode. |
 | `melsec:lcpu` | Frame 3E, legacy mode. |
 | `melsec:qnu` | Frame 3E, legacy mode. |
 | `melsec:qnudv` | Frame 3E, legacy mode. |
-| `melsec:mx-f` | Frame 4E, iQR mode with MX-F range rules. |
-| `melsec:mx-r` | Frame 4E, iQR mode with MX-R range rules. |
+| `melsec:mx-f` | Frame 4E, iQR mode. |
+| `melsec:mx-r` | Frame 4E, iQR mode. |

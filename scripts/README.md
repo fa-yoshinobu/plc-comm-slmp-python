@@ -8,7 +8,7 @@ You can use either:
 - `python scripts/<name>.py ...`
 - the installed console entry point
 
-Use [TESTING_GUIDE.md](../internal_docs/maintainer/TESTING_GUIDE.md) for when to run each script and [USER_GUIDE.md](../docsrc/user/USER_GUIDE.md) for API-side context.
+Use [TESTING_GUIDE.md](../internal_docs/maintainer/TESTING_GUIDE.md) for when to run each script and [USAGE_GUIDE.md](../docsrc/user/USAGE_GUIDE.md) for API-side context.
 
 ## Start Here
 
