@@ -62,5 +62,5 @@ Human-in-the-loop verification:
 - `slmp_tcp_concurrency.py`
 
 Use [Testing Guide](TESTING_GUIDE.md) for execution order and release gates. Use
-[User Guide](../user/USER_GUIDE.md) for API-facing examples.
+[User Guide](../../docsrc/user/USER_GUIDE.md) for API-facing examples.
 

@@ -443,7 +443,7 @@ Common examples in this project:
 
 Use:
 
-- [Error Codes Guide](../user/ERROR_CODES.md) for the quick table
+- [Error Codes Guide](../../docsrc/user/ERROR_CODES.md) for the quick table
 - [Open Items](open_items.md) for current unresolved items
 - [Communication Test Record](communication_test_record.md) for chronology
 

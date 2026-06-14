@@ -6,10 +6,10 @@ This is the minimum release checklist for this repository.
 
 Check these before tagging:
 
-- [Overview](../index.md)
-- [User Guide](../user/USER_GUIDE.md)
+- [Overview](../../docsrc/index.md)
+- [User Guide](../../docsrc/user/USER_GUIDE.md)
 - [Testing Guide](TESTING_GUIDE.md)
-- [Change Log](../CHANGELOG.md)
+- [Change Log](../../CHANGELOG.md)
 - [Protocol Spec](PROTOCOL_SPEC.md)
 - [Open Items](open_items.md)
 - [Communication Test Record](communication_test_record.md)

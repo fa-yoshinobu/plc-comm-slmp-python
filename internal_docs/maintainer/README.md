@@ -9,7 +9,7 @@ It holds:
 - target-specific live reports
 - operator-facing verification results that back implementation choices
 
-If you are a library user, start from [Overview](../index.md) and [User Guide](../user/USER_GUIDE.md) first.
+If you are a library user, start from [Overview](../../docsrc/index.md) and [User Guide](../../docsrc/user/USER_GUIDE.md) first.
 
 ## Start Here
 

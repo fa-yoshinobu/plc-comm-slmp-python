@@ -103,7 +103,7 @@ If you need human confirmation, use:
 ## Notes
 
 - Most scripts write a `*_latest.md` report under `internal_docsrc/<series>_<model>/`.
-- Interactive scripts temporarily change PLC values; read [TESTING.md](../TESTING.md) first.
+- Interactive scripts temporarily change PLC values; read [Testing Guide](../internal_docs/maintainer/TESTING_GUIDE.md) first.
 - Packet captures and raw communication logs are local-only and must not be committed.
 
 
