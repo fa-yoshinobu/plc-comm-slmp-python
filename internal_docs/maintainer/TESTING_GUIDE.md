@@ -276,7 +276,7 @@ Frame dumps:
 
 Multi-CPU `G/HG` expansion checklist:
 
-- `internal_docs/validation/reports/G_HG_MULTI_CPU_HARDWARE_RECHECK_2026-03-19.md`
+- maintainer archive
 
 ### G/HG Extended Specification Coverage Sweep
 

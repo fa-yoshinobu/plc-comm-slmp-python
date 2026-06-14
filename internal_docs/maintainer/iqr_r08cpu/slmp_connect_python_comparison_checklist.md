@@ -12,7 +12,7 @@ The current C++ library already has:
 
 - mixed block support in the codec and request builder (`src/slmp_minimal.cpp`)
 - mock-PLC integration coverage that accepts mixed `writeBlock()` (`tests/slmp_socket_integration.cpp`)
-- a real-board Atom Matrix result against MELSEC iQ-R `R08CPU` showing that mixed `writeBlock` was rejected on the real PLC (`HARDWARE_VALIDATION.md`)
+- a real-board Atom Matrix result against MELSEC iQ-R `R08CPU` showing that mixed `writeBlock` was rejected on the real PLC; the retained evidence lives in the maintainer archive
 
 What was still unknown before the 2026-03-14 live Python check was whether the original Python implementation:
 
