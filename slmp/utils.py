@@ -68,7 +68,7 @@ class SlmpConnectionOptions:
 
     The options object is the recommended input for :func:`open_and_connect`
     and :func:`open_and_connect_sync`. It keeps transport-level settings and
-    protocol-level defaults together so generated API docs can point users to
+    protocol-level defaults together so maintained documentation can point users to
     one explicit connection entry point.
 
     Attributes:

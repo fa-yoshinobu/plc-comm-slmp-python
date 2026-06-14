@@ -13,4 +13,3 @@ Python library for MELSEC SLMP (Binary 3E/4E) PLC communication.
 - [PLC Profiles](user/PROFILES.md)
 - [Gotchas](user/GOTCHAS.md)
 - [Latest communication verification](user/LATEST_COMMUNICATION_VERIFICATION.md)
-- [API Docs](api/client.md)
