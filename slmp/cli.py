@@ -41,13 +41,13 @@ from .core import (
     SlmpTarget,
     SlmpTraceFrame,
     TypeNameInfo,
+    _resolve_port,
     decode_device_words,
     encode_device_spec,
     pack_bit_values,
     parse_device,
     resolve_device_subcommand,
     resolve_extended_device_and_extension,
-    _resolve_port,
     unpack_bit_values,
 )
 from .errors import SlmpPracticalPathWarning
