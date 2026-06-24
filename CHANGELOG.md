@@ -2,17 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-06-24
 
 ### Added
-- Add 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`
-- Add `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`
+- Added 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`.
+- Added `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`.
 
-## 0.8.0 - 2026-06-14
+### Changed
+- Bumped package metadata to `1.0.0` for the first stable release line.
+
+## [0.8.0] - 2026-06-14
 
 - Bumped release metadata to 0.8.0 for the unified PLC communication library release.
 
-## 0.1.16 - 2026-06-12
+## [0.1.16] - 2026-06-12
 
 ### Changed
 - Removed the non-manual Remote STOP `force` argument from sync and async high-level APIs; Remote STOP now exposes only the manual fixed request data `01 00`.
@@ -23,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - Republished the Python package metadata with the current README and release workflow badge state.
 - Removed the obsolete duplicate automated-release badge from the packaged long description.
 
-## 0.1.15 - 2026-06-12
+## [0.1.15] - 2026-06-12
 
 ### Added
 - Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
@@ -33,7 +39,7 @@ All notable changes to this project will be documented in this file.
 - Removed remaining current-scope references to unsupported `18xx` file-control commands from maintainer TODO/status documents.
 - Guarded Extended Specification `G`/`HG` access before transport: `G` now requires a `U...` qualified module path, and `HG` is accepted only for `U3E0\HG` through `U3E3\HG` with the matching direct-memory code.
 
-## 0.1.14 - 2026-05-02
+## [0.1.14] - 2026-05-02
 
 ### Added
 - Added public `SlmpAddress`, `parse_address()`, `try_parse_address()`, and `format_address()` helpers for the same helper-layer notation accepted by `read_named()` and `write_named()`.
@@ -41,37 +47,37 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Updated the API unification policy, README, user guide, and samples to make the high-level address helper surface explicit.
 
-## 0.1.13 - 2026-04-27
+## [0.1.13] - 2026-04-27
 
 ### Fixed
 - Tightened SLMP device-name parsing to split by known device code instead of a greedy letter regex, so hexadecimal addresses such as `XFF` and `SWFF` parse correctly.
 - Matched-device invalid numbers now fail as that device code instead of being treated as another unknown code shape.
 
-## 0.1.12 - 2026-04-27
+## [0.1.12] - 2026-04-27
 
 ### Changed
 - Bumped the library revision for the cross-library SLMP parity release. The Python route guards from `0.1.11` are unchanged and remain aligned with the updated shared verification suite.
 - Kept the CLI's internal manual-profile client type-checkable under the repository mypy settings.
 
-## 0.1.11 - 2026-04-27
+## [0.1.11] - 2026-04-27
 
 ### Changed
 - Tightened long-device route guards so `LTN/LSTN/LCN/LZ` avoid unsupported direct/raw word and dword paths, while supported random/named dword paths remain available.
 - Aligned `LCS/LCC` write validation with the random/named bit route policy.
 
-## 0.1.10 - 2026-04-14
+## [0.1.10] - 2026-04-14
 
 ### Changed
 - The standard client route now requires explicit `plc_family`. `SlmpClient`, `AsyncSlmpClient`, and the bundled samples derive frame, access-profile, and device-range defaults from that family instead of exposing raw profile selection.
 - The CLI keeps the low-level compatibility path internally, but normal application code now uses `plc_family` as the single explicit PLC selection.
 
-## 0.1.9 - 2026-04-14
+## [0.1.9] - 2026-04-14
 
 ### Changed
 - High-level connection setup now centers on explicit `plc_family`, which derives fixed frame, access-profile, and device-range defaults from one canonical family selection.
 - String `X/Y` addresses now require explicit `plc_family`; `iq-f` uses octal `X/Y`, other supported families use hexadecimal, and non-canonical family aliases are rejected across client and device-range helpers.
 
-## 0.1.8 - 2026-04-14
+## [0.1.8] - 2026-04-14
 
 ### Added
 - Public device-range catalog helpers and regression coverage for device-range lookup and CPU operation-state decoding.
@@ -79,7 +85,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Expanded the package exports and README guidance for the new device-range helpers and cleaned up lint and typing issues in the new paths.
 
-## 0.1.7 - 2026-04-13
+## [0.1.7] - 2026-04-13
 
 ### Added
 - Client-side guard coverage for unsupported long-timer and long-counter-state command paths, including synchronous and asynchronous regression tests.
@@ -87,7 +93,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The public client surfaces now reject unsupported direct reads for `LTS/LTC/LSTS/LSTC` and unsupported `LCS/LCC` random, block, and monitor-registration commands before transport.
 
-## 0.1.6 - 2026-04-13
+## [0.1.6] - 2026-04-13
 
 ### Changed
 - CI now checks out `plc-comm-slmp-cross-verify/specs/shared` before running the shared-vector parity tests, so the package tests use the same canonical verification inputs as the cross-library harness.
@@ -95,9 +101,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - `slmp.__version__` now matches the packaged project version and upcoming release tag.
 
-## 0.1.5 - 2026-04-01
+## [0.1.5] - 2026-04-01
 
-## 0.1.4 - 2026-03-29
+## [0.1.4] - 2026-03-29
 
 ### Removed
 - **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
@@ -135,7 +141,7 @@ All notable changes to this project will be documented in this file.
 - **Node Search**: Improved robustness of `decode_node_search_response` against truncated or malformed network data.
 - Fixed several type hinting issues in `core.py` and redundant constant definitions.
 
-## 0.1.3 - 2026-03-15
+## [0.1.3] - 2026-03-15
 
 Documentation-only patch release.
 
@@ -143,7 +149,7 @@ Documentation-only patch release.
 
 - added a README link to the related minimal C++ implementation package `slmp-connect-cpp-minimal`
 
-## 0.1.2 - 2026-03-14
+## [0.1.2] - 2026-03-14
 
 Patch release to align the repository release tag with the CI-passing commit.
 
@@ -152,7 +158,7 @@ Patch release to align the repository release tag with the CI-passing commit.
 - formatted `scripts/slmp_mixed_block_compare.py` so `ruff check .` passes in GitHub Actions
 - release line now points to the same commit that passed unit tests, `ruff`, `mypy`, and package build
 
-## 0.1.1 - 2026-03-14
+## [0.1.1] - 2026-03-14
 
 Mixed block write compatibility update for the validated iQ-R target.
 
@@ -175,7 +181,7 @@ Mixed block write compatibility update for the validated iQ-R target.
 - equivalent word-only and bit-only block writes remained `OK`
 - `retry_mixed_on_error=True` was live-verified as a working fallback on the validated target
 
-## 0.1.0 - 2026-03-13
+## [0.1.0] - 2026-03-13
 
 Initial packaged release for the current repository scope.
 
