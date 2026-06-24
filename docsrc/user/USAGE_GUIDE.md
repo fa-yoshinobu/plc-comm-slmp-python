@@ -7,8 +7,8 @@
 | `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int \| None = None, transport: str = "tcp", timeout: float = 3.0, default_target: SlmpTarget \| None = None, monitoring_timer: int = 16, raise_on_error: bool = True, trace_hook: Any \| None = None)` | Store stable connection settings. Omitted ports resolve to `1025` for TCP and `1035` for UDP. |
 | `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> QueuedAsyncSlmpClient` | Open one queued async connection. |
 | `open_and_connect_sync` | `def open_and_connect_sync(options: SlmpConnectionOptions) -> SlmpClient` | Open one synchronous connection. |
-| `read_typed` | `async def read_typed(client, device, dtype) -> int | float` | Read one typed value. |
-| `write_typed` | `async def write_typed(client, device, dtype, value) -> None` | Write one typed value. |
+| `read_typed` | `async def read_typed(client, device, dtype) -> int | float | bool` | Read one typed value. |
+| `write_typed` | `async def write_typed(client, device, dtype, value: int | float | bool) -> None` | Write one typed value. |
 | `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed snapshot. |
 | `write_named` | `async def write_named(client, updates) -> None` | Write mixed values. |
 | `read_words_single_request` | `async def read_words_single_request(client, device, count) -> list[int]` | Read one contiguous 16-bit range in one request. |
@@ -74,14 +74,18 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, write_typed
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_typed
 
 
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        await write_typed(client, "D100", "U", 42)
-        print("wrote D100")
+        original = await read_typed(client, "D100", "U")
+        try:
+            await write_typed(client, "D100", "U", 42)
+            print("wrote D100")
+        finally:
+            await write_typed(client, "D100", "U", original)
 
 
 asyncio.run(main())
@@ -143,9 +147,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_bit_
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        await write_bit_in_word(client, "D50", bit_index=3, value=True)
-        snapshot = await read_named(client, ["D50.3"])
-        print(f"D50.3={snapshot['D50.3']}")
+        original = await read_named(client, ["D50.3"])
+        try:
+            await write_bit_in_word(client, "D50", bit_index=3, value=True)
+            snapshot = await read_named(client, ["D50.3"])
+            print(f"D50.3={snapshot['D50.3']}")
+        finally:
+            await write_bit_in_word(client, "D50", bit_index=3, value=bool(original["D50.3"]))
 
 
 asyncio.run(main())
@@ -218,6 +226,7 @@ asyncio.run(main())
 | Form | Example | Meaning | Helper behavior |
 | --- | --- | --- | --- |
 | Plain | `D100` | Unsigned 16-bit word | Same as `:U` for normal word devices. |
+| `:BIT` | `M1000:BIT` | Boolean bit value | One bit. |
 | `:U` | `D100:U` | Unsigned 16-bit word | One word. |
 | `:S` | `D100:S` | Signed 16-bit word | One word. |
 | `:D` | `D200:D` | Unsigned 32-bit value | Two words, little-endian word order. |

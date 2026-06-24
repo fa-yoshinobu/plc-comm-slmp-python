@@ -74,9 +74,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_type
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        await write_typed(client, "D100", "U", 42)
-        value = await read_typed(client, "D100", "U")
-        print(f"D100={value}")
+        original = await read_typed(client, "D100", "U")
+        try:
+            await write_typed(client, "D100", "U", 42)
+            value = await read_typed(client, "D100", "U")
+            print(f"D100={value}")
+        finally:
+            await write_typed(client, "D100", "U", original)
 
 
 asyncio.run(main())
@@ -93,7 +97,7 @@ D100=42
 1. Confirm your PLC accepts a TCP connection to `192.168.250.100:1025`.
 2. Confirm `plc_profile` matches your PLC family.
 3. Confirm the first read uses a simple word register such as `D100`.
-4. Confirm writes use only a known-safe test address.
+4. Confirm writes use only a known-safe test address and restore the original value.
 5. Confirm the value read back matches the test value you wrote.
 
 ## If it does not work

@@ -167,10 +167,16 @@ def main() -> None:
         val_l = read_typed_sync(client, "D202", "L")  # signed 32-bit (2 words)
         print(f"[read_typed_sync] D100(U)={val_u}  D101(S)={val_s}  D200(F)={val_f}  D202(L)={val_l}")
 
-        write_typed_sync(client, "D100", "U", 42)
-        write_typed_sync(client, "D200", "F", 3.14)
-        write_typed_sync(client, "D202", "L", -100)
-        print("[write_typed_sync] Wrote 42->D100, 3.14->D200, -100->D202")
+        try:
+            write_typed_sync(client, "D100", "U", 42)
+            write_typed_sync(client, "D200", "F", 3.14)
+            write_typed_sync(client, "D202", "L", -100)
+            print("[write_typed_sync] Wrote 42->D100, 3.14->D200, -100->D202")
+        finally:
+            write_typed_sync(client, "D100", "U", val_u)
+            write_typed_sync(client, "D200", "F", val_f)
+            write_typed_sync(client, "D202", "L", val_l)
+            print("[write_typed_sync] Restored D100, D200, D202")
 
         # ---------------------------------------------------------------
         # 2. explicit contiguous helpers
@@ -200,10 +206,16 @@ def main() -> None:
         # Use case: toggling a request bit in a control word without
         #           touching the other 15 bits.
         # ---------------------------------------------------------------
-        write_bit_in_word_sync(client, "D50", bit_index=3, value=True)
-        print("[write_bit_in_word_sync] Set bit 3 of D50")
-        write_bit_in_word_sync(client, "D50", bit_index=3, value=False)
-        print("[write_bit_in_word_sync] Cleared bit 3 of D50")
+        original = read_named_sync(client, ["D50.3"])
+        original_bit = bool(original["D50.3"])
+        try:
+            write_bit_in_word_sync(client, "D50", bit_index=3, value=True)
+            print("[write_bit_in_word_sync] Set bit 3 of D50")
+            write_bit_in_word_sync(client, "D50", bit_index=3, value=False)
+            print("[write_bit_in_word_sync] Cleared bit 3 of D50")
+        finally:
+            write_bit_in_word_sync(client, "D50", bit_index=3, value=original_bit)
+            print("[write_bit_in_word_sync] Restored bit 3 of D50")
 
         # ---------------------------------------------------------------
         # 4. read_named_sync / write_named_sync
@@ -232,16 +244,20 @@ def main() -> None:
         for addr, value in snapshot.items():
             print(f"[read_named_sync]  {addr} = {value!r}")
 
-        write_named_sync(
-            client,
-            {
-                "D100": 99,
-                "D200:F": 1.5,
-                "D202:L": -200,
-                "D50.3": True,
-            },
-        )
-        print("[write_named_sync] Wrote mixed-type values to D100, D200:F, D202:L, D50.3")
+        try:
+            write_named_sync(
+                client,
+                {
+                    "D100": 99,
+                    "D200:F": 1.5,
+                    "D202:L": -200,
+                    "D50.3": True,
+                },
+            )
+            print("[write_named_sync] Wrote mixed-type values to D100, D200:F, D202:L, D50.3")
+        finally:
+            write_named_sync(client, snapshot)
+            print("[write_named_sync] Restored mixed-type values")
 
         # ---------------------------------------------------------------
         # 5. poll_sync

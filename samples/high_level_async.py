@@ -165,10 +165,16 @@ async def demo_typed_rw(client) -> None:
     val_l = await read_typed(client, "D202", "L")
     print(f"[read_typed] D100(U)={val_u}  D200(F)={val_f}  D202(L)={val_l}")
 
-    await write_typed(client, "D100", "U", 42)
-    await write_typed(client, "D200", "F", 3.14)
-    await write_typed(client, "D202", "L", -100)
-    print("[write_typed] Wrote 42->D100, 3.14->D200, -100->D202")
+    try:
+        await write_typed(client, "D100", "U", 42)
+        await write_typed(client, "D200", "F", 3.14)
+        await write_typed(client, "D202", "L", -100)
+        print("[write_typed] Wrote 42->D100, 3.14->D200, -100->D202")
+    finally:
+        await write_typed(client, "D100", "U", val_u)
+        await write_typed(client, "D200", "F", val_f)
+        await write_typed(client, "D202", "L", val_l)
+        print("[write_typed] Restored D100, D200, D202")
 
 
 async def demo_contiguous_reads(client) -> None:
@@ -203,10 +209,16 @@ async def demo_bit_in_word(client) -> None:
     Use case: toggling a single request flag in a PLC control word without
               disturbing the other 15 flag bits.
     """
-    await write_bit_in_word(client, "D50", bit_index=3, value=True)
-    print("[write_bit_in_word] Set   bit 3 of D50")
-    await write_bit_in_word(client, "D50", bit_index=3, value=False)
-    print("[write_bit_in_word] Clear bit 3 of D50")
+    original = await read_named(client, ["D50.3"])
+    original_bit = bool(original["D50.3"])
+    try:
+        await write_bit_in_word(client, "D50", bit_index=3, value=True)
+        print("[write_bit_in_word] Set   bit 3 of D50")
+        await write_bit_in_word(client, "D50", bit_index=3, value=False)
+        print("[write_bit_in_word] Clear bit 3 of D50")
+    finally:
+        await write_bit_in_word(client, "D50", bit_index=3, value=original_bit)
+        print("[write_bit_in_word] Restored bit 3 of D50")
 
 
 async def demo_named_rw(client) -> None:
@@ -236,16 +248,20 @@ async def demo_named_rw(client) -> None:
     for addr, value in snapshot.items():
         print(f"[read_named]  {addr} = {value!r}")
 
-    await write_named(
-        client,
-        {
-            "D100": 99,
-            "D200:F": 1.5,
-            "D202:L": -200,
-            "D50.3": True,
-        },
-    )
-    print("[write_named] Wrote mixed-type values")
+    try:
+        await write_named(
+            client,
+            {
+                "D100": 99,
+                "D200:F": 1.5,
+                "D202:L": -200,
+                "D50.3": True,
+            },
+        )
+        print("[write_named] Wrote mixed-type values")
+    finally:
+        await write_named(client, snapshot)
+        print("[write_named] Restored mixed-type values")
 
 
 async def demo_poll(client, count: int) -> None:
