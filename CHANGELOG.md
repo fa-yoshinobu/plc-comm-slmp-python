@@ -5,242 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Entry labels**
+
+- `Release`: Package/version metadata and publishing preparation.
+- `Library`: Runtime behavior, public API, protocol handling, or validation in the distributed library.
+- `Docs`: README, user guides, generated API docs, or other documentation-only changes.
+- `Samples`: Examples, sample flows, sample scripts, or sample applications.
+- `Tests`: Test suites, test fixtures, golden vectors, or verification data.
+- `Tooling`: Developer/operator command-line tools and helper utilities.
+- `CI`: Release checks, workflow scripts, or automation-only changes.
+
 ## [1.0.1] - 2026-06-25
 
 ### Changed
-- [Library] Removed the legacy `family` alias from helper-layer address parsing and formatting APIs; callers should pass `plc_profile`.
-- [Samples] Made sample scripts require an explicit `--plc-profile` instead of defaulting to `melsec:iq-r`.
-- [Samples/Docs] Updated samples and documentation so write examples restore the original PLC values after demonstration writes.
+- Release: Bumped Python package metadata to `1.0.1`.
+- Library: Removed the legacy `family` alias from helper-layer address parsing and formatting APIs; callers should pass `plc_profile`.
+- Docs: Updated documentation so write examples restore the original PLC values after demonstration writes.
+- Samples: Made sample scripts require an explicit `--plc-profile` instead of defaulting to `melsec:iq-r`.
+- Samples: Updated write examples to restore the original PLC values after demonstration writes.
 
 ### Fixed
-- [Library] Corrected typed helper handling so boolean `BIT` writes stay on the intended bool path.
-- [Docs] Corrected typed helper annotations and user documentation to include boolean `BIT` reads and writes.
+- Library: Corrected typed helper handling so boolean `BIT` writes stay on the intended bool path.
+- Docs: Corrected typed helper annotations and user documentation to include boolean `BIT` reads and writes.
 
 ## [1.0.0] - 2026-06-24
 
 ### Added
-- Added 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`.
-- Added `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`.
+- Tests: Added 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`.
+- Tests: Added `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`.
 
 ### Changed
-- Bumped package metadata to `1.0.0` for the first stable release line.
-
-## [0.8.0] - 2026-06-14
-
-- Bumped release metadata to 0.8.0 for the unified PLC communication library release.
-
-## [0.1.16] - 2026-06-12
-
-### Changed
-- Removed the non-manual Remote STOP `force` argument from sync and async high-level APIs; Remote STOP now exposes only the manual fixed request data `01 00`.
-- Restricted `plc_profile` text parsing to canonical `melsec:...` profile names; short aliases such as `iq-r`, `iqr`, `q`, and `qnudvcpu` are now rejected.
-- Aligned Self Test loopback input validation with the manual: 1..960 bytes, ASCII `0`-`9`/`A`-`F` only.
-- Enabled TCP_NODELAY for sync and async TCP transports to avoid delayed-ACK latency spikes.
-- Added manual point-limit preflight checks for continuous, random, block, memory, and helper-layer requests so oversized requests fail before transport.
-- Republished the Python package metadata with the current README and release workflow badge state.
-- Removed the obsolete duplicate automated-release badge from the packaged long description.
-
-## [0.1.15] - 2026-06-12
-
-### Added
-- Added SLMP end-code name/message helpers for the full communication error-code table, and exposed them from `SlmpError`.
-
-### Changed
-- Removed `retry_mixed_on_error` from sync and async `write_block()`; mixed block-write failures now return the PLC end code unchanged, and only explicit `split_mixed_blocks=True` sends separate block writes.
-- Removed remaining current-scope references to unsupported `18xx` file-control commands from maintainer TODO/status documents.
-- Guarded Extended Specification `G`/`HG` access before transport: `G` now requires a `U...` qualified module path, and `HG` is accepted only for `U3E0\HG` through `U3E3\HG` with the matching direct-memory code.
-
-## [0.1.14] - 2026-05-02
-
-### Added
-- Added public `SlmpAddress`, `parse_address()`, `try_parse_address()`, and `format_address()` helpers for the same helper-layer notation accepted by `read_named()` and `write_named()`.
-
-### Changed
-- Updated the API unification policy, README, user guide, and samples to make the high-level address helper surface explicit.
-
-## [0.1.13] - 2026-04-27
-
-### Fixed
-- Tightened SLMP device-name parsing to split by known device code instead of a greedy letter regex, so hexadecimal addresses such as `XFF` and `SWFF` parse correctly.
-- Matched-device invalid numbers now fail as that device code instead of being treated as another unknown code shape.
-
-## [0.1.12] - 2026-04-27
-
-### Changed
-- Bumped the library revision for the cross-library SLMP parity release. The Python route guards from `0.1.11` are unchanged and remain aligned with the updated shared verification suite.
-- Kept the CLI's internal manual-profile client type-checkable under the repository mypy settings.
-
-## [0.1.11] - 2026-04-27
-
-### Changed
-- Tightened long-device route guards so `LTN/LSTN/LCN/LZ` avoid unsupported direct/raw word and dword paths, while supported random/named dword paths remain available.
-- Aligned `LCS/LCC` write validation with the random/named bit route policy.
-
-## [0.1.10] - 2026-04-14
-
-### Changed
-- The standard client route now requires explicit `plc_family`. `SlmpClient`, `AsyncSlmpClient`, and the bundled samples derive frame, access-profile, and device-range defaults from that family instead of exposing raw profile selection.
-- The CLI keeps the low-level compatibility path internally, but normal application code now uses `plc_family` as the single explicit PLC selection.
-
-## [0.1.9] - 2026-04-14
-
-### Changed
-- High-level connection setup now centers on explicit `plc_family`, which derives fixed frame, access-profile, and device-range defaults from one canonical family selection.
-- String `X/Y` addresses now require explicit `plc_family`; `iq-f` uses octal `X/Y`, other supported families use hexadecimal, and non-canonical family aliases are rejected across client and device-range helpers.
-
-## [0.1.8] - 2026-04-14
-
-### Added
-- Public device-range catalog helpers and regression coverage for device-range lookup and CPU operation-state decoding.
-
-### Changed
-- Expanded the package exports and README guidance for the new device-range helpers and cleaned up lint and typing issues in the new paths.
-
-## [0.1.7] - 2026-04-13
-
-### Added
-- Client-side guard coverage for unsupported long-timer and long-counter-state command paths, including synchronous and asynchronous regression tests.
-
-### Changed
-- The public client surfaces now reject unsupported direct reads for `LTS/LTC/LSTS/LSTC` and unsupported `LCS/LCC` random, block, and monitor-registration commands before transport.
-
-## [0.1.6] - 2026-04-13
-
-### Changed
-- CI now checks out `plc-comm-slmp-cross-verify/specs/shared` before running the shared-vector parity tests, so the package tests use the same canonical verification inputs as the cross-library harness.
-
-### Fixed
-- `slmp.__version__` now matches the packaged project version and upcoming release tag.
-
-## [0.1.5] - 2026-04-01
-
-## [0.1.4] - 2026-03-29
-
-### Removed
-- **Step Relay `S`**: Removed `S` from the public device table and parser. `TS/LTS/STS/LSTS/CS/LCS` remain supported.
-- **Stale scope references**: Removed current-doc references to file commands and PLC-initiated ondemand (`2101`), which are not part of the implemented public API.
-- **Unstable CLI auto profile flags**: Removed `--series auto` and `--frame-type auto` from the current CLI entry points, including `connection-check`, `other-station-check`, and `ExtendedDevice-device-recheck`.
-- **Auto profile helpers**: Removed `SlmpClient.resolve_profile()`, `AsyncSlmpClient.resolve_profile()`, `recommend_profile()`, `open_and_connect()`, and `open_and_connect_queued()`. Connection setup is now explicit.
-
-### Added
-- **`QueuedAsyncSlmpClient`**: Added a queued high-level wrapper for multi-coroutine shared use.
-- **Asynchronous API**: New `AsyncSlmpClient` for high-concurrency non-blocking I/O via `asyncio`.
-- **UDP Support**: Full support for UDP transport in both synchronous and asynchronous clients.
-- **3E Frame Support**: Formally enabled and documented support for SLMP 3E frames (binary).
-- **Module I/O Keywords**: Added `ModuleIONo` enum and keyword support (e.g. `OWN_STATION`, `MULTIPLE_CPU_1`) in `SLMPTarget`.
-- **Comprehensive Device Coverage**: Ported all device-related APIs (random, block, monitor, memory, label, remote) to the async client.
-- **`node_search` (sync)**: Added `SlmpClient.node_search()` for UDP broadcast node discovery, matching the existing async implementation.
-- **`ip_address_set` (sync + async)**: Added `SlmpClient.ip_address_set()` and `AsyncSlmpClient.ip_address_set()` for UDP fire-and-forget IP address configuration (command 0x0E31).
-- **`release_check.bat`**: Added a release-preflight batch entry point that runs CI and docs generation together.
-- **S Device Support**: Added `S` (Step Relay) device code to `DEVICE_CODES`.
-- **Compatibility Verification Notes**: Recorded compatibility verification findings for bit order consistency across device families and dynamic system-value behavior.
-
-### Changed
-- **User-facing docs**: Reoriented the README, user guide, and sample guide around the high-level helper APIs only.
-- **High-level samples**: Expanded the recommended sample documentation and updated `high_level_async.py` to use explicit `AsyncSlmpClient` / `QueuedAsyncSlmpClient` setup in the main flow.
-- **High-level named reads**: `read_named` / `read_named_sync` now compile the address list once and batch word/DWord reads via `read_random` when possible.
-- **Polling**: `poll` / `poll_sync` now reuse the compiled named-read plan across iterations instead of reparsing and reissuing per-address reads.
-- **TCP receive path**: Reduced intermediate allocations in synchronous TCP frame reads by switching the hot path to `recv_into` and single-frame assembly.
-- **Docstrings**: Expanded high-level helper docstrings so generated API docs describe the recommended connection, typed reads/writes, named snapshots, polling, and queued usage paths more clearly.
-- **Sans-I/O Refactoring**: Moved protocol logic, validation, and data structures from `client.py` to `core.py` to achieve implementation consistency.
-- **Documentation**: Updated the User Guide and compatibility notes for the newer feature set.
-
-### Fixed
-- **Qualified device DM override**: Explicit `direct_memory_specification` in `ExtensionSpec` is now respected when passing qualified device strings such as `U3E0\G10`; previously the auto-detected DM for `G` (0xF8) or `HG` (0xFA) devices would unconditionally override the caller's value. Auto-detection now only applies when the caller leaves DM at the default (`DIRECT_MEMORY_NORMAL = 0x00`).
-- **Bit Data Packing**: Swapped nibble order in `pack_bit_values` and `unpack_bit_values` to correctly map the first device to the high nibble and the second device to the low nibble, matching the SLMP binary specification and live PLC behavior.
-- **ZR Device Base**: Changed `ZR` device radix from hexadecimal to decimal in `constants.py` to align with live-verified iQ-R behavior.
-- **Node Search**: Improved robustness of `decode_node_search_response` against truncated or malformed network data.
-- Fixed several type hinting issues in `core.py` and redundant constant definitions.
-
-## [0.1.3] - 2026-03-15
-
-Documentation-only patch release.
-
-### Changed
-
-- added a README link to the related minimal C++ implementation package `slmp-connect-cpp-minimal`
-
-## [0.1.2] - 2026-03-14
-
-Patch release to align the repository release tag with the CI-passing commit.
-
-### Fixed
-
-- formatted `scripts/slmp_mixed_block_compare.py` so `ruff check .` passes in GitHub Actions
-- release line now points to the same commit that passed unit tests, `ruff`, `mypy`, and package build
-
-## [0.1.1] - 2026-03-14
-
-Mixed block write compatibility update for the validated iQ-R target.
-
-### Added
-
-- `retry_mixed_on_error=True` fallback for `write_block(...)` so one mixed `1406/0002` write can recover by retrying as separate word-only and bit-only block writes on known rejection end codes
-- `scripts/slmp_mixed_block_compare.py` for focused live comparison of mixed block read/write behavior
-- focused unit tests for the mixed-write retry path
-- validated-target comparison notes under `internal_docsrc/iqr_r08cpu/`
-
-### Changed
-
-- documentation now records that one-request mixed `writeBlock` on the validated `R08CPU` target reproduces `0xC05B`
-- practical guidance now recommends `split_mixed_blocks=True` or `retry_mixed_on_error=True` when a PLC rejects one mixed word+bit block write
-- project status and open-items tracking were updated with the latest live verification result
-
-### Live Validation
-
-- one-request mixed `writeBlock(D300 x2 + M200 x1 packed)` reproduced `0xC05B`
-- equivalent word-only and bit-only block writes remained `OK`
-- `retry_mixed_on_error=True` was live-verified as a working fallback on the validated target
-
-## [0.1.0] - 2026-03-13
-
-Initial packaged release for the current repository scope.
-
-### Added
-
-- 4E binary SLMP frame encoder/decoder
-- TCP and UDP client support
-- typed APIs for:
-  - normal device read/write
-  - random read/write
-  - block read/write
-  - monitor entry/execute
-  - memory read/write
-  - extend-unit read/write
-  - label command family
-  - remote control
-  - password lock/unlock
-  - self test
-- Extended Specification typed extension builders and access APIs
-- practical helper APIs for:
-  - long timer / long retentive timer decoding
-  - `LTC/LTS/LSTC/LSTS` state helpers
-  - CPU buffer read/write via the verified `0601/1601` path
-- CLI entry points for:
-  - base connection check
-  - device-range boundary probe
-  - focused register-boundary probe
-  - other-station verification
-  - open-item recheck
-  - pending live verification
-
-### Changed
-
-- documentation split into user-facing guides and internal implementation-facing records
-- generated live reports moved under `internal_docsrc/<series>_<model>/`
-- current live reports now keep a tracked `*_latest.md` plus a timestamped `archive/` copy
-
-### Validated Environment
-
-- MELSEC iQ-R `R08CPU`
-- Host `192.168.250.100`
-- `TCP 1025`
-- `UDP 1027`
-- library mode `series=iqr`
-
-### Known Limitations
-
-- 3E frame is not implemented
-- ASCII protocol is not implemented
-- some paths remain target-specific and unresolved on the validated iQ-R target
-- current unresolved items are tracked in `internal_docsrc/open_items.md`
+- Release: Bumped package metadata to `1.0.0` for the first stable release line.
