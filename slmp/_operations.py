@@ -85,7 +85,7 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
-def _parse_device_for_family(device: str | DeviceRef, address_profile: object | None) -> DeviceRef:
+def _parse_device_for_address_profile(device: str | DeviceRef, address_profile: object | None) -> DeviceRef:
     ref = parse_device(device, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
 
@@ -110,7 +110,7 @@ def build_read_devices_request(
 ) -> OperationRequest:
     _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices")
     effective_series = _effective_series(series, default_series)
-    ref = _parse_device_for_family(device, address_profile)
+    ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
@@ -154,7 +154,7 @@ def build_write_devices_request(
         raise ValueError("values must not be empty")
     _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices")
     effective_series = _effective_series(series, default_series)
-    ref = _parse_device_for_family(device, address_profile)
+    ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
@@ -188,7 +188,7 @@ def build_read_dwords_request(
 ) -> OperationRequest:
     if count < 1:
         raise ValueError("count must be >= 1")
-    ref = _parse_device_for_family(device, address_profile)
+    ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_dword_read_device(ref)
     return build_read_devices_request(
         ref,
@@ -342,12 +342,12 @@ def build_register_monitor_devices_request(
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
     for dev in word_devices:
-        ref = _parse_device_for_family(dev, address_profile)
+        ref = _parse_device_for_address_profile(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
         payload += encode_device_spec(ref, series=effective_series)
         word_refs.append(ref)
     for dev in dword_devices:
-        ref = _parse_device_for_family(dev, address_profile)
+        ref = _parse_device_for_address_profile(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
         payload += encode_device_spec(ref, series=effective_series)
         dword_refs.append(ref)
@@ -499,8 +499,8 @@ def build_read_random_request(
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
-    words = [_parse_device_for_family(device, address_profile) for device in word_devices]
-    dwords = [_parse_device_for_family(device, address_profile) for device in dword_devices]
+    words = [_parse_device_for_address_profile(device, address_profile) for device in word_devices]
+    dwords = [_parse_device_for_address_profile(device, address_profile) for device in dword_devices]
     _validate_random_read_devices(words, dwords)
     _check_temporarily_unsupported_devices(words)
     _check_temporarily_unsupported_devices(dwords)
@@ -718,7 +718,7 @@ def build_read_block_request(
     normalized_bit: list[tuple[DeviceRef, int]] = []
     for device, points in word_blocks:
         _check_points_u16(points, "word_block points")
-        ref = _parse_device_for_family(device, address_profile)
+        ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         normalized_word.append((ref, points))
@@ -726,7 +726,7 @@ def build_read_block_request(
         payload += points.to_bytes(2, "little")
     for device, points in bit_blocks:
         _check_points_u16(points, "bit_block points")
-        ref = _parse_device_for_family(device, address_profile)
+        ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         normalized_bit.append((ref, points))
@@ -784,13 +784,13 @@ def build_write_block_request(
     word_refs: list[DeviceRef] = []
     bit_refs: list[DeviceRef] = []
     for device, values in word_blocks:
-        ref = _parse_device_for_family(device, address_profile)
+        ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "word block size")
         word_refs.append(ref)
     for device, values in bit_blocks:
-        ref = _parse_device_for_family(device, address_profile)
+        ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "bit block size")

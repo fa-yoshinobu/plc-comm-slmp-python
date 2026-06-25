@@ -142,30 +142,30 @@ class SlmpAddress:
 
 
 def _client_address_profile(client: object) -> str | None:
-    family = getattr(client, "address_profile", None)
-    if family is None:
+    address_profile = getattr(client, "address_profile", None)
+    if address_profile is None:
         return None
-    if isinstance(family, str):
-        return family
-    value = getattr(family, "value", None)
+    if isinstance(address_profile, str):
+        return address_profile
+    value = getattr(address_profile, "value", None)
     if isinstance(value, str):
         return value
     return None
 
 
-def _parse_device_for_family(
+def _parse_device_for_address_profile(
     device: str | DeviceRef,
-    family: object | None = None,
+    address_profile: object | None = None,
 ) -> DeviceRef:
-    ref = parse_device(device, plc_profile=family)
-    return _require_explicit_plc_profile_for_xy(device, family, ref)
+    ref = parse_device(device, plc_profile=address_profile)
+    return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
 
 
 def _parse_device_for_client(
     client: object,
     device: str | DeviceRef,
 ) -> DeviceRef:
-    return _parse_device_for_family(device, _client_address_profile(client))
+    return _parse_device_for_address_profile(device, _client_address_profile(client))
 
 
 def _validate_dword_read_target(client: object, device: str | DeviceRef) -> DeviceRef:
@@ -413,7 +413,7 @@ async def read_named(
         The address list is compiled once, then grouped into random reads where
         possible. Use ``.bit`` notation only with word devices.
     """
-    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
+    plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     return await _read_named_with_plan(client, plan)
 
 
@@ -422,7 +422,7 @@ def read_named_sync(
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
     """Synchronously read a mixed logical snapshot by address string."""
-    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
+    plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     return _read_named_with_plan_sync(client, plan)
 
 
@@ -440,14 +440,14 @@ async def write_named(
     ``D50.3`` updates one bit inside one word. Direct bit devices such as
     ``M1000`` are normalized to ``"BIT"`` writes.
     """
-    family = _client_address_profile(client)
+    address_profile = _client_address_profile(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, _parse_device_for_family(base, family))
+            _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
             await write_bit_in_word(client, base, bit_idx or 0, bool(value))
         else:
-            device = _parse_device_for_family(base, family)
+            device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
             _validate_long_timer_entry(address, device, resolved_dtype)
             await write_typed(client, base, resolved_dtype, value)
@@ -458,14 +458,14 @@ def write_named_sync(
     updates: dict[str, int | float | bool],
 ) -> None:
     """Synchronously write a mixed logical snapshot by address string."""
-    family = _client_address_profile(client)
+    address_profile = _client_address_profile(client)
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, _parse_device_for_family(base, family))
+            _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
             write_bit_in_word_sync(client, base, bit_idx or 0, bool(value))
         else:
-            device = _parse_device_for_family(base, family)
+            device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
             _validate_long_timer_entry(address, device, resolved_dtype)
             write_typed_sync(client, base, resolved_dtype, value)
@@ -497,15 +497,10 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
 def _effective_address_profile(
     *,
     plc_profile: object | None = None,
-    family: object | None = None,
 ) -> object | None:
-    if plc_profile is not None and family is not None:
-        raise ValueError("Pass either plc_profile or family, not both.")
     if plc_profile is not None:
         defaults = _resolve_plc_profile_defaults(plc_profile)
         return None if defaults is None else defaults.address_profile
-    if family is not None:
-        return _normalize_plc_profile_hint(family)
     return None
 
 
@@ -513,7 +508,6 @@ def parse_address(
     address: str | DeviceRef,
     *,
     plc_profile: object | None = None,
-    family: object | None = None,
 ) -> SlmpAddress:
     """Parse public SLMP helper-layer address notation.
 
@@ -525,10 +519,10 @@ def parse_address(
         text = str(address)
         return SlmpAddress(text=text, base_device=text, dtype="U")
 
-    effective_family = _effective_address_profile(plc_profile=plc_profile, family=family)
+    effective_address_profile = _effective_address_profile(plc_profile=plc_profile)
     raw_text = address.strip()
     base, dtype, bit_index = _parse_address(raw_text)
-    device = _parse_device_for_family(base, effective_family)
+    device = _parse_device_for_address_profile(base, effective_address_profile)
     canonical_base = str(device)
 
     if bit_index is not None:
@@ -561,12 +555,11 @@ def try_parse_address(
     address: str | DeviceRef,
     *,
     plc_profile: object | None = None,
-    family: object | None = None,
 ) -> SlmpAddress | None:
     """Return parsed address information, or ``None`` when parsing fails."""
 
     try:
-        return parse_address(address, plc_profile=plc_profile, family=family)
+        return parse_address(address, plc_profile=plc_profile)
     except Exception:
         return None
 
@@ -575,14 +568,13 @@ def format_address(
     address: SlmpAddress | str | DeviceRef,
     *,
     plc_profile: object | None = None,
-    family: object | None = None,
 ) -> str:
     """Return canonical public SLMP address text."""
 
     if not isinstance(address, SlmpAddress):
-        return parse_address(address, plc_profile=plc_profile, family=family).text
+        return parse_address(address, plc_profile=plc_profile).text
 
-    canonical_base = normalize_address(address.base_device, plc_profile=plc_profile, family=family)
+    canonical_base = normalize_address(address.base_device, plc_profile=plc_profile)
     if address.dtype == "BIT_IN_WORD":
         if address.bit_index is None or not 0 <= address.bit_index <= 15:
             raise ValueError("bit-in-word address requires bit_index 0-F")
@@ -598,7 +590,6 @@ def normalize_address(
     address: str | DeviceRef,
     *,
     plc_profile: object | None = None,
-    family: object | None = None,
 ) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
 
@@ -610,14 +601,14 @@ def normalize_address(
     if not isinstance(address, str):
         return str(address)
 
-    effective_family = _effective_address_profile(plc_profile=plc_profile, family=family)
+    effective_address_profile = _effective_address_profile(plc_profile=plc_profile)
 
     text = address.strip()
     if ":" not in text and "." not in text:
-        return str(parse_device(text, plc_profile=effective_family))
+        return str(parse_device(text, plc_profile=effective_address_profile))
 
     base, dtype, bit_index = _parse_address(text)
-    canonical_base = str(parse_device(base, plc_profile=effective_family))
+    canonical_base = str(parse_device(base, plc_profile=effective_address_profile))
     if bit_index is not None:
         return f"{canonical_base}.{bit_index:X}"
     if ":" in text:
@@ -791,7 +782,7 @@ def _read_long_family_value_sync(
 def _compile_read_plan(
     addresses: list[str],
     *,
-    family: object | None = None,
+    address_profile: object | None = None,
 ) -> _ReadPlan:
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
@@ -801,7 +792,7 @@ def _compile_read_plan(
 
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
-        device = _parse_device_for_family(base, family)
+        device = _parse_device_for_address_profile(base, address_profile)
         dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
         _validate_long_timer_entry(address, device, dtype)
         batch_kind: str | None = None
@@ -1105,7 +1096,7 @@ async def poll(
 
     The address list is compiled once and reused for every cycle.
     """
-    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
+    plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     while True:
         yield await _read_named_with_plan(client, plan)
         await asyncio.sleep(interval)
@@ -1117,7 +1108,7 @@ def poll_sync(
     interval: float,
 ) -> Iterator[dict[str, int | float | bool]]:
     """Synchronously yield mixed snapshots at a fixed interval."""
-    plan = _compile_read_plan(addresses, family=_client_address_profile(client))
+    plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     while True:
         yield _read_named_with_plan_sync(client, plan)
         time.sleep(interval)

@@ -37,8 +37,8 @@ def add_connection_args(parser: argparse.ArgumentParser) -> None:
             "melsec:qnu",
             "melsec:qnudv",
         ),
-        default="melsec:iq-r",
-        help="Canonical PLC profile used to derive frame/profile defaults",
+        required=True,
+        help="Required canonical PLC profile used to derive frame/profile defaults",
     )
     parser.add_argument("--timeout", type=float, default=3.0, help="Socket timeout in seconds")
     parser.add_argument(

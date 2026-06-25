@@ -99,8 +99,8 @@ def parse_args() -> argparse.Namespace:
             "melsec:qnu",
             "melsec:qnudv",
         ),
-        default="melsec:iq-r",
-        help="Canonical high-level PLC profile (default melsec:iq-r)",
+        required=True,
+        help="Required canonical high-level PLC profile",
     )
     p.add_argument(
         "--poll-count",

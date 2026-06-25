@@ -23,7 +23,7 @@ from slmp.async_client import AsyncSlmpClient
 async def read_one_plc(host: str, port: int) -> dict[str, object]:
     """Connect to a single PLC and return a snapshot of several devices."""
     # The standard client route requires plc_profile so frame and address rules
-    # are derived from one explicit PLC family.
+    # are derived from one explicit PLC profile.
     async with AsyncSlmpClient(host, port, plc_profile="melsec:iq-r") as cli:
         info = await cli.read_type_name()
         d100 = await cli.read_devices("D100", 1)

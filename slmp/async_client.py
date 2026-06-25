@@ -91,7 +91,7 @@ class AsyncSlmpClient:
 
         The standard async client route requires ``plc_profile`` and fixes the
         frame type, access profile, and address/range handling from that one
-        explicit family.
+        explicit PLC profile.
         """
         self.host = host
         self.transport_type = transport.lower()

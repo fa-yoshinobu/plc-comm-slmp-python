@@ -518,7 +518,7 @@ def normalize_plc_profile(value: SlmpPlcProfile | str) -> SlmpPlcProfile:
 
     if isinstance(value, SlmpPlcProfile):
         return value
-    normalized = str(value).strip().lower()
+    normalized = str(value).strip()
     if normalized in _CANONICAL_FAMILIES:
         return _CANONICAL_FAMILIES[normalized]
     supported = ", ".join(sorted(_CANONICAL_FAMILIES))
