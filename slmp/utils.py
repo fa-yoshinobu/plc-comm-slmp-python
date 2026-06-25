@@ -13,7 +13,6 @@ from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
     SlmpTarget,
-    _normalize_plc_profile_hint,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     _resolve_plc_profile_defaults,
