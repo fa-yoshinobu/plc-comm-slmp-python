@@ -239,7 +239,7 @@ async def write_typed(
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
-        await _write_long_family_value(client, ref, key, cast(int | float, value), long_read)
+        await _write_long_family_value(client, ref, key, value, long_read)
         return
     if key == "BIT":
         await client.write_devices(device, [bool(value)], bit_unit=True)
@@ -253,7 +253,7 @@ async def write_typed(
     if key not in {"D", "L", "F"}:
         await client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
         return
-    await client.write_devices(device, _encode_dword_words(cast(int | float, value), key), bit_unit=False)
+    await client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +304,7 @@ def write_typed_sync(
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
-        _write_long_family_value_sync(client, ref, key, cast(int | float, value), long_read)
+        _write_long_family_value_sync(client, ref, key, value, long_read)
         return
     if key == "BIT":
         client.write_devices(device, [bool(value)], bit_unit=True)
@@ -318,7 +318,7 @@ def write_typed_sync(
     if key not in {"D", "L", "F"}:
         client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
         return
-    client.write_devices(device, _encode_dword_words(cast(int | float, value), key), bit_unit=False)
+    client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
 
 # ---------------------------------------------------------------------------
