@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.1] - 2026-06-25
 
 ### Changed
-- Removed the legacy `family` alias from helper-layer address parsing and formatting APIs; callers should pass `plc_profile`.
-- Made sample scripts require an explicit `--plc-profile` instead of defaulting to `melsec:iq-r`.
-- Updated samples and documentation so write examples restore the original PLC values after demonstration writes.
+- [Library] Removed the legacy `family` alias from helper-layer address parsing and formatting APIs; callers should pass `plc_profile`.
+- [Samples] Made sample scripts require an explicit `--plc-profile` instead of defaulting to `melsec:iq-r`.
+- [Samples/Docs] Updated samples and documentation so write examples restore the original PLC values after demonstration writes.
 
 ### Fixed
-- Corrected typed helper annotations and user documentation to include boolean `BIT` reads and writes.
+- [Library] Corrected typed helper handling so boolean `BIT` writes stay on the intended bool path.
+- [Docs] Corrected typed helper annotations and user documentation to include boolean `BIT` reads and writes.
 
 ## [1.0.0] - 2026-06-24
 
