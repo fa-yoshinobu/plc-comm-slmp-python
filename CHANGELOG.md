@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tooling`: Developer/operator command-line tools and helper utilities.
 - `CI`: Release checks, workflow scripts, or automation-only changes.
 
+## [Unreleased] - 2026-06-28
+
+### Fixed
+- Library: Made `BIT_IN_WORD` helper addresses require an explicit bit index such as `D100.0` through `D100.F`; `D100:BIT_IN_WORD` now fails instead of silently reading or writing bit 0.
+- Tests: Added coverage for rejecting `BIT_IN_WORD` addresses without an explicit bit index.
+
 ## [1.0.1] - 2026-06-25
 
 ### Changed

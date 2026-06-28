@@ -444,7 +444,7 @@ async def write_named(
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
             _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
-            await write_bit_in_word(client, base, bit_idx or 0, bool(value))
+            await write_bit_in_word(client, base, _require_bit_in_word_index(address, bit_idx), bool(value))
         else:
             device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
@@ -462,7 +462,7 @@ def write_named_sync(
         base, dtype, bit_idx = _parse_address(address)
         if dtype == "BIT_IN_WORD":
             _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
-            write_bit_in_word_sync(client, base, bit_idx or 0, bool(value))
+            write_bit_in_word_sync(client, base, _require_bit_in_word_index(address, bit_idx), bool(value))
         else:
             device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
@@ -491,6 +491,14 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
             return base.strip(), "BIT_IN_WORD", int(bit_text, 16)
         raise ValueError(f"Invalid bit-in-word index {bit_str!r}; use one hex digit 0-F or ':' for dtype.")
     return address.strip(), "U", None
+
+
+def _require_bit_in_word_index(address: str, bit_index: int | None) -> int:
+    if bit_index is None:
+        raise ValueError(f"bit-in-word address requires explicit bit index 0-F: {address!r}")
+    if not 0 <= bit_index <= 15:
+        raise ValueError(f"bit-in-word index must be 0-F: {address!r}")
+    return bit_index
 
 
 def _effective_address_profile(
@@ -805,6 +813,7 @@ def _compile_read_plan(
                 dword_devices.append(device)
                 seen_dwords.add(device)
         elif dtype == "BIT_IN_WORD":
+            bit_index = _require_bit_in_word_index(address, bit_index)
             _validate_bit_in_word_target(address, device)
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
@@ -1019,7 +1028,8 @@ async def _read_named_with_plan(
         if entry.batch_kind == "WORD":
             word = word_values[str(entry.device)]
             if entry.dtype == "BIT_IN_WORD":
-                result[entry.address] = bool((word >> (entry.bit_index or 0)) & 1)
+                bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
+                result[entry.address] = bool((word >> bit_index) & 1)
             else:
                 result[entry.address] = _decode_word_value(word, entry.dtype)
             continue
@@ -1028,7 +1038,8 @@ async def _read_named_with_plan(
             continue
         if entry.dtype == "BIT_IN_WORD":
             words = await client.read_devices(entry.device, 1, bit_unit=False)
-            result[entry.address] = bool((words[0] >> (entry.bit_index or 0)) & 1)
+            bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
+            result[entry.address] = bool((words[0] >> bit_index) & 1)
         else:
             result[entry.address] = await read_typed(client, entry.device, entry.dtype or "U")
 
@@ -1065,7 +1076,8 @@ def _read_named_with_plan_sync(
         if entry.batch_kind == "WORD":
             word = word_values[str(entry.device)]
             if entry.dtype == "BIT_IN_WORD":
-                result[entry.address] = bool((word >> (entry.bit_index or 0)) & 1)
+                bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
+                result[entry.address] = bool((word >> bit_index) & 1)
             else:
                 result[entry.address] = _decode_word_value(word, entry.dtype)
             continue
@@ -1074,7 +1086,8 @@ def _read_named_with_plan_sync(
             continue
         if entry.dtype == "BIT_IN_WORD":
             words = client.read_devices(entry.device, 1, bit_unit=False)
-            result[entry.address] = bool((words[0] >> (entry.bit_index or 0)) & 1)
+            bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
+            result[entry.address] = bool((words[0] >> bit_index) & 1)
         else:
             result[entry.address] = read_typed_sync(client, entry.device, entry.dtype or "U")
 

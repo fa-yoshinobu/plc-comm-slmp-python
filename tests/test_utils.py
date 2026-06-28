@@ -103,6 +103,10 @@ class TestParseAddress(unittest.TestCase):
             _parse_address("D0.10")
         self.assertIsNone(try_parse_address("D0.10"))
 
+    def test_bit_in_word_dtype_requires_explicit_bit_index(self):
+        with self.assertRaisesRegex(ValueError, "explicit bit index"):
+            _compile_read_plan(["D0:BIT_IN_WORD"])
+
     def test_normalize_address(self):
         self.assertEqual(normalize_address("d100"), "D100")
         self.assertEqual(normalize_address("y220", plc_profile="melsec:iq-f"), "Y220")
@@ -277,6 +281,11 @@ class TestWriteBitInWordSync(unittest.TestCase):
         client = MagicMock()
         with self.assertRaises(ValueError):
             write_bit_in_word_sync(client, "D0", 16, True)
+
+    def test_write_named_requires_explicit_bit_index(self):
+        client = MagicMock()
+        with self.assertRaisesRegex(ValueError, "explicit bit index"):
+            write_named_sync(client, {"D0:BIT_IN_WORD": True})
 
 
 # ---------------------------------------------------------------------------
