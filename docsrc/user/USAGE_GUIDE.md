@@ -101,7 +101,7 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        snapshot = await read_named(client, ["D100", "D101:S", "D200:F", "D202:L", "D50.3"])
+        snapshot = await read_named(client, ["D100:U", "D101:S", "D200:F", "D202:L", "D50.3"])
         print(f"snapshot={snapshot}")
 
 
@@ -170,7 +170,7 @@ async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
         index = 0
-        async for snapshot in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
+        async for snapshot in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
             print(f"snapshot={snapshot}")
             index += 1
             if index >= 3:
@@ -225,7 +225,6 @@ asyncio.run(main())
 
 | Form | Example | Meaning | Helper behavior |
 | --- | --- | --- | --- |
-| Plain | `D100` | Unsigned 16-bit word | Same as `:U` for normal word devices. |
 | `:BIT` | `M1000:BIT` | Boolean bit value | One bit. |
 | `:U` | `D100:U` | Unsigned 16-bit word | One word. |
 | `:S` | `D100:S` | Signed 16-bit word | One word. |
@@ -233,3 +232,5 @@ asyncio.run(main())
 | `:L` | `D202:L` | Signed 32-bit value | Two words, little-endian word order. |
 | `:F` | `D204:F` | Float32 value | Two words, little-endian word order. |
 | `.n` | `D50.3` | One bit inside a word | Hex bit index from `0` to `F`. |
+
+Named addresses used with `read_named`, `write_named`, and `poll` must include the intended type, for example `D100:U` or `M1000:BIT`.

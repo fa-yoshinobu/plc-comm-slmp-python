@@ -56,13 +56,14 @@ This table lists the device families accepted by the current parser and explains
 
 | Suffix | Example | Meaning | Words |
 | --- | --- | --- | --- |
-| Plain | `D100` | Unsigned 16-bit value for normal word devices | 1 |
 | `:U` | `D100:U` | Unsigned 16-bit value | 1 |
 | `:S` | `D100:S` | Signed 16-bit value | 1 |
 | `:D` | `D200:D` | Unsigned 32-bit value | 2 |
 | `:L` | `D202:L` | Signed 32-bit value | 2 |
 | `:F` | `D204:F` | IEEE-754 float32 value | 2 |
 | `.n` | `D50.3` | One bit inside a word device | 1 word read-modify-write |
+
+Named-address helpers require explicit type suffixes. Use `D100:U`, not plain `D100`; use `M1000:BIT`, not plain `M1000`.
 
 ## Addressing notes
 

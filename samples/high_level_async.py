@@ -226,7 +226,7 @@ async def demo_named_rw(client) -> None:
     read_named / write_named - multi-device mixed-type access by address string.
 
     Address notation:
-        "D100"    unsigned 16-bit (default)
+        "D100:U"  unsigned 16-bit
         "D100:F"  float32
         "D100:S"  signed 16-bit
         "D100:D"  unsigned 32-bit
@@ -239,7 +239,7 @@ async def demo_named_rw(client) -> None:
     snapshot = await read_named(
         client,
         [
-            "D100",
+            "D100:U",
             "D200:F",
             "D202:L",
             "D50.3",
@@ -252,7 +252,7 @@ async def demo_named_rw(client) -> None:
         await write_named(
             client,
             {
-                "D100": 99,
+                "D100:U": 99,
                 "D200:F": 1.5,
                 "D202:L": -200,
                 "D50.3": True,
@@ -275,7 +275,7 @@ async def demo_poll(client, count: int) -> None:
     print(f"\nPolling {count} snapshots (Ctrl+C to abort early):")
     try:
         i = 0
-        async for snap in poll(client, ["D100", "D200:F", "D50.3"], interval=1.0):
+        async for snap in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
             print(f"  [{i + 1}] {snap}")
             i += 1
             if i >= count:
@@ -299,7 +299,7 @@ async def demo_queued_client(host: str, port: int, transport: str, timeout: floa
         queued_view = cast(AsyncSlmpClient, queued)
 
         async def task_a() -> None:
-            first = await read_named(queued_view, ["D100", "D200:F"])
+            first = await read_named(queued_view, ["D100:U", "D200:F"])
             print(f"[queued task-A] {first}")
 
         async def task_b() -> None:

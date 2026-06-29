@@ -222,7 +222,7 @@ def main() -> None:
         #
         # Read/write multiple devices with mixed types in a single call.
         # Address notation:
-        #   "D100"    - unsigned 16-bit (default)
+        #   "D100:U"  - unsigned 16-bit
         #   "D100:F"  - float32
         #   "D100:S"  - signed 16-bit
         #   "D100:D"  - unsigned 32-bit
@@ -235,7 +235,7 @@ def main() -> None:
         snapshot = read_named_sync(
             client,
             [
-                "D100",
+                "D100:U",
                 "D200:F",
                 "D202:L",
                 "D50.3",
@@ -248,13 +248,13 @@ def main() -> None:
             write_named_sync(
                 client,
                 {
-                    "D100": 99,
+                    "D100:U": 99,
                     "D200:F": 1.5,
                     "D202:L": -200,
                     "D50.3": True,
                 },
             )
-            print("[write_named_sync] Wrote mixed-type values to D100, D200:F, D202:L, D50.3")
+            print("[write_named_sync] Wrote mixed-type values to D100:U, D200:F, D202:L, D50.3")
         finally:
             write_named_sync(client, snapshot)
             print("[write_named_sync] Restored mixed-type values")
@@ -270,7 +270,7 @@ def main() -> None:
         # ---------------------------------------------------------------
         print(f"\nPolling {args.poll_count} snapshots (press Ctrl+C to abort):")
         try:
-            for i, snap in enumerate(poll_sync(client, ["D100", "D200:F", "D50.3"], interval=1.0)):
+            for i, snap in enumerate(poll_sync(client, ["D100:U", "D200:F", "D50.3"], interval=1.0)):
                 print(f"  [{i + 1}] {snap}")
                 if i + 1 >= args.poll_count:
                     break

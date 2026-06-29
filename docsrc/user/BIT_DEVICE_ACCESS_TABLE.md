@@ -60,13 +60,13 @@ Only these `plc_profile` values are accepted:
 
 | Family | Operation | Command | High-Level Example | Point Meaning | Returned Value |
 |---|---|---|---|---|---|
-| `M` | bit read | `0401` | `read_named(client, ["M1000", "M1001", "M1002", "M1003"])` | `4` bit devices | `{"M1000": True, ...}` |
+| `M` | bit read | `0401` | `read_named(client, ["M1000:BIT", "M1001:BIT", "M1002:BIT", "M1003:BIT"])` | `4` bit devices | `{"M1000:BIT": True, ...}` |
 | `M` | packed word read | `0401` | `read_typed(client, "M1000", "U")` | `1` packed 16-bit unit | `0x0005` |
-| `B` | bit read | `0401` | `read_named(client, ["B20", "B21", "B22", "B23"])` | `4` bit devices | `{"B20": True, ...}` |
+| `B` | bit read | `0401` | `read_named(client, ["B20:BIT", "B21:BIT", "B22:BIT", "B23:BIT"])` | `4` bit devices | `{"B20:BIT": True, ...}` |
 | `B` | packed word read | `0401` | `read_typed(client, "B20", "U")` | `1` packed 16-bit unit | `0x0005` |
-| `X` | bit read | `0401` | `read_named(client, ["X20", "X21", "X22", "X23"])` | `4` bit devices | `{"X20": True, ...}` |
+| `X` | bit read | `0401` | `read_named(client, ["X20:BIT", "X21:BIT", "X22:BIT", "X23:BIT"])` | `4` bit devices | `{"X20:BIT": True, ...}` |
 | `X` | packed word read | `0401` | `read_typed(client, "X20", "U")` | `1` packed 16-bit unit | `0x0005` |
-| `Y` | bit read | `0401` | `read_named(client, ["Y20", "Y21", "Y22", "Y23"])` | `4` bit devices | `{"Y20": True, ...}` |
+| `Y` | bit read | `0401` | `read_named(client, ["Y20:BIT", "Y21:BIT", "Y22:BIT", "Y23:BIT"])` | `4` bit devices | `{"Y20:BIT": True, ...}` |
 | `Y` | packed word read | `0401` | `read_typed(client, "Y20", "U")` | `1` packed 16-bit unit | `0x0005` |
 
 ## Practical Interpretation

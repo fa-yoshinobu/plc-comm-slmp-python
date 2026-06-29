@@ -39,7 +39,7 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_type
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        state = await read_named(client, ["LCS0", "LCC0"])
+        state = await read_named(client, ["LCS0:BIT", "LCC0:BIT"])
         await write_typed(client, "LCC0", "BIT", True)
         print(state)
 
@@ -62,8 +62,8 @@ from slmp import SlmpConnectionOptions, open_and_connect, write_named
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        await write_named(client, {"LTS0": True, "LTC0": False})
-        await write_named(client, {"LSTS0": True, "LSTC0": False})
+        await write_named(client, {"LTS0:BIT": True, "LTC0:BIT": False})
+        await write_named(client, {"LSTS0:BIT": True, "LSTC0:BIT": False})
 
 
 asyncio.run(main())
@@ -105,8 +105,8 @@ from slmp import SlmpConnectionOptions, open_and_connect, write_named
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
     async with await open_and_connect(options) as client:
-        await write_named(client, {"D100": 42, "D101": 43})
-        await write_named(client, {"M100": True})
+        await write_named(client, {"D100:U": 42, "D101:U": 43})
+        await write_named(client, {"M100:BIT": True})
 
 
 asyncio.run(main())
@@ -127,7 +127,7 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-f")
     async with await open_and_connect(options) as client:
-        values = await read_named(client, ["X100", "Y100"])
+        values = await read_named(client, ["X100:BIT", "Y100:BIT"])
         print(values)
 
 
