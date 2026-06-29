@@ -671,14 +671,10 @@ def _validate_long_timer_entry(address: str, device: DeviceRef, dtype: str) -> N
     _, role = long_read
     if role == "current":
         if dtype not in {"D", "L"}:
-            raise ValueError(
-                f"Address '{address}' uses a 32-bit long current value. Specify ':D' or ':L'."
-            )
+            raise ValueError(f"Address '{address}' uses a 32-bit long current value. Specify ':D' or ':L'.")
         return
     if dtype != "BIT":
-        raise ValueError(
-            f"Address '{address}' is a long timer state device. Specify ':BIT'."
-        )
+        raise ValueError(f"Address '{address}' is a long timer state device. Specify ':BIT'.")
 
 
 async def _write_long_family_value(
