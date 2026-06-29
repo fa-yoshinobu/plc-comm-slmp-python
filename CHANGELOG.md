@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Library: Made named-address parsing and typed read/write helpers require explicit dtype suffixes such as `:U`, `:S`, `:D`, `:L`, `:F`, or `:BIT`; bare devices no longer default to `U`, `BIT`, or long-timer `D`.
+- Library: Removed embedded localized SLMP end-code message text; end-code helpers now return stable code-derived keys while message lookup hooks return `None`.
+- Docs: Reworked the end-code page around raw `end_code` inspection and code-derived keys instead of bundled message text.
 - Tests: Updated high-level address parser and shared-spec vectors for explicit dtype requirements.
+- Tests: Updated SLMP end-code helper coverage for code-derived keys and non-embedded messages.
 
 ### Fixed
 - Library: Made `BIT_IN_WORD` helper addresses require an explicit bit index such as `D100.0` through `D100.F`; `D100:BIT_IN_WORD` now fails instead of silently reading or writing bit 0.
