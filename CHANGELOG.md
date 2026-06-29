@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-06-28
 
+### Changed
+- Library: Made named-address parsing and typed read/write helpers require explicit dtype suffixes such as `:U`, `:S`, `:D`, `:L`, `:F`, or `:BIT`; bare devices no longer default to `U`, `BIT`, or long-timer `D`.
+- Tests: Updated high-level address parser and shared-spec vectors for explicit dtype requirements.
+
 ### Fixed
 - Library: Made `BIT_IN_WORD` helper addresses require an explicit bit index such as `D100.0` through `D100.F`; `D100:BIT_IN_WORD` now fails instead of silently reading or writing bit 0.
 - Tests: Added coverage for rejecting `BIT_IN_WORD` addresses without an explicit bit index.

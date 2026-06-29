@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 _WORD_DTYPES = frozenset({"U", "S"})
 _DWORD_DTYPES = frozenset({"D", "L", "F"})
 _UNBATCHED_DEVICE_CODES = frozenset({"G", "HG"})
-_DEFAULT_DWORD_DEVICE_CODES = frozenset({"LTN", "LSTN", "LCN", "LZ"})
 _RANDOM_DWORD_SCALAR_DEVICE_CODES = frozenset({"LCN", "LZ"})
 _LONG_COUNTER_STATE_DEVICE_CODES = frozenset({"LCS", "LCC"})
 _LONG_TIMER_READ_FAMILIES: dict[str, tuple[str, str]] = {
@@ -196,7 +195,7 @@ async def read_typed(
         ``bool`` for ``BIT``, otherwise ``int`` or ``float``.
     """
     ref = _parse_device_for_client(client, device)
-    key = dtype.upper()
+    key = _require_dtype(dtype)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -235,7 +234,7 @@ async def write_typed(
         value: Application value to encode and write.
     """
     ref = _parse_device_for_client(client, device)
-    key = dtype.upper()
+    key = _require_dtype(dtype)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -268,7 +267,7 @@ def read_typed_sync(
 ) -> int | float | bool:
     """Synchronously read one logical value as a Python scalar."""
     ref = _parse_device_for_client(client, device)
-    key = dtype.upper()
+    key = _require_dtype(dtype)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -300,7 +299,7 @@ def write_typed_sync(
 ) -> None:
     """Synchronously write one logical value using the requested type."""
     ref = _parse_device_for_client(client, device)
-    key = dtype.upper()
+    key = _require_dtype(dtype)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -448,6 +447,7 @@ async def write_named(
         else:
             device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
+            _validate_device_dtype(address, device, resolved_dtype)
             _validate_long_timer_entry(address, device, resolved_dtype)
             await write_typed(client, base, resolved_dtype, value)
 
@@ -466,6 +466,7 @@ def write_named_sync(
         else:
             device = _parse_device_for_address_profile(base, address_profile)
             resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
+            _validate_device_dtype(address, device, resolved_dtype)
             _validate_long_timer_entry(address, device, resolved_dtype)
             write_typed_sync(client, base, resolved_dtype, value)
 
@@ -483,14 +484,25 @@ def _parse_address(address: str) -> tuple[str, str, int | None]:
     address = address.strip()
     if ":" in address:
         base, dtype = address.split(":", 1)
-        return base.strip(), dtype.strip().upper(), None
+        return base.strip(), _require_dtype(dtype), None
     if "." in address:
         base, bit_str = address.split(".", 1)
         bit_text = bit_str.strip()
         if len(bit_text) == 1 and bit_text.upper() in "0123456789ABCDEF":
             return base.strip(), "BIT_IN_WORD", int(bit_text, 16)
         raise ValueError(f"Invalid bit-in-word index {bit_str!r}; use one hex digit 0-F or ':' for dtype.")
-    return address.strip(), "U", None
+    raise ValueError(f"Address {address!r} requires an explicit dtype such as ':U', ':D', or ':BIT'.")
+
+
+def _require_dtype(dtype: str) -> str:
+    key = str(dtype).strip().upper()
+    if not key:
+        raise ValueError("dtype is required; specify BIT/U/S/D/L/F explicitly.")
+    if key == "BIT_IN_WORD":
+        raise ValueError("BIT_IN_WORD requires '.bit' notation such as 'D50.A'.")
+    if key not in {"BIT", "U", "S", "D", "L", "F"}:
+        raise ValueError(f"Unsupported dtype {key!r}; expected BIT/U/S/D/L/F")
+    return key
 
 
 def _require_bit_in_word_index(address: str, bit_index: int | None) -> int:
@@ -518,13 +530,13 @@ def parse_address(
 ) -> SlmpAddress:
     """Parse public SLMP helper-layer address notation.
 
-    Supported forms match :func:`read_named`: ``"D100"``, ``"D200:F"``,
-    ``"D50.A"``, and direct bit devices such as ``"M100"``.
+    Supported forms match :func:`read_named`: ``"D100:U"``, ``"D200:F"``,
+    ``"D50.A"``, and direct bit devices such as ``"M100:BIT"``.
     """
 
     if not isinstance(address, str):
         text = str(address)
-        return SlmpAddress(text=text, base_device=text, dtype="U")
+        raise ValueError(f"Address {text!r} requires an explicit dtype; pass a string such as '{text}:U'.")
 
     effective_address_profile = _effective_address_profile(plc_profile=plc_profile)
     raw_text = address.strip()
@@ -545,12 +557,10 @@ def parse_address(
         )
 
     resolved_dtype = _resolve_dtype_for_address(raw_text, device, dtype, bit_index)
-    if resolved_dtype not in {"BIT", "U", "S", "D", "L", "F"}:
-        raise ValueError(f"Unsupported dtype {resolved_dtype!r}; expected BIT/U/S/D/L/F")
-    explicit_dtype = ":" in raw_text
-    suffix = f":{resolved_dtype}" if explicit_dtype else ""
+    _validate_device_dtype(raw_text, device, resolved_dtype)
+    explicit_dtype = True
     return SlmpAddress(
-        text=f"{canonical_base}{suffix}",
+        text=f"{canonical_base}:{resolved_dtype}",
         base_device=canonical_base,
         dtype=resolved_dtype,
         bit_index=None,
@@ -581,16 +591,14 @@ def format_address(
     if not isinstance(address, SlmpAddress):
         return parse_address(address, plc_profile=plc_profile).text
 
-    canonical_base = normalize_address(address.base_device, plc_profile=plc_profile)
+    effective_address_profile = _effective_address_profile(plc_profile=plc_profile)
+    canonical_base = str(parse_device(address.base_device, plc_profile=effective_address_profile))
     if address.dtype == "BIT_IN_WORD":
         if address.bit_index is None or not 0 <= address.bit_index <= 15:
             raise ValueError("bit-in-word address requires bit_index 0-F")
         return f"{canonical_base}.{address.bit_index:X}"
-    if address.explicit_dtype:
-        if address.dtype not in {"BIT", "U", "S", "D", "L", "F"}:
-            raise ValueError(f"Unsupported dtype {address.dtype!r}; expected BIT/U/S/D/L/F")
-        return f"{canonical_base}:{address.dtype}"
-    return canonical_base
+    dtype = _require_dtype(address.dtype)
+    return f"{canonical_base}:{dtype}"
 
 
 def normalize_address(
@@ -612,15 +620,15 @@ def normalize_address(
 
     text = address.strip()
     if ":" not in text and "." not in text:
-        return str(parse_device(text, plc_profile=effective_address_profile))
+        raise ValueError(f"Address {text!r} requires an explicit dtype such as ':U', ':D', or ':BIT'.")
 
     base, dtype, bit_index = _parse_address(text)
     canonical_base = str(parse_device(base, plc_profile=effective_address_profile))
     if bit_index is not None:
         return f"{canonical_base}.{bit_index:X}"
-    if ":" in text:
-        return f"{canonical_base}:{dtype}"
-    return canonical_base
+    device = parse_device(base, plc_profile=effective_address_profile)
+    _validate_device_dtype(text, device, dtype)
+    return f"{canonical_base}:{dtype}"
 
 
 def _is_batchable_word_device(device: DeviceRef) -> bool:
@@ -628,22 +636,28 @@ def _is_batchable_word_device(device: DeviceRef) -> bool:
     return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
 
 
-def _address_has_explicit_dtype(address: str) -> bool:
-    return ":" in address
-
-
 def _normalize_dtype_for_device(device: DeviceRef, dtype: str) -> str:
-    code = DEVICE_CODES.get(device.code)
-    if code is not None and code.unit == DeviceUnit.BIT and dtype == "U":
-        return "BIT"
-    return dtype
+    return _require_dtype(dtype)
 
 
 def _resolve_dtype_for_address(address: str, device: DeviceRef, dtype: str, bit_index: int | None) -> str:
-    normalized = _normalize_dtype_for_device(device, dtype or "U")
-    if not _address_has_explicit_dtype(address) and bit_index is None and device.code in _DEFAULT_DWORD_DEVICE_CODES:
-        return "D"
-    return normalized
+    if bit_index is not None:
+        return "BIT_IN_WORD"
+    return _normalize_dtype_for_device(device, dtype)
+
+
+def _validate_device_dtype(address: str, device: DeviceRef, dtype: str) -> None:
+    if dtype == "BIT_IN_WORD":
+        return
+    code = DEVICE_CODES.get(device.code)
+    is_bit_device = code is not None and code.unit == DeviceUnit.BIT
+    if is_bit_device and dtype != "BIT":
+        raise ValueError(f"Address '{address}' is a bit device and requires ':BIT'.")
+    if not is_bit_device and dtype == "BIT":
+        raise ValueError(
+            f"Address '{address}' uses ':BIT', which is only valid for bit devices. "
+            "Use '.bit' notation for a bit inside a word device."
+        )
 
 
 def _get_long_timer_read(device: DeviceRef) -> tuple[str, str] | None:
@@ -658,12 +672,12 @@ def _validate_long_timer_entry(address: str, device: DeviceRef, dtype: str) -> N
     if role == "current":
         if dtype not in {"D", "L"}:
             raise ValueError(
-                f"Address '{address}' uses a 32-bit long current value. Use the plain form or ':D' / ':L'."
+                f"Address '{address}' uses a 32-bit long current value. Specify ':D' or ':L'."
             )
         return
     if dtype != "BIT":
         raise ValueError(
-            f"Address '{address}' is a long timer state device. Use the plain device form without a dtype override."
+            f"Address '{address}' is a long timer state device. Specify ':BIT'."
         )
 
 
@@ -800,10 +814,22 @@ def _compile_read_plan(
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
         device = _parse_device_for_address_profile(base, address_profile)
-        dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
-        _validate_long_timer_entry(address, device, dtype)
         batch_kind: str | None = None
         long_timer_read = _get_long_timer_read(device)
+
+        if dtype == "BIT_IN_WORD":
+            dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
+            bit_index = _require_bit_in_word_index(address, bit_index)
+            _validate_bit_in_word_target(address, device)
+            if _is_batchable_word_device(device):
+                batch_kind = "WORD"
+                if device not in seen_words:
+                    word_devices.append(device)
+                    seen_words.add(device)
+        else:
+            dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
+            _validate_device_dtype(address, device, dtype)
+            _validate_long_timer_entry(address, device, dtype)
 
         if long_timer_read is not None and not (device.code == "LCN" and long_timer_read[1] == "current"):
             batch_kind = "LONG_TIMER"
@@ -812,14 +838,6 @@ def _compile_read_plan(
             if device not in seen_dwords:
                 dword_devices.append(device)
                 seen_dwords.add(device)
-        elif dtype == "BIT_IN_WORD":
-            bit_index = _require_bit_in_word_index(address, bit_index)
-            _validate_bit_in_word_target(address, device)
-            if _is_batchable_word_device(device):
-                batch_kind = "WORD"
-                if device not in seen_words:
-                    word_devices.append(device)
-                    seen_words.add(device)
         elif dtype in _WORD_DTYPES:
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
@@ -1041,7 +1059,7 @@ async def _read_named_with_plan(
             bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
             result[entry.address] = bool((words[0] >> bit_index) & 1)
         else:
-            result[entry.address] = await read_typed(client, entry.device, entry.dtype or "U")
+            result[entry.address] = await read_typed(client, entry.device, entry.dtype)
 
     return result
 
@@ -1089,7 +1107,7 @@ def _read_named_with_plan_sync(
             bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
             result[entry.address] = bool((words[0] >> bit_index) & 1)
         else:
-            result[entry.address] = read_typed_sync(client, entry.device, entry.dtype or "U")
+            result[entry.address] = read_typed_sync(client, entry.device, entry.dtype)
 
     return result
 

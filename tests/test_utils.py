@@ -80,7 +80,9 @@ def _make_coro(value):
 
 class TestParseAddress(unittest.TestCase):
     def test_plain_device(self):
-        self.assertEqual(_parse_address("D100"), ("D100", "U", None))
+        with self.assertRaisesRegex(ValueError, "requires an explicit dtype"):
+            _parse_address("D100")
+        self.assertIsNone(try_parse_address("D100"))
 
     def test_dtype_suffix(self):
         self.assertEqual(_parse_address("D100:F"), ("D100", "F", None))
@@ -104,18 +106,18 @@ class TestParseAddress(unittest.TestCase):
         self.assertIsNone(try_parse_address("D0.10"))
 
     def test_bit_in_word_dtype_requires_explicit_bit_index(self):
-        with self.assertRaisesRegex(ValueError, "explicit bit index"):
+        with self.assertRaisesRegex(ValueError, "BIT_IN_WORD requires"):
             _compile_read_plan(["D0:BIT_IN_WORD"])
 
     def test_normalize_address(self):
-        self.assertEqual(normalize_address("d100"), "D100")
-        self.assertEqual(normalize_address("y220", plc_profile="melsec:iq-f"), "Y220")
-        self.assertEqual(normalize_address("y220", plc_profile="melsec:iq-f"), "Y220")
+        self.assertEqual(normalize_address("d100:u"), "D100:U")
+        self.assertEqual(normalize_address("y220:bit", plc_profile="melsec:iq-f"), "Y220:BIT")
+        self.assertEqual(normalize_address("y220:bit", plc_profile="melsec:iq-f"), "Y220:BIT")
 
     def test_public_parse_try_format_address(self):
         typed = parse_address("d200:f")
         bit = parse_address("d50.a")
-        direct_bit = parse_address("m100")
+        direct_bit = parse_address("m100:bit")
 
         self.assertEqual(typed.text, "D200:F")
         self.assertEqual(typed.base_device, "D200")
@@ -126,14 +128,14 @@ class TestParseAddress(unittest.TestCase):
         self.assertEqual(bit.dtype, "BIT_IN_WORD")
         self.assertEqual(bit.bit_index, 10)
         self.assertEqual(format_address(bit), "D50.A")
-        self.assertEqual(direct_bit.text, "M100")
+        self.assertEqual(direct_bit.text, "M100:BIT")
         self.assertEqual(direct_bit.dtype, "BIT")
         self.assertEqual(format_address("d100:s"), "D100:S")
 
     def test_public_parse_address_uses_plc_profile(self):
-        parsed = parse_address("x100", plc_profile="melsec:iq-f")
+        parsed = parse_address("x100:bit", plc_profile="melsec:iq-f")
 
-        self.assertEqual(parsed.text, "X100")
+        self.assertEqual(parsed.text, "X100:BIT")
         self.assertEqual(parsed.base_device, "X100")
         self.assertEqual(parsed.dtype, "BIT")
         self.assertIsNone(try_parse_address("x100"))
@@ -141,17 +143,17 @@ class TestParseAddress(unittest.TestCase):
 
     def test_public_parse_address_rejects_short_plc_profile(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
-            parse_address("x100", plc_profile="iq-f")
+            parse_address("x100:bit", plc_profile="iq-f")
 
     def test_public_parse_address_rejects_noncanonical_profile_case(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
-            parse_address("x100", plc_profile="MELSEC:IQ-F")
+            parse_address("x100:bit", plc_profile="MELSEC:IQ-F")
 
     def test_read_named_sync_rejects_xy_without_address_profile(self):
         client = MagicMock()
         client.address_profile = None
         with self.assertRaisesRegex(ValueError, "plc_profile"):
-            read_named_sync(client, ["X40"])
+            read_named_sync(client, ["X40:BIT"])
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +286,7 @@ class TestWriteBitInWordSync(unittest.TestCase):
 
     def test_write_named_requires_explicit_bit_index(self):
         client = MagicMock()
-        with self.assertRaisesRegex(ValueError, "explicit bit index"):
+        with self.assertRaisesRegex(ValueError, "BIT_IN_WORD requires"):
             write_named_sync(client, {"D0:BIT_IN_WORD": True})
 
 
@@ -302,8 +304,8 @@ class TestReadNamedSync(unittest.TestCase):
             word={"D100": 10, "D0": 0x00FF},
             dword={"D101": dword},
         )
-        result = read_named_sync(client, ["D100", "D101:F", "D0.3"])
-        self.assertEqual(result["D100"], 10)
+        result = read_named_sync(client, ["D100:U", "D101:F", "D0.3"])
+        self.assertEqual(result["D100:U"], 10)
         self.assertAlmostEqual(result["D101:F"], 2.5, places=5)
         self.assertEqual(result["D0.3"], bool((0x00FF >> 3) & 1))
         client.read_random.assert_called_once_with(
@@ -320,8 +322,8 @@ class TestReadNamedSync(unittest.TestCase):
     def test_bit_device_falls_back_to_single_read(self):
         client = MagicMock()
         client.read_devices.return_value = [True]
-        result = read_named_sync(client, ["M100"])
-        self.assertTrue(result["M100"])
+        result = read_named_sync(client, ["M100:BIT"])
+        self.assertTrue(result["M100:BIT"])
         client.read_random.assert_not_called()
         client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=True)
 
@@ -346,18 +348,28 @@ class TestReadNamedSync(unittest.TestCase):
 
         result = read_named_sync(
             client,
-            ["LTN10", "LTS10", "LTC10", "LSTN20", "LSTS20", "LSTC20", "LCN30", "LCS30", "LCC30"],
+            [
+                "LTN10:D",
+                "LTS10:BIT",
+                "LTC10:BIT",
+                "LSTN20:D",
+                "LSTS20:BIT",
+                "LSTC20:BIT",
+                "LCN30:D",
+                "LCS30:BIT",
+                "LCC30:BIT",
+            ],
         )
 
-        self.assertEqual(result["LTN10"], 0x00010002)
-        self.assertTrue(result["LTS10"])
-        self.assertFalse(result["LTC10"])
-        self.assertEqual(result["LSTN20"], 7)
-        self.assertFalse(result["LSTS20"])
-        self.assertTrue(result["LSTC20"])
-        self.assertEqual(result["LCN30"], 8)
-        self.assertTrue(result["LCS30"])
-        self.assertTrue(result["LCC30"])
+        self.assertEqual(result["LTN10:D"], 0x00010002)
+        self.assertTrue(result["LTS10:BIT"])
+        self.assertFalse(result["LTC10:BIT"])
+        self.assertEqual(result["LSTN20:D"], 7)
+        self.assertFalse(result["LSTS20:BIT"])
+        self.assertTrue(result["LSTC20:BIT"])
+        self.assertEqual(result["LCN30:D"], 8)
+        self.assertTrue(result["LCS30:BIT"])
+        self.assertTrue(result["LCC30:BIT"])
         client.read_random.assert_called_once_with(word_devices=[], dword_devices=[DeviceRef("LCN", 30)])
         client.read_long_timer.assert_called_once_with(head_no=10, points=1)
         client.read_long_retentive_timer.assert_called_once_with(head_no=20, points=1)
@@ -378,7 +390,7 @@ class TestReadNamedSync(unittest.TestCase):
 class TestWriteNamedSync(unittest.TestCase):
     def test_write_multiple(self):
         client = MagicMock()
-        write_named_sync(client, {"D100": 1, "D200": 2})
+        write_named_sync(client, {"D100:U": 1, "D200:U": 2})
         self.assertEqual(client.write_devices.call_count, 2)
 
     def test_write_float(self):
@@ -395,7 +407,7 @@ class TestWriteNamedSync(unittest.TestCase):
 
     def test_write_direct_bit_device(self):
         client = MagicMock()
-        write_named_sync(client, {"M100": True})
+        write_named_sync(client, {"M100:BIT": True})
         client.write_devices.assert_called_once_with("M100", [True], bit_unit=True)
 
     def test_write_bit_device_bit_suffix_raises(self):
@@ -403,9 +415,9 @@ class TestWriteNamedSync(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only valid for word devices"):
             write_named_sync(client, {"M100.0": True})
 
-    def test_write_named_defaults_long_current_values_to_dword(self):
+    def test_write_named_requires_explicit_long_current_dtype(self):
         client = MagicMock()
-        write_named_sync(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
+        write_named_sync(client, {"LTN10:D": 1, "LSTN20:D": 2, "LCN30:D": 3})
 
         self.assertEqual(
             client.write_random_words.call_args_list,
@@ -421,12 +433,12 @@ class TestWriteNamedSync(unittest.TestCase):
         write_named_sync(
             client,
             {
-                "LTC10": True,
-                "LTS10": False,
-                "LSTC20": True,
-                "LSTS20": False,
-                "LCC30": True,
-                "LCS30": False,
+                "LTC10:BIT": True,
+                "LTS10:BIT": False,
+                "LSTC20:BIT": True,
+                "LSTS20:BIT": False,
+                "LCC30:BIT": True,
+                "LCS30:BIT": False,
             },
         )
 
@@ -564,37 +576,39 @@ class TestPollSync(unittest.TestCase):
             RandomReadResult(word={"D0": 2}, dword={}),
             RandomReadResult(word={"D0": 3}, dword={}),
         ]
-        gen = poll_sync(client, ["D0"], interval=0)
+        gen = poll_sync(client, ["D0:U"], interval=0)
         snap1 = next(gen)
         snap2 = next(gen)
         snap3 = next(gen)
-        self.assertEqual(snap1["D0"], 1)
-        self.assertEqual(snap2["D0"], 2)
-        self.assertEqual(snap3["D0"], 3)
+        self.assertEqual(snap1["D0:U"], 1)
+        self.assertEqual(snap2["D0:U"], 2)
+        self.assertEqual(snap3["D0:U"], 3)
 
 
 class TestReadPlan(unittest.TestCase):
     def test_compile_read_plan_batches_word_and_dword_addresses(self):
-        plan = _compile_read_plan(["D100", "D100.3", "D101:F", "M10"])
+        plan = _compile_read_plan(["D100:U", "D100.3", "D101:F", "M10:BIT"])
         self.assertEqual(plan.word_devices, (DeviceRef("D", 100),))
         self.assertEqual(plan.dword_devices, (DeviceRef("D", 101),))
         self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", None])
 
     def test_compile_read_plan_marks_long_timer_helper_reads_and_long_currents(self):
-        plan = _compile_read_plan(["LTN10", "LTS10", "LTC10", "LSTN20", "LCN30", "LCS30", "LCC30"])
+        plan = _compile_read_plan(
+            ["LTN10:D", "LTS10:BIT", "LTC10:BIT", "LSTN20:D", "LCN30:D", "LCS30:BIT", "LCC30:BIT"]
+        )
 
         self.assertEqual(plan.word_devices, ())
         self.assertEqual(plan.dword_devices, (DeviceRef("LCN", 30),))
         self.assertEqual(
             [(entry.address, entry.dtype, entry.batch_kind) for entry in plan.entries],
             [
-                ("LTN10", "D", "LONG_TIMER"),
-                ("LTS10", "BIT", "LONG_TIMER"),
-                ("LTC10", "BIT", "LONG_TIMER"),
-                ("LSTN20", "D", "LONG_TIMER"),
-                ("LCN30", "D", "DWORD"),
-                ("LCS30", "BIT", "LONG_TIMER"),
-                ("LCC30", "BIT", "LONG_TIMER"),
+                ("LTN10:D", "D", "LONG_TIMER"),
+                ("LTS10:BIT", "BIT", "LONG_TIMER"),
+                ("LTC10:BIT", "BIT", "LONG_TIMER"),
+                ("LSTN20:D", "D", "LONG_TIMER"),
+                ("LCN30:D", "D", "DWORD"),
+                ("LCS30:BIT", "BIT", "LONG_TIMER"),
+                ("LCC30:BIT", "BIT", "LONG_TIMER"),
             ],
         )
 
@@ -669,16 +683,16 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
             pass
 
         client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
-        await write_named(client, {"D100": 1, "D200": 2})
+        await write_named(client, {"D100:U": 1, "D200:U": 2})
         self.assertEqual(client.write_devices.call_count, 2)
 
-    async def test_write_named_defaults_long_current_values_to_dword(self):
+    async def test_write_named_requires_explicit_long_current_dtype(self):
         client = MagicMock()
         client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
         client.write_random_words = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
         client.write_random_bits = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
 
-        await write_named(client, {"LTN10": 1, "LSTN20": 2, "LCN30": 3})
+        await write_named(client, {"LTN10:D": 1, "LSTN20:D": 2, "LCN30:D": 3})
 
         self.assertEqual(
             client.write_random_words.call_args_list,
@@ -697,7 +711,14 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
 
         await write_named(
             client,
-            {"LTC10": True, "LTS10": False, "LSTC20": True, "LSTS20": False, "LCC30": True, "LCS30": False},
+            {
+                "LTC10:BIT": True,
+                "LTS10:BIT": False,
+                "LSTC20:BIT": True,
+                "LSTS20:BIT": False,
+                "LCC30:BIT": True,
+                "LCS30:BIT": False,
+            },
         )
 
         self.assertEqual(
