@@ -1,4 +1,4 @@
-# Extended Device Device Recheck Report
+# Extended Device Recheck Report
 
 - Date: 2026-06-12 11:37:59
 - Host: 192.168.250.101
