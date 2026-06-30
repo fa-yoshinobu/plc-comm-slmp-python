@@ -37,27 +37,39 @@ Run the minimum applicable set:
 
 1. Basic connection
 ```powershell
-python scripts/slmp_connection_check.py --host <HOST> --port <PORT> --transport tcp --series iqr --read-device D1000 --points 1
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+python scripts/slmp_connection_check.py --host $plcHost --port $plcPort --transport tcp --series iqr --read-device D1000 --points 1
 ```
 
 2. Device range boundary probe
 ```powershell
-python scripts/slmp_device_range_probe.py --host <HOST> --port <PORT> --transport tcp --series iqr --spec-file <SPEC_FILE> --include-writeback
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+$specFile = ".\device-range-spec.json"
+python scripts/slmp_device_range_probe.py --host $plcHost --port $plcPort --transport tcp --series iqr --spec-file $specFile --include-writeback
 ```
 
 3. Open-item recheck
 ```powershell
-python scripts/slmp_open_items_recheck.py --host <HOST> --port <PORT> --transport tcp --series iqr
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+python scripts/slmp_open_items_recheck.py --host $plcHost --port $plcPort --transport tcp --series iqr
 ```
 
 4. Special device probe if `LT/LST` or `G/HG` related settings changed
 ```powershell
-python scripts/slmp_special_device_probe.py --host <HOST> --port <PORT> --transport tcp --series iqr
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+python scripts/slmp_special_device_probe.py --host $plcHost --port $plcPort --transport tcp --series iqr
 ```
 
 5. Other-station probe if target header or route assumptions changed
 ```powershell
-python scripts/slmp_other_station_check.py --host <HOST> --port <PORT> --transport tcp --series iqr --target-file <TARGET_FILE>
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+$targetFile = ".\other-station-targets.json"
+python scripts/slmp_other_station_check.py --host $plcHost --port $plcPort --transport tcp --series iqr --target-file $targetFile
 ```
 
 ## 4. Re-Verification Result
