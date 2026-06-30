@@ -49,7 +49,10 @@ python -m venv %TEMP%\\slmp_release_smoke
 ## 3. Run the Minimum Live Check
 
 ```powershell
-python scripts/slmp_connection_check.py --host <host> --port <port> --transport tcp --series <series>
+$plcHost = "192.168.3.10"
+$plcPort = 1025
+$series = "iqr"
+python scripts/slmp_connection_check.py --host $plcHost --port $plcPort --transport tcp --series $series
 ```
 
 If the release changes live behavior, also run the focused script for that area.
