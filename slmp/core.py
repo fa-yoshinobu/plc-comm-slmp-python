@@ -1126,6 +1126,12 @@ def _check_block_request_limits(
         raise ValueError(f"{name} total device points out of range (<=960): {detail}")
 
 
+def _validate_block_route_for_profile(plc_profile: object | None, command_label: str) -> None:
+    normalized = _normalize_plc_profile_hint(plc_profile)
+    if normalized in {SlmpPlcProfile.QCpu.value, SlmpPlcProfile.QnU.value, SlmpPlcProfile.QnUDV.value}:
+        raise ValueError(f"{command_label} is not supported for plc_profile '{normalized}'. Use direct or random device commands.")
+
+
 def _normalize_items(
     values: Mapping[str | DeviceRef, Any] | Sequence[tuple[str | DeviceRef, Any]],
 ) -> list[tuple[DeviceRef, Any]]:

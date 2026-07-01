@@ -37,6 +37,7 @@ from .core import (
     _label_array_data_bytes,
     _normalize_items,
     _require_explicit_plc_profile_for_xy,
+    _validate_block_route_for_profile,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_direct_dword_read_device,
@@ -720,6 +721,7 @@ def build_read_block_request(
     if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
         raise ValueError("word_blocks and bit_blocks must be <= 255 each")
     effective_series = _effective_series(series, default_series)
+    _validate_block_route_for_profile(address_profile, "Read Block (0x0406)")
     _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="read_block")
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
@@ -788,6 +790,7 @@ def build_write_block_request(
     if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
         raise ValueError("word_blocks and bit_blocks must be <= 255 each")
     effective_series = _effective_series(series, default_series)
+    _validate_block_route_for_profile(address_profile, "Write Block (0x1406)")
     _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="write_block", write=True)
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 

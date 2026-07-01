@@ -2696,6 +2696,15 @@ class TestDeviceApi(unittest.TestCase):
             client.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
+    def test_read_block_rejects_q_profiles_before_transport(self) -> None:
+        """Q-series Ethernet profiles must not send Read Block."""
+        for profile in ("melsec:qcpu", "melsec:qnu", "melsec:qnudv"):
+            with self.subTest(profile=profile):
+                client = FakeClient(plc_profile=profile)
+                with self.assertRaisesRegex(ValueError, f"Read Block \\(0x0406\\).*{profile}"):
+                    client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+                self.assertIsNone(client.last_request)
+
     def test_read_block_rejects_lcn_lz_and_non_block_long_current_routes(self) -> None:
         """Read Block must not use unsupported long-current word-block routes."""
         client = FakeClient()
@@ -2777,6 +2786,15 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Write Block \\(0x1406\\) does not support LCS/LCC"):
             client.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
+
+    def test_write_block_rejects_q_profiles_before_transport(self) -> None:
+        """Q-series Ethernet profiles must not send Write Block."""
+        for profile in ("melsec:qcpu", "melsec:qnu", "melsec:qnudv"):
+            with self.subTest(profile=profile):
+                client = FakeClient(plc_profile=profile)
+                with self.assertRaisesRegex(ValueError, f"Write Block \\(0x1406\\).*{profile}"):
+                    client.write_block(word_blocks=[("D100", [1])], bit_blocks=[("M100", [1])])
+                self.assertIsNone(client.last_request)
 
     def test_write_block_rejects_long_current_and_lz_routes(self) -> None:
         """Write Block must not use unsupported long-current word-block routes."""
