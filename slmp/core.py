@@ -1188,6 +1188,8 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
 
 
 def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool) -> None:
+    if ref.code in _READ_ONLY_DEVICE_CODES:
+        raise ValueError(f"{ref.code} is read-only and cannot be written.")
     if bit_unit and ref.code in _LONG_FAMILY_STATE_WRITE_DIRECT_CODES:
         raise ValueError(
             f"Direct bit write is not supported for {ref.code}. "
@@ -1224,12 +1226,24 @@ def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Se
         )
 
 
-def _validate_random_write_word_devices(word_refs: Sequence[DeviceRef]) -> None:
+def _validate_random_write_word_devices(
+    word_refs: Sequence[DeviceRef],
+    dword_refs: Sequence[DeviceRef] = (),
+) -> None:
+    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in (*word_refs, *dword_refs)):
+        raise ValueError("Write Random (0x1402) does not support read-only devices such as S.")
     if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
         raise ValueError(
             "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
             "Use dword entries or write_typed/write_named with ':D' or ':L' instead."
         )
+
+
+def _validate_random_write_bit_devices(bit_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in bit_refs):
+        raise ValueError("Write Random (0x1402) does not support read-only devices such as S.")
+    if any(ref.code in _G_HG_CODES for ref in bit_refs):
+        raise ValueError("Write Random (0x1402) does not support G/HG bit entries. Use U-qualified word access.")
 
 
 def _validate_block_read_devices(
@@ -1259,6 +1273,8 @@ def _validate_block_read_devices(
 
 
 def _validate_block_write_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
+    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in (*word_refs, *bit_refs)):
+        raise ValueError("Write Block (0x1406) does not support read-only devices such as S.")
     if any(
         ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in (*word_refs, *bit_refs)
     ):
@@ -1346,6 +1362,7 @@ _LC_CONTACT_CODES = frozenset({"LCS", "LCC"})
 _LONG_FAMILY_STATE_WRITE_DIRECT_CODES = _LT_LST_DIRECT_CODES | _LC_CONTACT_CODES
 _DWORD_ONLY_DIRECT_CODES = frozenset({"LZ"})
 _RANDOM_DWORD_ONLY_DIRECT_CODES = frozenset({"LCN", "LZ"})
+_READ_ONLY_DEVICE_CODES = frozenset({"S"})
 _G_HG_CODES = frozenset({"G", "HG"})
 _HG_VALID_EXTENSION_SPECIFICATIONS = frozenset({0x03E0, 0x03E1, 0x03E2, 0x03E3})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})

@@ -19,7 +19,7 @@ Audit basis:
 | A-3 Remote Stop `1002` | High-level Remote Stop sends only fixed `01 00`. The old force variant is not a manual branch. | Force argument removed from sync/async high-level APIs. |
 | A-4 Remote Password `1630/1631` | iQ-R/iQ-L use little-endian length plus ASCII password; Q/L uses `04 00 + 4 ASCII bytes`. | Q/L 4-byte format is implemented. |
 | A-5 ZR address radix | ZR device numbers are decimal. The manual table entry that looks hexadecimal is treated as unreliable. | No code change. |
-| A-6 Step relay `S` | R120PCPU can read and monitor `S`, but write failed and GX Works cannot monitor it in the user workflow. | Not exposed as a public high-level device. |
+| A-6 Step relay `S` | R120PCPU can read and monitor `S`, but write failed and GX Works cannot monitor it in the user workflow. | Exposed for reads; all write routes reject `S` as read-only. |
 | A-7 Self Test `0619` | High-level API follows the manual: 1..960 bytes and ASCII `0`-`9` / `A`-`F` only. | Reflected. |
 | A-8 Link Direct `J` | Keep the current 11-byte layout and `0080/0081`; `0082/0083` failed with `0xC061` on iQ-R. | No code change. |
 | A-9 `G` / `HG` extension layout | Keep the current capture-compatible layout. The manual order failed with `0xC061` on R120PCPU. | No code change. |

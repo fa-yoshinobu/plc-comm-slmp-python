@@ -39,8 +39,8 @@ _LONG_TIMER_READ_FAMILIES: dict[str, tuple[str, str]] = {
     "LSTS": ("LSTN", "contact"),
     "LSTC": ("LSTN", "coil"),
     "LCN": ("LCN", "current"),
-    "LCS": ("LCN", "contact"),
-    "LCC": ("LCN", "coil"),
+    "LCS": ("LCS", "contact"),
+    "LCC": ("LCC", "coil"),
 }
 
 
