@@ -40,10 +40,12 @@ Expected result:
 Optional packaging smoke check:
 
 ```powershell
-python -m venv %TEMP%\\slmp_release_smoke
-%TEMP%\\slmp_release_smoke\\Scripts\\python.exe -m pip install .\\dist\\slmp_connect_python-0.1.6-py3-none-any.whl
-%TEMP%\\slmp_release_smoke\\Scripts\\python.exe -c "import slmp; print(slmp.__version__)"
-%TEMP%\\slmp_release_smoke\\Scripts\\slmp-connection-check.exe --help
+$smokeVenv = Join-Path $env:TEMP "slmp_release_smoke"
+$wheel = Get-ChildItem .\dist\slmp_connect_python-*.whl | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+python -m venv $smokeVenv
+& (Join-Path $smokeVenv "Scripts\python.exe") -m pip install $wheel.FullName
+& (Join-Path $smokeVenv "Scripts\python.exe") -c "import slmp; print(slmp.__version__)"
+& (Join-Path $smokeVenv "Scripts\slmp-connection-check.exe") --help
 ```
 
 ## 3. Run the Minimum Live Check

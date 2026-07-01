@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.
 - Docs: Documented `S` as a read-only bit device in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
+- Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
+- Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
 
 ## [1.1.1] - 2026-06-29
