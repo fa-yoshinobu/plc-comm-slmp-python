@@ -44,6 +44,7 @@ from .core import (
     _validate_direct_write_device,
     _validate_monitor_register_devices,
     _validate_random_read_devices,
+    _validate_random_write_bit_devices,
     _validate_random_write_word_devices,
     _warn_boundary_behavior,
     _warn_practical_device_path,
@@ -595,7 +596,10 @@ def build_write_random_words_request(
         series=effective_series,
         name="write_random_words",
     )
-    _validate_random_write_word_devices([device for device, _ in word_items])
+    _validate_random_write_word_devices(
+        [device for device, _ in word_items],
+        [device for device, _ in dword_items],
+    )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
     payload = bytearray([len(word_items), len(dword_items)])
     for device, value in word_items:
@@ -631,6 +635,7 @@ def build_write_random_words_ext_request(
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
+    dword_refs: list[DeviceRef] = []
     for device, value, extension in word_values:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
@@ -640,9 +645,10 @@ def build_write_random_words_ext_request(
     for device, value, extension in dword_values:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        dword_refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(4, "little", signed=False)
-    _validate_random_write_word_devices(word_refs)
+    _validate_random_write_word_devices(word_refs, dword_refs)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
@@ -659,6 +665,7 @@ def build_write_random_bits_request(
         raise ValueError("bit_values must be <= 255")
     effective_series = _effective_series(series, default_series)
     _check_random_bit_write_count(len(items), series=effective_series, name="write_random_bits")
+    _validate_random_write_bit_devices([device for device, _ in items])
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=False)
     payload = bytearray([len(items)])
     for device, state in items:
@@ -686,14 +693,17 @@ def build_write_random_bits_ext_request(
     _check_random_bit_write_count(len(bit_values), series=effective_series, name="write_random_bits_ext")
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
+    refs: list[DeviceRef] = []
     for device, state, extension in bit_values:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         if effective_series == PLCSeries.IQR:
             payload += b"\x01\x00" if bool(state) else b"\x00\x00"
         else:
             payload += b"\x01" if bool(state) else b"\x00"
+    _validate_random_write_bit_devices(refs)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 

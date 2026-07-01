@@ -72,15 +72,18 @@ Manual expectation:
 
 Current implementation:
 
-- `S` is removed from the repository device table and parser
+- `S` is present in the repository device table and parser
+- reads are allowed
+- writes are rejected before transport because `S` is treated as read-only
 
 Reason:
 
-- this repository no longer exposes `S` as a supported public device family
+- current project policy follows the SLMP read-only treatment for `S`
+- a device that is readable on a target is not automatically considered writable
 
 Status:
 
-- removed from current project scope
+- read-only public device family
 
 ## 4. Mixed Block Split Behavior
 

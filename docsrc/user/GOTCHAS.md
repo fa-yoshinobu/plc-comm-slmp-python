@@ -69,6 +69,12 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## S write rejected
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| `S10:BIT` can be read but any write route rejects it. | SLMP exposes the step relay as read-only for this library. | Treat `S` as a read-only bit device and keep it out of write lists. |
+
 ## G/HG fails
 
 | Symptom | Root cause | Fix |

@@ -125,6 +125,7 @@ Commonly addressed through `read_named`, `write_named`, `read_typed`, and `write
 | L | Latch relay | Decimal | |
 | F | Annunciator | Decimal | |
 | V | Edge relay | Decimal | |
+| S | Step relay | Decimal | read-only; write routes are rejected before transport |
 | B | Link relay | Hex | |
 | SB | Link special relay | Hex | |
 | DX | Direct input | Hex | rejected for `plc_profile="melsec:iq-f"` |
@@ -142,7 +143,7 @@ Commonly addressed through `read_named`, `write_named`, `read_typed`, and `write
 | LCS | Long counter contact | Decimal | iQ-R |
 | LCC | Long counter coil | Decimal | iQ-R |
 
-> `S` (step relay) is present in the device code table but is intentionally disabled.
+> `S` (step relay) reads are supported. Writes are rejected because this library treats `S` as read-only.
 
 ### Word Devices
 

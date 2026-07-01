@@ -1709,17 +1709,24 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0080)
         self.assertEqual(payload, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8\x01\x00")
 
-    def test_s_device_code_is_rejected(self) -> None:
-        """Test test_s_device_code_is_rejected."""
+    def test_s_device_is_read_only(self) -> None:
+        """Test test_s_device_is_read_only."""
         client = FakeClient()
-        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
-            parse_device("S0")
-        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
-            client.read_devices("S0", 1, bit_unit=True, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
+        self.assertEqual(parse_device("S10").code, "S")
+
+        client.next_response_data = b"\x10"
+        self.assertEqual(client.read_devices("S10", 1, bit_unit=True, series=PLCSeries.IQR), [True])
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.DEVICE_READ)
+        self.assertEqual(subcommand, 0x0003)
+        self.assertIn(b"\x98\x00", payload)
+
+        with self.assertRaisesRegex(ValueError, "S is read-only"):
             client.write_devices("S0", [True], bit_unit=True, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(ValueError, "Unknown SLMP device code 'S'"):
-            client.read_block(word_blocks=(), bit_blocks=[("S0", 1)], series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, "read-only devices such as S"):
+            client.write_random_bits({"S10": True}, series=PLCSeries.IQR)
+        with self.assertRaisesRegex(ValueError, "read-only devices such as S"):
+            client.write_block(word_blocks=(), bit_blocks=[("S10", [1])], series=PLCSeries.IQR)
 
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_hg."""
@@ -1840,6 +1847,12 @@ class TestDeviceApi(unittest.TestCase):
         # iQ-R/iQ-L random bit write state is 2 bytes per point (ON=01 00, OFF=00 00)
         self.assertIn(b"\x90\x00\x01\x00", payload)
         self.assertTrue(payload.endswith(b"\x9d\x00\x00\x00"))
+
+        with self.assertRaisesRegex(ValueError, "does not support G/HG bit entries"):
+            client.write_random_bits_ext(
+                bit_values=[(r"U3E0\G10", True, ExtensionSpec())],
+                series=PLCSeries.IQR,
+            )
 
     def test_manual_point_limits_for_direct_access(self) -> None:
         client = FakeClient()

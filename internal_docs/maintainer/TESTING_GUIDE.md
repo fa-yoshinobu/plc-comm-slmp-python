@@ -444,12 +444,12 @@ Before a release or a merge that changes behavior, run at least:
 1. `python -m unittest discover -s tests -v`
 2. `python -m ruff check slmp tests scripts`
 3. `python -m mypy slmp scripts`
-4. `python scripts/slmp_connection_check.py --host <host> --port <port> --transport tcp --series <series>`
+4. `python scripts/slmp_connection_check.py --host $plcHost --port $plcPort --transport tcp --series $series`
 
 Also run focused live scripts when the change touches that area.
 
 Equivalent convenience command:
 
-1. `python scripts/slmp_regression_suite.py --include-live-connection-check --host <host> --port <port> --transport tcp --series <series>`
+1. `python scripts/slmp_regression_suite.py --include-live-connection-check --host $plcHost --port $plcPort --transport tcp --series $series`
 
 
