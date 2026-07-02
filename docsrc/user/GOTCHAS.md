@@ -102,6 +102,12 @@ asyncio.run(main())
 | --- | --- | --- |
 | A mixed write containing word devices and bit devices returns a PLC-side error. | Some PLCs reject command `0x1406` when word and bit blocks are combined. | Split word writes and bit writes into separate helper calls. |
 
+## Q-series profiles reject block commands
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| `read_block()` or `write_block()` raises when `plc_profile` is `melsec:qcpu`, `melsec:qnu`, or `melsec:qnudv`. | These Q-series profiles reject SLMP Read Block (`0x0406`) and Write Block (`0x1406`) before transport. | Use direct or random device commands for those profiles. |
+
 ```python
 import asyncio
 

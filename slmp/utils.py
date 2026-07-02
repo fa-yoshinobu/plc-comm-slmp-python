@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 _WORD_DTYPES = frozenset({"U", "S"})
 _DWORD_DTYPES = frozenset({"D", "L", "F"})
 _UNBATCHED_DEVICE_CODES = frozenset({"G", "HG"})
+_PLAIN_BIT_WORD_BATCHABLE_CODES = frozenset({"SM", "X", "Y", "M", "L", "F", "V", "B", "SB"})
 _RANDOM_DWORD_SCALAR_DEVICE_CODES = frozenset({"LCN", "LZ"})
 _LONG_COUNTER_STATE_DEVICE_CODES = frozenset({"LCS", "LCC"})
 _LONG_TIMER_READ_FAMILIES: dict[str, tuple[str, str]] = {
@@ -636,6 +637,14 @@ def _is_batchable_word_device(device: DeviceRef) -> bool:
     return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
 
 
+def _plain_bit_word_read(device: DeviceRef) -> tuple[DeviceRef, int] | None:
+    if device.code not in _PLAIN_BIT_WORD_BATCHABLE_CODES:
+        return None
+    bit_index = device.number % 16
+    word_device = DeviceRef(device.code, device.number - bit_index, device.radix_override)
+    return word_device, bit_index
+
+
 def _normalize_dtype_for_device(device: DeviceRef, dtype: str) -> str:
     return _require_dtype(dtype)
 
@@ -834,6 +843,15 @@ def _compile_read_plan(
             if device not in seen_dwords:
                 dword_devices.append(device)
                 seen_dwords.add(device)
+        elif dtype == "BIT":
+            bit_word = _plain_bit_word_read(device)
+            if bit_word is not None:
+                device, bit_index = bit_word
+                dtype = "BIT_IN_WORD"
+                batch_kind = "WORD"
+                if device not in seen_words:
+                    word_devices.append(device)
+                    seen_words.add(device)
         elif dtype in _WORD_DTYPES:
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"

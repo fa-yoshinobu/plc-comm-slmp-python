@@ -319,13 +319,31 @@ class TestReadNamedSync(unittest.TestCase):
         result = read_named_sync(client, ["D0.0"])
         self.assertFalse(result["D0.0"])
 
-    def test_bit_device_falls_back_to_single_read(self):
+    def test_excluded_bit_device_falls_back_to_single_read(self):
         client = MagicMock()
         client.read_devices.return_value = [True]
-        result = read_named_sync(client, ["M100:BIT"])
-        self.assertTrue(result["M100:BIT"])
+        result = read_named_sync(client, ["TS100:BIT"])
+        self.assertTrue(result["TS100:BIT"])
         client.read_random.assert_not_called()
-        client.read_devices.assert_called_once_with(DeviceRef("M", 100), 1, bit_unit=True)
+        client.read_devices.assert_called_once_with(DeviceRef("TS", 100), 1, bit_unit=True)
+
+    def test_plain_bit_devices_batch_as_random_word_reads(self):
+        client = MagicMock()
+        client.read_random.return_value = RandomReadResult(
+            word={"M96": 0x0010, "SM16": 0x0002, "SB10": 0x8000},
+            dword={},
+        )
+
+        result = read_named_sync(client, ["M100:BIT", "SM17:BIT", "SB1F:BIT"])
+
+        self.assertTrue(result["M100:BIT"])
+        self.assertTrue(result["SM17:BIT"])
+        self.assertTrue(result["SB1F:BIT"])
+        client.read_random.assert_called_once_with(
+            word_devices=[DeviceRef("M", 96), DeviceRef("SM", 16), DeviceRef("SB", 0x10)],
+            dword_devices=[],
+        )
+        client.read_devices.assert_not_called()
 
     def test_bit_device_bit_suffix_raises(self):
         client = MagicMock()
@@ -588,9 +606,21 @@ class TestPollSync(unittest.TestCase):
 class TestReadPlan(unittest.TestCase):
     def test_compile_read_plan_batches_word_and_dword_addresses(self):
         plan = _compile_read_plan(["D100:U", "D100.3", "D101:F", "M10:BIT"])
-        self.assertEqual(plan.word_devices, (DeviceRef("D", 100),))
+        self.assertEqual(plan.word_devices, (DeviceRef("D", 100), DeviceRef("M", 0)))
         self.assertEqual(plan.dword_devices, (DeviceRef("D", 101),))
-        self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", None])
+        self.assertEqual([entry.batch_kind for entry in plan.entries], ["WORD", "WORD", "DWORD", "WORD"])
+        self.assertEqual(plan.entries[3].device, DeviceRef("M", 0))
+        self.assertEqual(plan.entries[3].dtype, "BIT_IN_WORD")
+        self.assertEqual(plan.entries[3].bit_index, 10)
+
+    def test_compile_read_plan_keeps_risky_bit_families_on_direct_read(self):
+        plan = _compile_read_plan(
+            ["TS10:BIT", "TC10:BIT", "STS10:BIT", "STC10:BIT", "CS10:BIT", "CC10:BIT", "DX10:BIT", "DY10:BIT"]
+        )
+        self.assertEqual(plan.word_devices, ())
+        self.assertEqual(plan.dword_devices, ())
+        self.assertTrue(all(entry.batch_kind is None for entry in plan.entries))
+        self.assertTrue(all(entry.dtype == "BIT" for entry in plan.entries))
 
     def test_compile_read_plan_marks_long_timer_helper_reads_and_long_currents(self):
         plan = _compile_read_plan(
