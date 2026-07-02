@@ -21,11 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Added SLMP `S` step relay device-code support for reads and rejected writes to `S` as read-only.
 - Library: Rejected `G/HG` random bit writes; callers should use U-qualified word access for buffer-memory devices.
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.
+- Library: Rejected Read Block (`0x0406`) and Write Block (`0x1406`) for `melsec:qcpu`, `melsec:qnu`, and `melsec:qnudv` before transport; callers should use direct or random device commands for those profiles.
 - Docs: Documented `S` as a read-only bit device in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
 - Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
 - Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
+- Tests: Added sync and async guard coverage that Q-series profiles reject block read/write before transport.
 
 ## [1.1.1] - 2026-06-29
 
