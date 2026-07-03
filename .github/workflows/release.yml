@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check canonical SLMP profile JSONs
+        shell: pwsh
+        run: ./scripts/update_slmp_profile_jsons.ps1 -FailIfChanged
       - name: Set up Python
         uses: actions/setup-python@v6
         with: { python-version: "3.11" }

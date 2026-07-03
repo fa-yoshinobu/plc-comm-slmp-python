@@ -15,6 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check canonical SLMP profile JSONs
+        shell: pwsh
+        run: ./scripts/update_slmp_profile_jsons.ps1 -FailIfChanged
+
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
