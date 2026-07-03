@@ -8,7 +8,11 @@ from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
 from slmp.core import SlmpPlcProfile, SlmpResponse, SlmpTarget, encode_device_spec
-from slmp.device_ranges import SlmpDeviceRangeNotation, normalize_plc_profile
+from slmp.device_ranges import (
+    SlmpDeviceRangeNotation,
+    build_device_range_catalog_for_plc_profile,
+    normalize_plc_profile,
+)
 from slmp.errors import SlmpError
 
 
@@ -128,6 +132,22 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertIsNone(entries["V"].point_count)
         self.assertEqual(entries["LCS"].point_count, 64)
         self.assertEqual(entries["LCS"].address_range, "LCS0-LCS63")
+
+    def test_mx_profiles_keep_s_supported_from_sd276(self) -> None:
+        for plc_profile in (SlmpPlcProfile.MxF, SlmpPlcProfile.MxR):
+            with self.subTest(plc_profile=plc_profile):
+                registers = {register: 0 for register in range(260, 310)}
+                registers[276] = 123
+                catalog = build_device_range_catalog_for_plc_profile(
+                    plc_profile,
+                    registers,
+                )
+
+                entries = {entry.device: entry for entry in catalog.entries}
+                self.assertTrue(entries["S"].supported)
+                self.assertEqual(entries["S"].source, "SD276-SD277 (32-bit)")
+                self.assertEqual(entries["S"].point_count, 123)
+                self.assertEqual(entries["S"].address_range, "S0-S122")
 
     def test_read_device_range_catalog_uses_client_plc_profile_defaults(self) -> None:
         client = _FakeSyncClient(plc_profile="melsec:iq-l")
