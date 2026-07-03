@@ -50,7 +50,7 @@ $specFile = ".\device-range-spec.json"
 python scripts/slmp_device_range_probe.py --host $plcHost --port $plcPort --transport tcp --series iqr --spec-file $specFile --include-writeback
 ```
 
-3. Open-item recheck
+3. TODO-item recheck
 ```powershell
 $plcHost = "192.168.3.10"
 $plcPort = 1025
@@ -78,7 +78,7 @@ python scripts/slmp_other_station_check.py --host $plcHost --port $plcPort --tra
 | --- | --- | --- |
 | connection check | | |
 | device range probe | | |
-| open items | | |
+| TODO items | | |
 | special device probe | | |
 | other station | | |
 
@@ -89,9 +89,9 @@ python scripts/slmp_other_station_check.py --host $plcHost --port $plcPort --tra
 - New failures:
 - Documents updated:
 
-## 6. Follow-Up Actions
+## 6. Update Actions
 
 1. Update `internal_docs/maintainer/plc_device_range_expectations.md` if the configured ranges changed.
-2. Update the repository-root `TODO.md` if pass/fail conclusions create or close active follow-up.
+2. Update the repository-root `TODO.md` if pass/fail conclusions create or close active TODO items.
 3. Update `internal_docs/maintainer/communication_test_record.md` with the new live verification date and result.
 

@@ -51,10 +51,10 @@ If you need human confirmation, use:
   - Verify explicit target-header access to other network/station combinations.
   - Loads `compatibility_policy.json` automatically when present; `--compatibility-policy` overrides it.
 
-### Rechecks for maintained open areas
+### Rechecks for maintained areas
 
 - `slmp_open_items_recheck.py`
-  - Re-run the maintained open-item set when one exists.
+  - Re-run the repository-root TODO live-check set when one exists.
 - `slmp_pending_live_verification.py`
   - Re-check maintained command families.
   - Current workflow excludes `1006 remote reset`.

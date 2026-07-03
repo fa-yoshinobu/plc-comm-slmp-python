@@ -151,7 +151,7 @@ These are not pure range issues. They are command-path or target-specific behavi
   - same-value writes: `ZR163838 x3`, `ZR163839 x2`, `ZR163839 x3`, `ZR163839 x16`, `ZR163839 x64` all returned `0x0000`
 - Current practical interpretation for this PLC:
   - `ZR` acceptance appears to be checked primarily by start address, not by full end-of-span overrun
-  - this is an observed target behavior, not yet a general protocol rule
+  - this is an observed target behavior, not a general protocol rule
   - a separate capture from another PLC environment showed successful direct `0401/1401` access to `ZR1535996`, so this validated-target boundary must not be treated as a protocol-wide or client-wide ceiling
   - that large-`ZR` target was later revalidated through the current Python client by writing `1234` to `ZR1535996` and reading back the same value
 
@@ -163,7 +163,7 @@ These are not pure range issues. They are command-path or target-specific behavi
   - `R32768` reads `x1`, `x2`, and `x16` all returned `0x4031`
 - Current practical interpretation for this PLC:
   - `R` behaves like `ZR` in that acceptance appears to depend mainly on the start address rather than the full end-of-span overrun
-  - this is an observed target behavior, not yet a general protocol rule
+  - this is an observed target behavior, not a general protocol rule
 
 6. `LC`
 - `LCN511` `2-point` in-range read/writeback was OK.

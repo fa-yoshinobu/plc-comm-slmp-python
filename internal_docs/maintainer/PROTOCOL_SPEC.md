@@ -332,8 +332,8 @@ Practical conclusion for this repository:
 ## 6. Error Handling
 
 - Protocol-level validation failures raise `SLMPError`.
-- Intentionally blocked families in typed APIs raise `SLMPUnsupportedDeviceError`.
-- Current always-blocked family in typed APIs is `S`. Standalone typed access to `G/HG` is also blocked because `G/HG` requires a `U...` qualifier; Extended Specification `_ext` APIs allow qualified `G/HG`.
+- Intentionally rejected families in typed APIs raise `SLMPUnsupportedDeviceError`.
+- Current always-rejected family in typed APIs is `S`. Standalone typed access to `G/HG` is also rejected because `G/HG` requires a `U...` qualifier; Extended Specification `_ext` APIs allow qualified `G/HG`.
 - `R32768` and above are rejected by project policy with `ValueError` before frame encoding.
 - `End code != 0` raises `SLMPError` by default (`raise_on_error=True`).
 - Response frame size consistency is validated against `response_data_length`.
@@ -372,7 +372,7 @@ Additional operational scripts:
 3. `scripts/slmp_register_boundary_probe.py` (repeatable focused boundary probe for `Z`, `LZ`, `R`, `ZR`, and `RD`)
 4. `scripts/slmp_init_model_docs.py` (create a local `internal_docs/<series>_<model>/` scaffold)
 5. `scripts/slmp_other_station_check.py` (verify multiple explicit target headers / other stations)
-6. `scripts/slmp_pending_live_verification.py` (execute pending command-family live checks)
+6. `scripts/slmp_pending_live_verification.py` (execute focused command-family live checks)
 
 Installed console entry points:
 1. `slmp-connection-check`

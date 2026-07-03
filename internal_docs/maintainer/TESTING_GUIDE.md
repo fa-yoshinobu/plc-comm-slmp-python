@@ -99,8 +99,8 @@ Use this order unless you have a reason not to:
 
 1. `slmp_connection_check.py` over TCP
 2. optional `slmp_connection_check.py` over UDP
-3. `slmp_open_items_recheck.py` if you touched unresolved behavior
-4. `slmp_pending_live_verification.py` if you touched command-family support
+3. `slmp_open_items_recheck.py` if the repository-root TODO has active items
+4. `slmp_pending_live_verification.py` if you changed command-family support
 5. a focused script only for the area you changed
 
 This keeps destructive or noisy checks until the end.
@@ -183,9 +183,9 @@ Validated practical note:
 
 - `Q26UDEHCPU` built-in Ethernet accepted `SELF` route probing, returned `0xC059` for `read_type_name()`, and timed out on `NW1`/`NW2` other-station probes during the 2026-03-19 validation session.
 
-### Open-Item Recheck
+### TODO-Item Recheck
 
-Use this when you changed an unresolved area:
+Use this when the repository-root `TODO.md` has active live-check items:
 
 ```powershell
 python scripts/slmp_open_items_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
@@ -195,7 +195,7 @@ Local generated report:
 
 - `internal_docs/<series>_<model>/open_items_recheck_latest.md`
 
-### Pending Command-Family Verification
+### Command-Family Verification
 
 Use this when you changed implemented command-family behavior:
 
@@ -220,7 +220,7 @@ Local generated report:
 
 ### Special Device Probe
 
-Use this for `G/HG` and `LT/LST` related open items:
+Use this for `G/HG` and `LT/LST` related support paths:
 
 ```powershell
 python scripts/slmp_special_device_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr

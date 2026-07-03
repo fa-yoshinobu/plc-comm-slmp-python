@@ -103,14 +103,15 @@ After PLC-side setting updates:
 - `0601/1601` are confirmed on the narrow helper-backed path:
   - `module_no=0x03E0`
   - `head=0x00000000`
-- this does not yet prove full `G/HG` equivalence
+- this record covers the helper-backed path only; qualified `G/HG` rules are
+  documented in `PROTOCOL_SPEC.md`
 
 ### `1617` clear error
 
 - request acceptance confirmed: `0x0000`
-- operator-visible effect still not pinned down
+- operator-visible effect is not used as a support criterion in this repository
 
-## Current Follow-Up Documents
+## Related Stable Documents
 
 - [TODO.md](../../TODO.md)
 - [manual_implementation_differences.md](manual_implementation_differences.md)
