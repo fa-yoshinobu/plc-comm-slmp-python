@@ -7,9 +7,8 @@
 - Host: `192.168.250.100`
 - Source of configured ranges: current PLC device-setting screen provided by the user
 - Library policy: do not hard-code these PLC-setting-dependent limits in the client
-- Current probe inputs:
-  - `internal_docsrc/iqr_r08cpu/current_plc_boundary_specs_20260313.txt`
-  - `internal_docsrc/iqr_r08cpu/device_range_probe_latest.md`
+- Current evidence: PLC device-setting screen values supplied by the user and
+  repeatable live probes on the validated target
 
 This document records the current PLC-side configured device ranges and the expected response pattern when a request stays inside the configured range, crosses the upper bound, or starts outside the configured range.
 
@@ -69,14 +68,8 @@ The following cases were measured directly against the current PLC using normal 
 | read `D12000`, `10 points` | `end_code=0x4031` |
 | write `D12000`, `1 point` | `end_code=0x4031` |
 
-Current full generated report:
-
-- `internal_docsrc/iqr_r08cpu/device_range_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/register_boundary_comparison_latest.md`
-- `internal_docsrc/iqr_r08cpu/additional_register_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/lz_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/zr_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/register_boundary_probe_latest.md`
+Current evidence is summarized here rather than by retaining generated probe
+reports in Git.
 
 Selected 2026-03-13 observations from the generated report:
 
@@ -210,16 +203,7 @@ These are not pure range issues. They are command-path or target-specific behavi
 
 ## References
 
-- `internal_docsrc/communication_test_record.md`
-- `internal_docsrc/iqr_r08cpu/device_range_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/register_boundary_comparison_latest.md`
-- `internal_docsrc/iqr_r08cpu/additional_register_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/lz_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/zr_boundary_probe_latest.md`
-- `internal_docsrc/iqr_r08cpu/register_boundary_probe_latest.md`
-- `internal_docsrc/open_items.md`
-- `internal_docsrc/manual_implementation_differences.md`
-- maintainer archive
-- maintainer archive
-- maintainer archive
+- `internal_docs/maintainer/communication_test_record.md`
+- repository-root `TODO.md`
+- `internal_docs/maintainer/manual_implementation_differences.md`
 

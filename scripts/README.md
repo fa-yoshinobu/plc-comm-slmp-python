@@ -17,7 +17,7 @@ If you only need a safe first check, use:
 - `slmp_connection_check.py`
 - `slmp_regression_suite.py`
 
-If you need to validate unresolved behavior, use:
+If you need to re-run focused live verification, use:
 
 - `slmp_open_items_recheck.py`
 - `slmp_pending_live_verification.py`
@@ -39,7 +39,7 @@ If you need human confirmation, use:
   - Run unit tests, `ruff`, `mypy`, and wrapper `--help` smoke checks in one command.
   - Optional safe live connection smoke check is available by flag.
 - `slmp_init_model_docs.py`
-  - Create `internal_docsrc/<series>_<model>/`.
+  - Create a local `internal_docs/<series>_<model>/` scaffold.
 
 ### Safe connection and scope checks
 
@@ -53,7 +53,7 @@ If you need human confirmation, use:
 ### Rechecks for maintained open areas
 
 - `slmp_open_items_recheck.py`
-  - Re-run the current unresolved item set.
+  - Re-run the maintained open-item set when one exists.
 - `slmp_pending_live_verification.py`
   - Re-check maintained command families.
   - Current workflow excludes `1006 remote reset`.
@@ -62,7 +62,7 @@ If you need human confirmation, use:
 - `slmp_extended_device_device_recheck.py`
   - Generic Extended Specification word-device read-write-readback with restore for qualified devices such as `U01\G22`.
 - `slmp_g_hg_extended_device_recheck.py`
-  - Focused Extended Specification `G10` / `HG20` read-write-readback with restore and frame dumps.
+  - Focused qualified Extended Specification `U...\\G` / `U...\\HG` read-write-readback with restore and frame dumps.
 - `slmp_g_hg_extended_device_coverage.py`
   - Sweep qualified `G/HG` Extended Specification devices across addresses and point counts, with optional temporary write/readback/restore.
   - Supports repeated `--transport` and named `--target` entries for broader live coverage in one report.
@@ -92,7 +92,8 @@ If you need human confirmation, use:
 
 ## Notes
 
-- Most scripts write a `*_latest.md` report under `internal_docsrc/<series>_<model>/`.
+- Most scripts write a local `*_latest.md` report under `internal_docs/<series>_<model>/`.
+- Do not commit generated probe reports once their conclusions are summarized in stable maintainer docs.
 - Interactive scripts temporarily change PLC values; read [Testing Guide](../internal_docs/maintainer/TESTING_GUIDE.md) first.
 - Packet captures and raw communication logs are local-only and must not be committed.
 

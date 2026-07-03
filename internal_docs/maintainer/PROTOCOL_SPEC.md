@@ -4,14 +4,14 @@ This document is the authoritative communication specification for this reposito
 
 Known intentional differences between manual expectations and the current implementation are tracked separately in:
 
-- `internal_docsrc/manual_implementation_differences.md`
+- `internal_docs/maintainer/manual_implementation_differences.md`
 
 ## 1. Scope
 
 - Protocol: SLMP (Seamless Message Protocol)
 - Frame type: 4E frame only
 - Data code: binary only
-- Out of scope: 3E frame and ASCII code mode
+- Unsupported by this library: SLMP 3E frames and ASCII SLMP frames
 
 ## 2. 4E Binary Frame Format
 
@@ -275,13 +275,13 @@ For `G/HG`, the practical meaning is that the access is unit/module-scoped, not 
 - `HG` is CPU-buffer related and is only meaningful in the `U3E0\\HG`, `U3E1\\HG`,
   `U3E2\\HG`, and `U3E3\\HG` forms in the current iQ-R multi-CPU context. Do not
   treat lower unit forms such as `U1\\HG` as valid `HG` targets.
-- In both cases, plain `G0` / `HG0` without surrounding unit/module context is not sufficient on the validated target.
+- In both cases, plain `G0` / `HG0` without surrounding `U...` context is not a valid access target for this library.
 - The `Uxxxx` qualifier is syntax only at the protocol builder level. The repository can encode it as an protocol extension specification, but the actual meaning depends on the PLC configuration and on whether the corresponding unit exists.
 - In the currently verified iQ-R path, that unit context is provided by `0601/1601` with `module_no=0x03E0`.
 - On the user's current multi-CPU environment, the practical Extended Specification qualifiers for `G/HG` are `U3E0`, `U3E1`, `U3E2`, and `U3E3`, representing CPU memories for CPU No.1 through CPU No.4 respectively.
 - Lower `U**` values must not be read as CPU-memory selectors by default. In the same workspace context, lower `U**` values are ordinary I/O unit addresses for `G`, while `HG` is limited to `U3E0..U3E3`.
 - Therefore, `U1\\G*`, `U4\\G*`, `U01\\G*`, and `U3E0\\G*` must not be generalized from one another unless a capture or live verification proves that the target interprets them in the same way.
-- For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository now special-cases `G/HG` requests to match the captured reordered payload layout. That layout now has direct capture evidence for `U3E0\G10`, `U3E0\HG20`, and `U01\G22`. The iQ-R `U3E0\G10` / `U3E0\HG20` path was revalidated on the current R120PCPU target for single-word `G10` / `HG20` read-write-readback with restore. Each target still requires its own validation.
+- For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository special-cases qualified `G/HG` requests to match the captured reordered payload layout. That layout has direct capture evidence for `U3E0\G10`, `U3E0\HG20`, and `U01\G22`. The iQ-R `U3E0\G10` / `U3E0\HG20` path was revalidated on the current R120PCPU target for single-word read-write-readback with restore.
 
 ## 5.3 Typed Extension APIs
 
@@ -303,39 +303,37 @@ For convenience, the typed `_ext` APIs also accept qualified device strings such
 - lower `U**` values remain plain I/O unit addresses for `G`; they are not valid `HG`
   targets
 
-## 5.4 Observed Environment Gap (Manual vs PLC)
+## 5.4 Qualified `G/HG` Rule
 
-Before the capture-aligned iQ-R `G/HG` builder was added, the generic repository Extended Specification module/CPU-buffer style access for `G/HG` returned `0xC061`, even when:
-1. `direct_memory_specification` is changed (`0xFA` and `0xF8` tested)
-2. extension specification variants are changed (`0x03E0`, `0x3E00`, `0x0000` tested)
-3. both series modes are tested (`iqr` and `ql`)
+Older maintainer probes included bare `G0` / `HG0` attempts and generic
+Extended Specification combinations. Treat those as historical invalid-probe
+evidence, not as an open question about whether standalone `G/HG` should work.
+`G/HG` access must be qualified with an explicit `U...` context.
 
-This means Extended Specification framing/parameter requirements on this PLC setup are stricter than what was inferred from manual examples alone. Later capture-based `U3E0\G10`, `U3E0\HG20`, and `U01\G22` success cases showed that `G/HG` are not universally impossible, and the current builder now matches that reordered payload layout in unit tests. A live R120PCPU smoke recheck also passed for single-word `G10` / `HG20`, but broader validation is still required.
-The concrete byte-order difference between the old generic builder and the captured working layout is recorded in maintainer archive.
-At the moment, `G/HG` is the only family with a confirmed dedicated Extended Specification builder branch in this repository.
-Current operational status is tracked in:
-1. `internal_docsrc/open_items.md`
+The concrete byte-order difference between the old generic builder and the
+captured working qualified layout is recorded in maintainer archive. At the
+moment, `G/HG` is the only family with a confirmed dedicated Extended
+Specification builder branch in this repository.
 
 Practical conclusion for this repository:
 - `G` should be documented and treated as a unit-qualified module-access device (`U\\G` style).
 - `HG` should be documented and treated as requiring one of the explicit `U3E0..U3E3`
-  CPU-buffer contexts. `U1\\HG` and similar lower-unit forms are invalid targets, not
-  unresolved access failures.
+  CPU-buffer contexts. `U1\\HG` and similar lower-unit forms are invalid targets.
 - On the validated target, the only repository-verified operational form is still `0601/1601` with `module_no=0x03E0`.
-- The typed Extended Specification `_ext` APIs now generate the capture-aligned `G/HG` payload shape, and the iQ-R path has been hardware-revalidated on the current R120PCPU target for single-word `G10` / `HG20`.
+- The typed Extended Specification `_ext` APIs now generate the capture-aligned `G/HG` payload shape, and the iQ-R path has been hardware-revalidated on the current R120PCPU target for single-word `U3E0\\G10` / `U3E0\\HG20`.
 - The manual-side Extended Specification interpretation for `U4\\G0` is:
   - direct memory `0xF8`
   - device code `G`
   - extension specification = intelligent-function-module start I/O number
-- A focused `U4\\G0` check used the manual-aligned start I/O interpretation `0x0004` (`0040H` -> upper 3 digits), but that Extended Specification path still returned `0xC061` on the validated target.
-- Separate capture-based `U3E0\\G10`, `U3E0\\HG20`, and `U01\\G22` sessions later showed successful Extended Specification `G/HG` traffic. The current builder now reproduces that reordered payload shape, and a live R120PCPU smoke recheck passed for the iQ-R target, so the remaining task is coverage expansion rather than builder reproduction.
+- A focused `U4\\G0` check used the manual-aligned start I/O interpretation `0x0004` (`0040H` -> upper 3 digits), but that historical check did not establish a working equivalent to the engineering-tool view.
+- Separate capture-based `U3E0\\G10`, `U3E0\\HG20`, and `U01\\G22` sessions later showed successful qualified Extended Specification `G/HG` traffic. The current builder reproduces that reordered payload shape, and a live R120PCPU smoke recheck passed for the iQ-R target.
 - A separate `0601/1601` path through `module_no=0x0004` returned data for low addresses, but those values did not match the live engineering-tool view of `U4\\G0`; therefore that path must not be treated as a confirmed `U\\G` equivalent.
 
 ## 6. Error Handling
 
 - Protocol-level validation failures raise `SLMPError`.
 - Intentionally blocked families in typed APIs raise `SLMPUnsupportedDeviceError`.
-- Current always-blocked family in typed APIs is `S`. Direct typed access to `G/HG` is still blocked, but Extended Specification `_ext` APIs now allow `G/HG`.
+- Current always-blocked family in typed APIs is `S`. Standalone typed access to `G/HG` is also blocked because `G/HG` requires a `U...` qualifier; Extended Specification `_ext` APIs allow qualified `G/HG`.
 - `R32768` and above are rejected by project policy with `ValueError` before frame encoding.
 - `End code != 0` raises `SLMPError` by default (`raise_on_error=True`).
 - Response frame size consistency is validated against `response_data_length`.
@@ -351,8 +349,8 @@ Practical conclusion for this repository:
 
 ## 7.1 Verified Practical Access Path Notes
 
-- In the current iQ-R environment, direct `G/HG` device access is not operational.
-- Earlier Extended Specification `G/HG` requests built by the generic layout were not operational in the same environment. The current iQ-R builder now uses the capture-aligned layout, and single-word `G10` / `HG20` smoke checks passed on the current R120PCPU target.
+- Standalone `G/HG` device access is intentionally invalid; use `U...\\G` or `U...\\HG`.
+- Earlier generic Extended Specification experiments are retained only as historical evidence. The current iQ-R builder now uses the capture-aligned qualified layout, and `U3E0\\G10` / `U3E0\\HG20` smoke checks passed on the current R120PCPU target.
 - The currently verified raw module/CPU-buffer access path is `0601/1601` with `module_no=0x03E0`.
 - The `cpu_buffer_*` helpers are thin convenience wrappers around that verified `0601/1601` path.
 - Read-then-write-same-value smoke checks were completed for `cpu_buffer_write_word(...)` and `cpu_buffer_write_dword(...)` at head address `0x00000000`.
@@ -369,10 +367,10 @@ Capabilities:
 4. Optional local-only frame dumps for debugging (`--dump-frame-dir`)
 
 Additional operational scripts:
-1. `scripts/slmp_open_items_recheck.py` (recheck current open items only)
+1. `scripts/slmp_open_items_recheck.py` (recheck current repository-root TODO items only)
 2. `scripts/slmp_device_range_probe.py` (probe PLC-configured boundary behavior from a spec file)
 3. `scripts/slmp_register_boundary_probe.py` (repeatable focused boundary probe for `Z`, `LZ`, `R`, `ZR`, and `RD`)
-4. `scripts/slmp_init_model_docs.py` (create a new `internal_docsrc/<series>_<model>/` scaffold)
+4. `scripts/slmp_init_model_docs.py` (create a local `internal_docs/<series>_<model>/` scaffold)
 5. `scripts/slmp_other_station_check.py` (verify multiple explicit target headers / other stations)
 6. `scripts/slmp_pending_live_verification.py` (execute pending command-family live checks)
 
@@ -395,6 +393,7 @@ Core implementation:
 Validation:
 - `tests/test_slmp.py`
 
-Generated live reports are tracked as `internal_docsrc/<series>_<model>/*_latest.md`, and each new run also writes a timestamped archive copy under `internal_docsrc/<series>_<model>/archive/`.
+Generated live reports are local verification artifacts. Do not commit them once
+their conclusions have been folded into the stable maintainer documents.
 
 

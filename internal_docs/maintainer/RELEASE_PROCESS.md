@@ -12,7 +12,7 @@ Check these before tagging:
 - [Testing Guide](TESTING_GUIDE.md)
 - [Change Log](../../CHANGELOG.md)
 - [Protocol Spec](PROTOCOL_SPEC.md)
-- [Open Items](open_items.md)
+- [TODO](../../TODO.md)
 - [Communication Test Record](communication_test_record.md)
 
 ## 2. Run Local Verification
@@ -71,11 +71,12 @@ Typical examples:
 
 If you ran live verification:
 
-- confirm the expected `internal_docsrc/<series>_<model>/*_latest.md` files changed
 - reflect conclusion changes in:
-  - `open_items.md`
+  - repository-root `TODO.md`
   - `communication_test_record.md`
   - `manual_implementation_differences.md`
+- keep generated probe reports local unless they are needed as durable evidence
+  for a current implementation decision
 
 ## 5. Artifact Policy
 

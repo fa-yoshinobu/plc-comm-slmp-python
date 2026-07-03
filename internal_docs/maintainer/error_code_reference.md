@@ -24,8 +24,8 @@ This table records what the project actually observed on the validated target. I
 | `0x413E` | environment-dependent path | file state/environment rejected the operation | target-specific operation rejection | keep as environment-dependent |
 | `0xC051` | long-counter and `LZ` writes | point-count or write-unit rule violation | `LZ1 x1`, some long-counter writes | treat as manual-confirmed |
 | `0xC059` | unsupported request family on the current endpoint | request family not accepted | unsupported command family on the current target | treat as out of supported scope |
-| `0xC05B` | direct `G0` / `HG0` read, historical first one-request mixed `1406` block write with the old client layout | direct path rejected, or historical invalid mixed-write payload layout rejected | trying to use `G/HG` as normal devices, or replaying the old mixed-write layout | use validated Extended Specification paths for `G/HG`; keep mixed `1406` on the corrected layout and return PLC end codes unchanged |
-| `0xC061` | Extended Specification CPU-buffer path | request content/path not accepted in the current environment | unresolved Extended Specification condition | keep the practical alternative path |
+| `0xC05B` | historical bare `G0` / `HG0` read, historical first one-request mixed `1406` block write with the old client layout | invalid standalone `G/HG` path, or historical invalid mixed-write payload layout rejected | trying to use `G/HG` without a `U...` qualifier, or replaying the old mixed-write layout | use qualified Extended Specification paths for `G/HG`; keep mixed `1406` on the corrected layout and return PLC end codes unchanged |
+| `0xC061` | historical Extended Specification CPU-buffer experiments | request content/path not accepted in that context | invalid or mismatched Extended Specification context | use a validated qualified path |
 | `0xC075` | historical label payload attempt | payload formatting error | earlier incorrect label payload | resolved |
 | `0xC207` | environment-dependent path | file environment rejected the operation | target-specific operation rejection | keep as environment-dependent |
 
@@ -62,7 +62,7 @@ Do not overfit this code to only one feature family either.
 
 On this project it was observed on:
 
-- direct `G/HG` normal-device access
+- invalid standalone `G/HG` normal-device access
 - historical first one-request mixed `1406` block writes from clients that used
   the old invalid payload layout
 
@@ -74,6 +74,6 @@ the original PLC end code visible.
 
 ## Related Documents
 
-- [open_items.md](open_items.md)
+- [TODO.md](../../TODO.md)
 - [communication_test_record.md](communication_test_record.md)
 - [manual_implementation_differences.md](manual_implementation_differences.md)

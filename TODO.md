@@ -1,3 +1,7 @@
-# TODO: SLMP Python (slmp)
+# TODO
 
-No active TODOs are currently tracked for the SLMP Python library.
+Current active TODOs only.
+
+## Current Status
+
+No active TODOs are currently tracked.

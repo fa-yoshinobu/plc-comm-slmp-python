@@ -41,13 +41,14 @@ Manual expectation:
 
 - `G` is unit-qualified module access
 - `HG` is CPU-buffer related
-- Extended Specification access should work when the correct context is supplied
+- Extended Specification access requires an explicit `U...` context such as
+  `U3E0\G10` or `U3E0\HG20`
 
 Current implementation:
 
-- direct typed device APIs intentionally reject `G` and `HG`
+- standalone typed device APIs intentionally reject `G` and `HG`
 - Extended Specification `_ext` APIs now build a capture-aligned `G/HG` payload that matches the recorded `U3E0\G10`, `U3E0\HG20`, and `U01\G22` sessions
-- the current R120PCPU target passed a live single-word `G10` / `HG20` read-write-readback with restore
+- the current R120PCPU target passed live single-word `U3E0\G10` / `U3E0\HG20` read-write-readback with restore
 - the practical supported path is:
   - `cpu_buffer_read_*`
   - `cpu_buffer_write_*`
@@ -55,14 +56,14 @@ Current implementation:
 
 Reason:
 
-- direct `G/HG` normal-device access remains rejected on the validated target
-- earlier repository Extended Specification `G/HG` requests still failed on the validated target
+- standalone `G/HG` normal-device access is invalid because the `U...` qualifier is required
+- earlier repository probes that treated bare `G0` / `HG0` as meaningful access targets were based on the wrong premise
 - separate capture-based `U3E0\G10`, `U3E0\HG20`, and `U01\G22` sessions proved that Extended Specification `G/HG` can work in real environments, and the current builder now reproduces that reordered payload shape
 - the CPU-buffer helper path was live-verified
 
 Status:
 
-- practical deviation in favor of the verified helper path, with Extended Specification `G/HG` coverage expansion still open
+- settled rule: `G/HG` requires a qualified `U...` context; standalone `G/HG` is intentionally rejected
 
 ## 3. Step Relay `S`
 

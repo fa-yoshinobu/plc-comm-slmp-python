@@ -112,9 +112,7 @@ After PLC-side setting updates:
 
 ## Current Follow-Up Documents
 
-- [open_items.md](open_items.md)
+- [TODO.md](../../TODO.md)
 - [manual_implementation_differences.md](manual_implementation_differences.md)
-- [iqr_r08cpu/pending_live_verification_latest.md](iqr_r08cpu/pending_live_verification_latest.md)
-- [iqr_r08cpu/special_device_probe_latest.md](iqr_r08cpu/special_device_probe_latest.md)
-- [iqr_r08cpu/manual_label_verification_latest.md](iqr_r08cpu/manual_label_verification_latest.md)
-- [iqr_r08cpu/mixed_block_compare_latest.md](iqr_r08cpu/mixed_block_compare_latest.md)
+- [PROTOCOL_SPEC.md](PROTOCOL_SPEC.md)
+- [error_code_reference.md](error_code_reference.md)

@@ -91,7 +91,7 @@ python scripts/slmp_other_station_check.py --host $plcHost --port $plcPort --tra
 
 ## 6. Follow-Up Actions
 
-1. Update `internal_docsrc/plc_device_range_expectations.md` if the configured ranges changed.
-2. Update `internal_docsrc/open_items.md` if pass/fail conclusions changed.
-3. Update `internal_docsrc/communication_test_record.md` with the new live verification date and result.
+1. Update `internal_docs/maintainer/plc_device_range_expectations.md` if the configured ranges changed.
+2. Update the repository-root `TODO.md` if pass/fail conclusions create or close active follow-up.
+3. Update `internal_docs/maintainer/communication_test_record.md` with the new live verification date and result.
 

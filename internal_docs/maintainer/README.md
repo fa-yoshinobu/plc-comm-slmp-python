@@ -6,8 +6,8 @@ This folder is for repository maintainers.
 It holds:
 
 - stable project decisions
-- target-specific live reports
-- operator-facing verification results that back implementation choices
+- implementation decisions
+- operator-facing verification summaries that back implementation choices
 
 If you are a library user, start from the repository [README](../../README.md) and [Getting Started](../../docsrc/user/GETTING_STARTED.md) first.
 
@@ -15,8 +15,8 @@ If you are a library user, start from the repository [README](../../README.md) a
 
 Read these in order when you need current project truth:
 
-- [open_items.md](open_items.md)
-  - current unresolved items and practical limits
+- [TODO.md](../../TODO.md)
+  - current active TODOs
 - [communication_test_record.md](communication_test_record.md)
   - chronological record of important live checks
 - [manual_implementation_differences.md](manual_implementation_differences.md)
@@ -31,26 +31,15 @@ Supporting stable documents:
 - [API_UNIFICATION_POLICY.md](API_UNIFICATION_POLICY.md)
   - includes the maintainer-only boundary for `*_raw` wrappers
 
-## Model Folders
-
-Generated live reports live under `internal_docsrc/<series>_<model>/`.
-
-Current folders:
-
-- [iqr_r08cpu/README.md](iqr_r08cpu/README.md): main validated target
-- [iqr_r08cpu_rj71en71/README.md](iqr_r08cpu_rj71en71/README.md): performance-focused target
-
-Use `python scripts/slmp_init_model_docs.py --series <series> --model <model>` to create a new folder scaffold.
-
 ## Commit Policy
 
 Tracked:
 
-- `*_latest.md` reports
 - stable Markdown documents
 
 Do not commit:
 
+- one-off probe logs
 - packet captures
 - raw communication logs
 - frame-dump scratch data
@@ -60,9 +49,7 @@ Those artifacts are for local debugging only and are intentionally ignored by Gi
 
 ## Update Rule
 
-- regenerate the relevant `*_latest.md` file when a live result changes
 - update the matching stable summary when the conclusion changed, not only the timestamp
-- keep model-folder `README.md` files aligned with the current report set
 
 
 

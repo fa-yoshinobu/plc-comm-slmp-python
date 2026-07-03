@@ -140,24 +140,24 @@ Expected result:
 Use this after PLC-side device-range settings changed:
 
 ```powershell
-python scripts/slmp_device_range_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_plc_boundary_specs_20260313.txt --include-writeback
+python scripts/slmp_device_range_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file path/to/current_plc_boundary_specs.txt --include-writeback
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/device_range_probe_latest.md`
+- `internal_docs/<series>_<model>/device_range_probe_latest.md`
 
 ### Register Boundary Probe
 
 Use this for `Z`, `LZ`, `R`, `ZR`, and `RD` edge behavior:
 
 ```powershell
-python scripts/slmp_register_boundary_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file internal_docsrc/iqr_r08cpu/current_register_boundary_focus_specs_20260313.txt
+python scripts/slmp_register_boundary_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --spec-file path/to/current_register_boundary_focus_specs.txt
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/register_boundary_probe_latest.md`
+- `internal_docs/<series>_<model>/register_boundary_probe_latest.md`
 
 ### Other-Station Check
 
@@ -175,9 +175,9 @@ Own-station multiple-CPU shorthand is also supported at the parser level:
 python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --frame-type 4e --target SELF-CPU1
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/other_station_check_latest.md`
+- `internal_docs/<series>_<model>/other_station_check_latest.md`
 
 Validated practical note:
 
@@ -191,9 +191,9 @@ Use this when you changed an unresolved area:
 python scripts/slmp_open_items_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/open_items_recheck_latest.md`
+- `internal_docs/<series>_<model>/open_items_recheck_latest.md`
 
 ### Pending Command-Family Verification
 
@@ -214,9 +214,9 @@ Notes:
 - `1006 remote reset` is intentionally outside routine live verification
 - `0x40C0` on labels usually means the label is missing or external access is not enabled
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/pending_live_verification_latest.md`
+- `internal_docs/<series>_<model>/pending_live_verification_latest.md`
 
 ### Special Device Probe
 
@@ -226,9 +226,9 @@ Use this for `G/HG` and `LT/LST` related open items:
 python scripts/slmp_special_device_probe.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/special_device_probe_latest.md`
+- `internal_docs/<series>_<model>/special_device_probe_latest.md`
 
 ### G/HG Extended Specification Recheck
 
@@ -244,13 +244,13 @@ Optional exact target overrides:
 python scripts/slmp_g_hg_extended_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --g-device U3E0\G10 --hg-device U3E0\HG20 --g-write-value 0x001E --hg-write-value 0x0032
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/g_hg_extended_device_recheck_latest.md`
+- `internal_docs/<series>_<model>/g_hg_extended_device_recheck_latest.md`
 
-Frame dumps:
+Local frame dumps:
 
-- `internal_docsrc/<series>_<model>/frame_dumps_extended_device_g_hg_recheck/`
+- `internal_docs/<series>_<model>/frame_dumps_extended_device_g_hg_recheck/`
 
 ### Generic Extended Specification Device Recheck
 
@@ -266,13 +266,13 @@ Repeat `--probe` to run multiple devices in one report:
 python scripts/slmp_extended_device_device_recheck.py --host 192.168.250.100 --port 1025 --transport tcp --series ql --probe u01_g22,U01\G22,0x0004,0xF8 --probe u4_g0,U4\G0,0x0001,0xF8
 ```
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/extended_device_device_recheck_latest.md`
+- `internal_docs/<series>_<model>/extended_device_device_recheck_latest.md`
 
-Frame dumps:
+Local frame dumps:
 
-- `internal_docsrc/<series>_<model>/frame_dumps_extended_device_device_recheck/`
+- `internal_docs/<series>_<model>/frame_dumps_extended_device_device_recheck/`
 
 Multi-CPU `G/HG` expansion checklist:
 
@@ -294,13 +294,13 @@ python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --se
 
 If `read_type_name()` is unsupported on the resolved path, the sweep continues and records the coverage rows anyway.
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/g_hg_extended_device_coverage_latest.md`
+- `internal_docs/<series>_<model>/g_hg_extended_device_coverage_latest.md`
 
-Frame dumps:
+Local frame dumps:
 
-- `internal_docsrc/<series>_<model>/frame_dumps_g_hg_extended_device_coverage/`
+- `internal_docs/<series>_<model>/frame_dumps_g_hg_extended_device_coverage/`
 
 ### Mixed Block Comparison
 
@@ -316,9 +316,9 @@ First-pass comparison rule:
 - leave `--retry-mixed-on-error` off
 - capture the first mixed `1406` response before enabling any compatibility fallback
 
-Report:
+Local generated report:
 
-- `internal_docsrc/<series>_<model>/mixed_block_compare_latest.md`
+- `internal_docs/<series>_<model>/mixed_block_compare_latest.md`
 
 ### Performance Scripts
 
@@ -369,7 +369,7 @@ If you need frame dumps or packet captures for local debugging:
 
 - keep them local
 - do not commit them
-- do not add them back under `internal_docsrc/*/frame_dumps*` or `wireshark/`
+- do not add them back under `internal_docs/*/frame_dumps*` or `wireshark/`
 
 ## 11. What Each Layer Covers
 
@@ -419,21 +419,22 @@ Common examples in this project:
 Use:
 
 - [Error Codes Guide](../../docsrc/user/ERROR_CODES.md) for the quick table
-- [Open Items](open_items.md) for current unresolved items
+- [TODO](../../TODO.md) for current active items
 - [Communication Test Record](communication_test_record.md) for chronology
 
 ## 13. Report Files
 
-Common tracked report outputs:
+Common generated report outputs. Keep these local by default; update stable
+maintainer summaries when conclusions change:
 
-- `internal_docsrc/<series>_<model>/open_items_recheck_latest.md`
-- `internal_docsrc/<series>_<model>/pending_live_verification_latest.md`
-- `internal_docsrc/<series>_<model>/register_boundary_probe_latest.md`
-- `internal_docsrc/<series>_<model>/manual_label_verification_latest.md`
+- `internal_docs/<series>_<model>/open_items_recheck_latest.md`
+- `internal_docs/<series>_<model>/pending_live_verification_latest.md`
+- `internal_docs/<series>_<model>/register_boundary_probe_latest.md`
+- `internal_docs/<series>_<model>/manual_label_verification_latest.md`
 
 Stable summaries live in:
 
-- `open_items.md`
+- repository-root `TODO.md`
 - `communication_test_record.md`
 - `manual_implementation_differences.md`
 
