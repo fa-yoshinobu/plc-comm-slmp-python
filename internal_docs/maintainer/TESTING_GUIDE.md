@@ -418,7 +418,7 @@ Common examples in this project:
 
 Use:
 
-- [Error Codes Guide](../../docsrc/user/ERROR_CODES.md) for the quick table
+- `docsrc/user/ERROR_CODES.md` for the quick table
 - [TODO](../../TODO.md) for current active items
 - [Communication Test Record](communication_test_record.md) for chronology
 

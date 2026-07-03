@@ -9,7 +9,7 @@ It holds:
 - implementation decisions
 - operator-facing verification summaries that back implementation choices
 
-If you are a library user, start from the repository [README](../../README.md) and [Getting Started](../../docsrc/user/GETTING_STARTED.md) first.
+This folder is not part of the user-facing manual.
 
 ## Start Here
 

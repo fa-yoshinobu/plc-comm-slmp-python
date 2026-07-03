@@ -6,14 +6,14 @@ This is the minimum release checklist for this repository.
 
 Check these before tagging:
 
-- [README](../../README.md)
-- [Getting Started](../../docsrc/user/GETTING_STARTED.md)
-- [Usage Guide](../../docsrc/user/USAGE_GUIDE.md)
-- [Testing Guide](TESTING_GUIDE.md)
-- [Change Log](../../CHANGELOG.md)
-- [Protocol Spec](PROTOCOL_SPEC.md)
-- [TODO](../../TODO.md)
-- [Communication Test Record](communication_test_record.md)
+- `README.md`
+- `docsrc/user/GETTING_STARTED.md`
+- `docsrc/user/USAGE_GUIDE.md`
+- `internal_docs/maintainer/TESTING_GUIDE.md`
+- `CHANGELOG.md`
+- `internal_docs/maintainer/PROTOCOL_SPEC.md`
+- `TODO.md`
+- `internal_docs/maintainer/communication_test_record.md`
 
 ## 2. Run Local Verification
 

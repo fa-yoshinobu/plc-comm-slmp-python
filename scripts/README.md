@@ -8,7 +8,8 @@ You can use either:
 - `python scripts/<name>.py ...`
 - the installed console entry point
 
-Use [TESTING_GUIDE.md](../internal_docs/maintainer/TESTING_GUIDE.md) for when to run each script and [USAGE_GUIDE.md](../docsrc/user/USAGE_GUIDE.md) for API-side context.
+Use `internal_docs/maintainer/TESTING_GUIDE.md` for when to run each script and
+`docsrc/user/USAGE_GUIDE.md` for API-side context.
 
 ## Start Here
 
@@ -94,7 +95,7 @@ If you need human confirmation, use:
 
 - Most scripts write a local `*_latest.md` report under `internal_docs/<series>_<model>/`.
 - Do not commit generated probe reports once their conclusions are summarized in stable maintainer docs.
-- Interactive scripts temporarily change PLC values; read [Testing Guide](../internal_docs/maintainer/TESTING_GUIDE.md) first.
+- Interactive scripts temporarily change PLC values; read `internal_docs/maintainer/TESTING_GUIDE.md` first.
 - Packet captures and raw communication logs are local-only and must not be committed.
 
 
