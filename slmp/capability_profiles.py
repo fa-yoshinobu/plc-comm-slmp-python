@@ -59,6 +59,10 @@ def _write_policy(*device_codes: str) -> dict[str, str]:
     return {device_code: "read-only" for device_code in device_codes}
 
 
+def _policy(**entries: str) -> dict[str, str]:
+    return dict(entries)
+
+
 def _iqr_common_features(hg_state: str) -> dict[str, CapabilityFeature]:
     return _features(
         ("type_name", "supported", "live", None),
@@ -70,13 +74,13 @@ def _iqr_common_features(hg_state: str) -> dict[str, CapabilityFeature]:
         (
             "ext_link_direct",
             "config-dependent",
-            "policy",
+            "live",
             "Link-direct access depends on the network/module configuration.",
         ),
         (
             "hg_cpu_buffer",
             hg_state,
-            "live" if hg_state == "supported" else "manual",
+            "live" if hg_state == "supported" else "spec",
             "U3E0\\HG direct/random/monitor succeeded."
             if hg_state == "supported"
             else "CPU-buffer HG is an iQ-R-only path.",
@@ -86,18 +90,18 @@ def _iqr_common_features(hg_state: str) -> dict[str, CapabilityFeature]:
     )
 
 
-def _ql_measured_features() -> dict[str, CapabilityFeature]:
+def _ql_features(source: str) -> dict[str, CapabilityFeature]:
     return _features(
-        ("type_name", "blocked", "live", "Read Type Name returned C059."),
-        ("direct", "supported", "live", None),
-        ("random", "supported", "live", None),
-        ("block", "blocked", "live", "Read/Write Block returned C059."),
-        ("monitor", "supported", "live", None),
-        ("ext_module_access", "blocked", "live", "U\\G access is not available on the tested built-in CPU port."),
-        ("ext_link_direct", "unverified", "policy", "No link unit was available in the verification set."),
-        ("hg_cpu_buffer", "blocked", "manual", "CPU-buffer HG is an iQ-R-only path."),
-        ("long_device_path", "delegated", "policy", "Existing long-device route rules decide this feature."),
-        ("lz_32bit_path", "delegated", "policy", "Existing 32-bit route rules decide this feature."),
+        ("type_name", "blocked", source, "Read Type Name returned C059."),
+        ("direct", "supported", source, None),
+        ("random", "supported", source, None),
+        ("block", "blocked", source, "Read/Write Block returned C059."),
+        ("monitor", "supported", source, None),
+        ("ext_module_access", "blocked", source, "U\\G access is not available on the tested built-in CPU port."),
+        ("ext_link_direct", "blocked", source, "Link-direct access is not available on the tested built-in CPU port."),
+        ("hg_cpu_buffer", "blocked", "spec", "CPU-buffer HG is an iQ-R-only path."),
+        ("long_device_path", "delegated", source, "Existing long-device route rules decide this feature."),
+        ("lz_32bit_path", "delegated", source, "Existing 32-bit route rules decide this feature."),
     )
 
 
@@ -146,7 +150,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         compat="iQ-R",
         features=_iqr_common_features("supported"),
         limits=_iqr_limits(weighted_random_write=True),
-        write_policy=_write_policy("S", "LCS"),
+        write_policy=_write_policy("S"),
     ),
     "melsec:iq-l": CapabilityProfile(
         profile_id="melsec:iq-l",
@@ -154,7 +158,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
         limits=_iqr_limits(weighted_random_write=False),
-        write_policy=_write_policy("S", "LCS"),
+        write_policy=_write_policy("S"),
     ),
     "melsec:mx-r": CapabilityProfile(
         profile_id="melsec:mx-r",
@@ -162,7 +166,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
         limits=_iqr_limits(weighted_random_write=True),
-        write_policy=_write_policy("S", "LCS"),
+        write_policy=_write_policy("S"),
     ),
     "melsec:mx-f": CapabilityProfile(
         profile_id="melsec:mx-f",
@@ -170,7 +174,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
         limits=_iqr_limits(weighted_random_write=True),
-        write_policy=_write_policy("S", "LCS"),
+        write_policy=_write_policy("S"),
     ),
     "melsec:iq-f": CapabilityProfile(
         profile_id="melsec:iq-f",
@@ -183,29 +187,45 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
             ("block", "supported", "live", None),
             ("monitor", "blocked", "live", "0x0801/0x0802 returned C059 on FX5U."),
             ("ext_module_access", "config-dependent", "live", "U1\\G0 depends on the installed special module."),
-            ("ext_link_direct", "unverified", "policy", "No link unit was available in the iQ-F verification set."),
-            ("hg_cpu_buffer", "blocked", "manual", "CPU-buffer HG is an iQ-R-only path."),
+            ("ext_link_direct", "blocked", "live", "J1 link-direct access returned a PLC error."),
+            ("hg_cpu_buffer", "blocked", "spec", "CPU-buffer HG is an iQ-R-only path."),
             ("long_device_path", "supported", "live", None),
             ("lz_32bit_path", "supported", "live", None),
         ),
         limits=_iqf_limits(),
-        write_policy=_write_policy("X"),
+        write_policy=_policy(S="read-write"),
+    ),
+    "melsec:qcpu": CapabilityProfile(
+        profile_id="melsec:qcpu",
+        frame="3E",
+        compat="Q/L",
+        features=_ql_features("policy"),
+        limits=_ql_limits(),
+        write_policy=_write_policy("S"),
     ),
     "melsec:lcpu": CapabilityProfile(
         profile_id="melsec:lcpu",
         frame="3E",
         compat="Q/L",
-        features=_ql_measured_features(),
+        features=_ql_features("live"),
         limits=_ql_limits(),
-        write_policy=_write_policy(),
+        write_policy=_write_policy("S"),
+    ),
+    "melsec:qnu": CapabilityProfile(
+        profile_id="melsec:qnu",
+        frame="3E",
+        compat="Q/L",
+        features=_ql_features("live"),
+        limits=_ql_limits(),
+        write_policy=_write_policy("S"),
     ),
     "melsec:qnudv": CapabilityProfile(
         profile_id="melsec:qnudv",
         frame="3E",
         compat="Q/L",
-        features=_ql_measured_features(),
+        features=_ql_features("live"),
         limits=_ql_limits(),
-        write_policy=_write_policy(),
+        write_policy=_write_policy("S"),
     ),
 }
 

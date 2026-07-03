@@ -22,16 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Exposed structured PLC error information on `SlmpResponse.error_info` and `SlmpError.error_info` when a non-zero end-code response carries the 9-byte error information block.
 - Library: Enforced documented point limits before transport: iQ-F direct bit access is limited to 3584 points, and 008x extended random/monitor routes use the 96-point / weighted-960 / 94-bit limits.
 - Library: Connected UDP sockets before sending and receiving so datagrams from unrelated sources are not accepted as PLC responses.
-- Library: Added SLMP `S` step relay device-code support for reads and rejected writes to `S` as read-only.
+- Library: Added SLMP `S` step relay device-code support for reads and profile-specific write policy enforcement.
 - Library: Rejected `G/HG` random bit writes; callers should use U-qualified word access for buffer-memory devices.
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.
 - Library: Added built-in SLMP capability profiles from `plc-comm-slmp-profiles` v1.0.0 and `strict_profile=True` defaults for sync and async clients so high-level APIs reject profile `blocked` / `unverified` features before transport.
 - Library: Added `SlmpProfileFeatureError` for profile guard failures with profile ID, feature key, state, evidence, and the `strict_profile=False` bypass hint.
-- Library: Moved direct/random point limits to the capability table for defined profiles while preserving legacy fallback behavior for profiles without capability data such as `melsec:qcpu` and `melsec:qnu`.
-- Library: Enforced capability write policies independently of `strict_profile`, including `X` as read-only for `melsec:iq-f` and `LCS` as read-only for iQ-R-compatible profiles.
-- Library: Kept the legacy Read Block (`0x0406`) and Write Block (`0x1406`) guard for `melsec:qcpu` and `melsec:qnu`; `melsec:lcpu` and `melsec:qnudv` now use the capability profile guard and can be intentionally sent with `strict_profile=False`.
+- Library: Moved direct/random point limits to the capability table for all canonical built-in Ethernet profiles, including `melsec:qcpu` and `melsec:qnu`.
+- Library: Enforced capability write policies independently of `strict_profile`; `S` is read-only on iQ-R/iQ-L/MX/Q/L profiles and read-write on iQ-F.
+- Library: Moved Q/L profile Read Block (`0x0406`) and Write Block (`0x1406`) rejection to the capability profile guard so `strict_profile=False` can intentionally send the request and let the PLC answer.
 - Library: Batched named plain-bit reads through random word-read only for `SM/X/Y/M/L/F/V/B/SB`; `TS/TC/STS/STC/CS/CC/DX/DY` stay on direct bit reads.
-- Docs: Documented `S` as a read-only bit device in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
+- Docs: Documented profile-specific `S` write policy in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
 - Docs: Documented the Q-series Read Block (`0x0406`) and Write Block (`0x1406`) profile guard in user profiles and gotchas.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
 - Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release: Excluded maintainer-only files, scripts, and tests from generated source archives via `.gitattributes`.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
 - Tests: Added canonical capability fixture comparison plus sync and async strict-profile coverage for qnudv block/type-name guards, qnudv `strict_profile=False`, iQ-F link-direct, iQ-F `U\G`, iQ-L HG, profile limits, and profile write policies.
-- Tests: Kept coverage that `melsec:qcpu` and `melsec:qnu` reject block read/write before transport through the legacy guard.
+- Tests: Updated coverage so `melsec:qcpu` and `melsec:qnu` reject block read/write through the capability profile guard.
 - Tests: Added named-read planning coverage for random-word-safe plain bit families versus the direct-bit-only families seen on R-series hardware.
 - Tooling: Added a release check that requires `pyproject.toml` and `slmp.__version__` to match.
 

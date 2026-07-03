@@ -404,7 +404,7 @@ async def test_async_read_block_rejects_lcs_lcc() -> None:
 @pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
 async def test_async_read_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
-    with pytest.raises(ValueError, match=rf"Read Block \(0x0406\).*{profile}"):
+    with pytest.raises(SlmpProfileFeatureError, match=rf"block.*{profile}|{profile}.*block"):
         await cli.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
     assert cli.last_request is None
 
@@ -437,7 +437,7 @@ async def test_async_write_block_rejects_lcs_lcc() -> None:
 @pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
 async def test_async_write_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
-    with pytest.raises(ValueError, match=rf"Write Block \(0x1406\).*{profile}"):
+    with pytest.raises(SlmpProfileFeatureError, match=rf"block.*{profile}|{profile}.*block"):
         await cli.write_block(word_blocks=[("D100", [1])], bit_blocks=[("M100", [1])])
     assert cli.last_request is None
 

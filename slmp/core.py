@@ -1186,11 +1186,7 @@ def _check_block_request_limits(
 
 
 def _validate_block_route_for_profile(plc_profile: object | None, command_label: str) -> None:
-    normalized = _normalize_plc_profile_hint(plc_profile)
-    if normalized in {SlmpPlcProfile.QCpu.value, SlmpPlcProfile.QnU.value}:
-        raise ValueError(
-            f"{command_label} is not supported for plc_profile '{normalized}'. Use direct or random device commands."
-        )
+    _ = (plc_profile, command_label)
 
 
 def _normalize_items(

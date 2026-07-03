@@ -73,7 +73,7 @@ asyncio.run(main())
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `S10:BIT` can be read but any write route rejects it. | SLMP exposes the step relay as read-only for this library. | Treat `S` as a read-only bit device and keep it out of write lists. |
+| `S10:BIT` can be read but a write route rejects it. | The selected profile marks `S` as read-only. iQ-F profiles allow `S` writes. | Follow the selected profile's write policy. |
 
 ## G/HG fails
 

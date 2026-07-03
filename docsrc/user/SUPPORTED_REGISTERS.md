@@ -13,7 +13,7 @@ This table lists the device families accepted by the current parser and explains
 | `L` | Bit | Decimal | Latch relay. |
 | `F` | Bit | Decimal | Annunciator. |
 | `V` | Bit | Decimal | Edge relay. |
-| `S` | Bit | Decimal | Step relay; reads are supported and writes are rejected as read-only. |
+| `S` | Bit | Decimal | Step relay; reads are supported and writes follow the selected profile's write policy. |
 | `B` | Bit | Hexadecimal | Link relay. |
 | `TS` | Bit | Decimal | Timer contact. |
 | `TC` | Bit | Decimal | Timer coil. |
@@ -73,7 +73,7 @@ Named-address helpers require explicit type suffixes. Use `D100:U`, not plain `D
 | Long current families | `LTN`, `LSTN`, `LCN`, and `LZ` are 32-bit families. Do not request 16-bit word views; use `:D` or `:L`. |
 | iQ-F direct devices | `DX` and `DY` are not valid for `melsec:iq-f`. |
 | Module buffers | `G` and `HG` are raw or extended-device API families, not public high-level helper families. |
-| Step relay | `S` is a read-only bit family in this library; direct, random, and block writes are rejected before transport. |
+| Step relay | `S` writes follow the selected profile's write policy; iQ-F allows writes, while iQ-R/iQ-L/MX/Q/L profiles mark `S` read-only. |
 | `X`/`Y` numbering | `melsec:iq-f` uses octal text for `X` and `Y`; every other profile uses hexadecimal text. |
 | PLC profile selection | Use canonical values such as `melsec:iq-r`; short aliases are rejected. |
 | Profile detection | The library does not infer the active profile from `ReadTypeName` or model codes. |

@@ -75,11 +75,11 @@ Current implementation:
 
 - `S` is present in the repository device table and parser
 - reads are allowed
-- writes are rejected before transport because `S` is treated as read-only
+- writes are rejected before transport only for profiles whose canonical write policy marks `S` as read-only
 
 Reason:
 
-- current project policy follows the SLMP read-only treatment for `S`
+- current project policy follows the canonical profile write policy for `S`
 - a device that is readable on a target is not automatically considered writable
 
 Status:

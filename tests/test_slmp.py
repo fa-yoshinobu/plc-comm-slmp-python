@@ -2843,12 +2843,15 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIsNone(client.last_request)
 
     def test_read_block_rejects_q_profiles_before_transport(self) -> None:
-        """Q-series Ethernet profiles must not send Read Block."""
+        """Q-series Ethernet profiles reject Read Block through the capability guard."""
         for profile in ("melsec:qcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
-                with self.assertRaisesRegex(ValueError, f"Read Block \\(0x0406\\).*{profile}"):
+                with self.assertRaises(SlmpProfileFeatureError) as raised:
                     client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+                self.assertEqual(raised.exception.profile_id, profile)
+                self.assertEqual(raised.exception.feature_key, "block")
+                self.assertEqual(raised.exception.state, "blocked")
                 self.assertIsNone(client.last_request)
 
     def test_read_block_rejects_qnudv_by_profile_guard_before_transport(self) -> None:
@@ -2885,12 +2888,12 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIsNone(client.last_request)
 
     def test_link_direct_iqf_rejects_unverified_by_profile_guard(self) -> None:
-        """iQ-F link-direct is unverified and is guarded in strict mode."""
+        """iQ-F link-direct is blocked by the canonical profile."""
         client = FakeClient(plc_profile="melsec:iq-f")
         with self.assertRaises(SlmpProfileFeatureError) as raised:
             client.read_devices_ext(r"J2\SW10", 1, extension=ExtensionSpec())
         self.assertEqual(raised.exception.feature_key, "ext_link_direct")
-        self.assertEqual(raised.exception.state, "unverified")
+        self.assertEqual(raised.exception.state, "blocked")
         self.assertIsNone(client.last_request)
 
     def test_hg_iql_rejects_by_profile_guard(self) -> None:
@@ -2909,11 +2912,11 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(out, [0x5678])
         self.assertIsNotNone(client.last_request)
 
-    def test_iqf_write_policy_rejects_input_device_even_when_not_strict(self) -> None:
+    def test_iqr_write_policy_rejects_step_relay_even_when_not_strict(self) -> None:
         """write_policy is always enforced, even with strict_profile=False."""
-        client = FakeClient(plc_profile="melsec:iq-f", strict_profile=False)
-        with self.assertRaisesRegex(ValueError, "X is read-only"):
-            client.write_devices("X0", [True], bit_unit=True)
+        client = FakeClient(plc_profile="melsec:iq-r", strict_profile=False)
+        with self.assertRaisesRegex(ValueError, "S is read-only"):
+            client.write_devices("S0", [True], bit_unit=True)
         self.assertIsNone(client.last_request)
 
     def test_iql_random_write_word_uses_profile_total_limit_without_weighted_limit(self) -> None:
@@ -3007,12 +3010,15 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIsNone(client.last_request)
 
     def test_write_block_rejects_q_profiles_before_transport(self) -> None:
-        """Q-series Ethernet profiles must not send Write Block."""
+        """Q-series Ethernet profiles reject Write Block through the capability guard."""
         for profile in ("melsec:qcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
-                with self.assertRaisesRegex(ValueError, f"Write Block \\(0x1406\\).*{profile}"):
+                with self.assertRaises(SlmpProfileFeatureError) as raised:
                     client.write_block(word_blocks=[("D100", [1])], bit_blocks=[("M100", [1])])
+                self.assertEqual(raised.exception.profile_id, profile)
+                self.assertEqual(raised.exception.feature_key, "block")
+                self.assertEqual(raised.exception.state, "blocked")
                 self.assertIsNone(client.last_request)
 
     def test_write_block_rejects_long_current_and_lz_routes(self) -> None:

@@ -18,7 +18,7 @@ class SlmpDeviceRangeCategory(str, Enum):
     Word = "word"
     TimerCounter = "timer-counter"
     Index = "index"
-    FileRefresh = "file-refresh"
+    FileRegister = "file-register"
 
 
 class SlmpDeviceRangeNotation(str, Enum):
@@ -174,8 +174,8 @@ _ROWS: dict[str, _RangeRow] = {
     ),
     "Z": _RangeRow(SlmpDeviceRangeCategory.Index, (("Z", False),), SlmpDeviceRangeNotation.Base10),
     "LZ": _RangeRow(SlmpDeviceRangeCategory.Index, (("LZ", False),), SlmpDeviceRangeNotation.Base10),
-    "ZR": _RangeRow(SlmpDeviceRangeCategory.FileRefresh, (("ZR", False),), SlmpDeviceRangeNotation.Base10),
-    "RD": _RangeRow(SlmpDeviceRangeCategory.FileRefresh, (("RD", False),), SlmpDeviceRangeNotation.Base10),
+    "ZR": _RangeRow(SlmpDeviceRangeCategory.FileRegister, (("ZR", False),), SlmpDeviceRangeNotation.Base10),
+    "RD": _RangeRow(SlmpDeviceRangeCategory.FileRegister, (("RD", False),), SlmpDeviceRangeNotation.Base10),
     "SM": _RangeRow(SlmpDeviceRangeCategory.Bit, (("SM", True),), SlmpDeviceRangeNotation.Base10),
     "SD": _RangeRow(SlmpDeviceRangeCategory.Word, (("SD", False),), SlmpDeviceRangeNotation.Base10),
 }
