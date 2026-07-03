@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import unittest
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
-from slmp.core import SlmpPlcProfile, SlmpResponse, SlmpTarget, encode_device_spec
+from slmp.core import (
+    SlmpPlcProfile,
+    SlmpResponse,
+    SlmpTarget,
+    SlmpUnsupportedDeviceError,
+    encode_device_spec,
+    parse_device,
+)
 from slmp.device_ranges import (
     SlmpDeviceRangeNotation,
     build_device_range_catalog_for_plc_profile,
@@ -25,6 +34,54 @@ def _pack_words(values: list[int]) -> bytes:
 
 def _build_word_block(start: int, count: int, values: dict[int, int]) -> bytes:
     return _pack_words([values.get(start + index, 0) for index in range(count)])
+
+
+def _load_canonical_device_range_rules() -> dict[str, object]:
+    path = Path(__file__).parent / "fixtures" / "slmp_device_range_rules.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _canonical_rule_value(rule: dict[str, object]) -> int:
+    kind = str(rule["kind"])
+    if kind.endswith("clipped"):
+        return int(rule["clip_value"]) + 5
+    return 123
+
+
+def _canonical_register_snapshot(profile: dict[str, object], only_item: str | None = None) -> dict[int, int]:
+    start = int(profile["register_start"])
+    count = int(profile["register_count"])
+    registers = {start + offset: 0 for offset in range(count)}
+    rules = profile["rules"]
+    assert isinstance(rules, dict)
+    rule_values = [rules[only_item]] if only_item is not None else rules.values()
+    for rule_value in rule_values:
+        rule = rule_value
+        assert isinstance(rule, dict)
+        kind = str(rule["kind"])
+        register = rule.get("register")
+        if register is None:
+            continue
+        reg = int(register)
+        value = _canonical_rule_value(rule)
+        if kind.startswith("dword-register"):
+            registers[reg] = value & 0xFFFF
+            registers[reg + 1] = (value >> 16) & 0xFFFF
+        elif kind.startswith("word-register"):
+            registers[reg] = value & 0xFFFF
+    return registers
+
+
+def _canonical_expected_point_count(rule: dict[str, object]) -> int | None:
+    kind = str(rule["kind"])
+    if kind in {"unsupported", "undefined"}:
+        return None
+    if kind == "fixed":
+        return int(rule["fixed_value"])
+    value = _canonical_rule_value(rule)
+    if kind.endswith("clipped"):
+        return min(value, int(rule["clip_value"]))
+    return value
 
 
 class _FakeSyncClient(SlmpClient):
@@ -148,6 +205,78 @@ class TestSyncDeviceRanges(unittest.TestCase):
                 self.assertEqual(entries["S"].source, "SD276-SD277 (32-bit)")
                 self.assertEqual(entries["S"].point_count, 123)
                 self.assertEqual(entries["S"].address_range, "S0-S122")
+
+    def test_catalog_matches_canonical_device_range_rules_fixture(self) -> None:
+        payload = _load_canonical_device_range_rules()
+        rows = payload["rows"]
+        profiles = payload["profiles"]
+        notation_overrides = payload.get("notation_overrides", {})
+        assert isinstance(rows, dict)
+        assert isinstance(profiles, dict)
+        assert isinstance(notation_overrides, dict)
+
+        for profile_name, profile_payload in profiles.items():
+            assert isinstance(profile_payload, dict)
+            with self.subTest(profile=profile_name):
+                rules = profile_payload["rules"]
+                assert isinstance(rules, dict)
+                profile_notation_overrides = notation_overrides.get(profile_name, {})
+                assert isinstance(profile_notation_overrides, dict)
+
+                for item, rule_payload in rules.items():
+                    row = rows[item]
+                    assert isinstance(row, dict)
+                    assert isinstance(rule_payload, dict)
+                    catalog = build_device_range_catalog_for_plc_profile(
+                        normalize_plc_profile(profile_name),
+                        _canonical_register_snapshot(profile_payload, item),
+                    )
+                    entries = {entry.device: entry for entry in catalog.entries}
+                    expected_supported = rule_payload["kind"] != "unsupported"
+                    expected_point_count = _canonical_expected_point_count(rule_payload)
+                    expected_notation = profile_notation_overrides.get(item, row["notation"])
+                    for device_payload in row["devices"]:
+                        assert isinstance(device_payload, dict)
+                        device = str(device_payload["device"])
+                        entry = entries[device]
+                        self.assertEqual(entry.supported, expected_supported, f"{profile_name} {device}")
+                        self.assertEqual(entry.point_count, expected_point_count, f"{profile_name} {device}")
+                        self.assertEqual(
+                            entry.notation,
+                            SlmpDeviceRangeNotation(str(expected_notation)),
+                            f"{profile_name} {device}",
+                        )
+
+    def test_profile_unsupported_device_codes_match_canonical_fixture(self) -> None:
+        payload = _load_canonical_device_range_rules()
+        rows = payload["rows"]
+        profiles = payload["profiles"]
+        assert isinstance(rows, dict)
+        assert isinstance(profiles, dict)
+
+        for profile_name, profile_payload in profiles.items():
+            assert isinstance(profile_payload, dict)
+            rules = profile_payload["rules"]
+            assert isinstance(rules, dict)
+            for item, rule_payload in rules.items():
+                assert isinstance(rule_payload, dict)
+                row = rows[item]
+                assert isinstance(row, dict)
+                expected_supported = rule_payload["kind"] != "unsupported"
+                for device_payload in row["devices"]:
+                    assert isinstance(device_payload, dict)
+                    device = str(device_payload["device"])
+                    address = f"{device}10"
+                    if expected_supported:
+                        self.assertEqual(parse_device(address, plc_profile=profile_name).code, device)
+                    else:
+                        with self.assertRaises(SlmpUnsupportedDeviceError, msg=f"{profile_name} {device}"):
+                            parse_device(address, plc_profile=profile_name)
+
+        with self.assertRaises(SlmpUnsupportedDeviceError):
+            parse_device("DX10", plc_profile="melsec:iq-f")
+        with self.assertRaises(SlmpUnsupportedDeviceError):
+            parse_device("DY10", plc_profile="melsec:iq-f")
 
     def test_read_device_range_catalog_uses_client_plc_profile_defaults(self) -> None:
         client = _FakeSyncClient(plc_profile="melsec:iq-l")
