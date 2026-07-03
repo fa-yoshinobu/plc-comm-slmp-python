@@ -28,7 +28,7 @@ asyncio.run(main())
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `LCS0` or `LCC0` does not behave like a normal word read. | Long counter state devices are state bits. Reads use direct bit access, and writes are selected through random bit write (`0x1402`). | Use `read_named` or `write_typed` with `BIT`. |
+| `LCS0` or `LCC0` does not behave like a normal word read. | Long counter state devices are state bits. | Use `read_named` or `write_typed` with `BIT`. |
 
 ```python
 import asyncio
@@ -100,13 +100,13 @@ asyncio.run(main())
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A mixed write containing word devices and bit devices returns a PLC-side error. | Some PLCs reject command `0x1406` when word and bit blocks are combined. | Split word writes and bit writes into separate helper calls. |
+| A mixed write containing word devices and bit devices returns a PLC-side error. | Some PLCs reject mixed word and bit block writes. | Split word writes and bit writes into separate helper calls. |
 
 ## Q-series profiles reject block commands
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `read_block()` or `write_block()` raises when `plc_profile` is `melsec:qcpu`, `melsec:qnu`, or `melsec:qnudv`. | These Q-series profiles reject SLMP Read Block (`0x0406`) and Write Block (`0x1406`) before transport. | Use direct or random device commands for those profiles. |
+| `read_block()` or `write_block()` raises when `plc_profile` is `melsec:qcpu`, `melsec:qnu`, or `melsec:qnudv`. | These Q-series profiles do not use block access for normal high-level flows. | Use direct or random device commands for those profiles. |
 
 ```python
 import asyncio

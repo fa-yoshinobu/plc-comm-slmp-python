@@ -2,6 +2,8 @@
 
 Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
 
+For cross-profile capability and device-range details, see the [SLMP Profile Reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/).
+
 ## Profiles
 
 | Canonical profile | Human label | Frame | Mode | Notes |
@@ -11,10 +13,10 @@ Use one canonical profile in `plc_profile` for each connection. The profile sele
 | `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Use for MELSEC iQ-L targets. |
 | `melsec:mx-f` | MELSEC MX-F | 4E | iQR `iqr` | Use for MELSEC MX-F targets. |
 | `melsec:mx-r` | MELSEC MX-R | 4E | iQR `iqr` | Use for MELSEC MX-R targets. |
-| `melsec:qcpu` | MELSEC QCPU | 3E | Legacy `ql` | Q CPU profile. Strict profile rejects unavailable block routes; use direct or random device commands. |
+| `melsec:qcpu` | MELSEC QCPU | 3E | Legacy `ql` | Q CPU profile. Use direct or random device commands for normal access. |
 | `melsec:lcpu` | MELSEC LCPU | 3E | Legacy `ql` | Legacy L CPU profile. |
-| `melsec:qnu` | MELSEC QnU | 3E | Legacy `ql` | QnU profile. Strict profile rejects unavailable block routes; use direct or random device commands. |
-| `melsec:qnudv` | MELSEC QnUDV | 3E | Legacy `ql` | QnUDV profile. Strict profile rejects unavailable type-name and block routes. |
+| `melsec:qnu` | MELSEC QnU | 3E | Legacy `ql` | QnU profile. Use direct or random device commands for normal access. |
+| `melsec:qnudv` | MELSEC QnUDV | 3E | Legacy `ql` | QnUDV profile. Use direct or random device commands for normal access. |
 
 ## How to select
 
@@ -33,17 +35,3 @@ async def main() -> None:
 
 asyncio.run(main())
 ```
-
-## Profile-specific cautions
-
-| Canonical profile | Caution |
-| --- | --- |
-| `melsec:iq-f` | Frame 3E, legacy mode. `DX` and `DY` are not valid. `X`/`Y` addressing is octal. |
-| `melsec:iq-r` | Frame 4E, iQR mode. `X`/`Y` addressing is hexadecimal. |
-| `melsec:iq-l` | Frame 4E, iQR mode. |
-| `melsec:qcpu` | Frame 3E, legacy mode. Strict profile rejects block commands `0x0406` / `0x1406`. |
-| `melsec:lcpu` | Frame 3E, legacy mode. |
-| `melsec:qnu` | Frame 3E, legacy mode. Strict profile rejects block commands `0x0406` / `0x1406`. |
-| `melsec:qnudv` | Frame 3E, legacy mode. Strict profile rejects Read Type Name (`0x0101`) and block commands `0x0406` / `0x1406`; disabling strict profile sends them and lets the PLC respond. |
-| `melsec:mx-f` | Frame 4E, iQR mode. |
-| `melsec:mx-r` | Frame 4E, iQR mode. |
