@@ -401,6 +401,18 @@ class TestCodec(unittest.TestCase):
             parse_device("DX10", plc_profile="melsec:iq-f")
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "not supported"):
             parse_device("DY10", plc_profile="melsec:iq-f")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:iq-f"):
+            parse_device("V10", plc_profile="melsec:iq-f")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:iq-f"):
+            parse_device("LTS10", plc_profile="melsec:iq-f")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:iq-f"):
+            parse_device("ZR10", plc_profile="melsec:iq-f")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:qnudv"):
+            parse_device("LCS10", plc_profile="melsec:qnudv")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:qnu"):
+            parse_device("LZ0", plc_profile="melsec:qnu")
+        with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:lcpu"):
+            parse_device("RD0", plc_profile="melsec:lcpu")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
         self.assertEqual(encode_device_spec("D100", series=PLCSeries.IQR), b"\x64\x00\x00\x00\xa8\x00")
         self.assertEqual(encode_device_spec("R32767", series=PLCSeries.IQR), b"\xff\x7f\x00\x00\xaf\x00")

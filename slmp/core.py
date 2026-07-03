@@ -217,8 +217,11 @@ def _resolve_device_radix(code: str, plc_profile: object | None = None) -> int:
 
 def _ensure_device_supported_for_profile(code: str, plc_profile: object | None = None) -> None:
     normalized_profile = _normalize_plc_profile_hint(plc_profile)
-    if normalized_profile == "melsec:iq-f" and code in {"DX", "DY"}:
-        raise SlmpUnsupportedDeviceError(f"SLMP device code '{code}' is not supported for plc_profile 'melsec:iq-f'.")
+    unsupported = _PROFILE_UNSUPPORTED_DEVICE_CODES.get(normalized_profile or "")
+    if unsupported is not None and code in unsupported:
+        raise SlmpUnsupportedDeviceError(
+            f"SLMP device code '{code}' is not supported for plc_profile '{normalized_profile}'."
+        )
 
 
 def _apply_plc_profile_hint(value: DeviceRef, plc_profile: object | None = None) -> DeviceRef:
@@ -1456,6 +1459,13 @@ _G_HG_CODES = frozenset({"G", "HG"})
 _HG_VALID_EXTENSION_SPECIFICATIONS = frozenset({0x03E0, 0x03E1, 0x03E2, 0x03E3})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})
 _BOUNDARY_START_ACCEPTANCE_CODES = frozenset({"R", "ZR"})
+_PROFILE_UNSUPPORTED_DEVICE_CODES: dict[str, frozenset[str]] = {
+    "melsec:iq-f": frozenset({"DX", "DY", "V", "LTS", "LTC", "LTN", "LSTS", "LSTC", "LSTN", "ZR", "RD"}),
+    "melsec:qcpu": frozenset({"LTS", "LTC", "LTN", "LSTS", "LSTC", "LSTN", "LCS", "LCC", "LCN", "LZ", "RD"}),
+    "melsec:lcpu": frozenset({"LTS", "LTC", "LTN", "LSTS", "LSTC", "LSTN", "LCS", "LCC", "LCN", "LZ", "RD"}),
+    "melsec:qnu": frozenset({"LTS", "LTC", "LTN", "LSTS", "LSTC", "LSTN", "LCS", "LCC", "LCN", "LZ", "RD"}),
+    "melsec:qnudv": frozenset({"LTS", "LTC", "LTN", "LSTS", "LSTC", "LSTN", "LCS", "LCC", "LCN", "LZ", "RD"}),
+}
 
 
 def _encode_label_name(label: str) -> bytes:
