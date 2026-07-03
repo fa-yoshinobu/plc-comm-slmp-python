@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Library: Added non-breaking SLMP specification-audit updates for manual-conformant request framing, point-limit guards, response correlation, UDP source filtering, and PLC error diagnostics.
+- Library: Exposed structured PLC error information on `SlmpResponse.error_info` and `SlmpError.error_info` when a non-zero end-code response carries the 9-byte error information block.
+- Library: Enforced documented point limits before transport: iQ-F direct bit access is limited to 3584 points, and 008x extended random/monitor routes use the 96-point / weighted-960 / 94-bit limits.
+- Library: Connected UDP sockets before sending and receiving so datagrams from unrelated sources are not accepted as PLC responses.
 - Library: Added SLMP `S` step relay device-code support for reads and rejected writes to `S` as read-only.
 - Library: Rejected `G/HG` random bit writes; callers should use U-qualified word access for buffer-memory devices.
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.
@@ -53,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: Updated SLMP end-code helper coverage for code-derived keys and non-embedded messages.
 
 ### Fixed
+- Library: Aligned standard 008x extended device specifications with the manual 11-byte Q/L and 13-byte iQ-R layouts.
+- Library: Matched 4E responses by request serial and discarded mismatched D4 responses before parsing the response payload.
 - Library: Made `BIT_IN_WORD` helper addresses require an explicit bit index such as `D100.0` through `D100.F`; `D100:BIT_IN_WORD` now fails instead of silently reading or writing bit 0.
 - Tests: Added coverage for rejecting `BIT_IN_WORD` addresses without an explicit bit index.
 
