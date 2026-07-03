@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Documented the Q-series Read Block (`0x0406`) and Write Block (`0x1406`) profile guard in user profiles and gotchas.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
 - Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
+- Docs: Cleaned up maintainer notes, obsolete probe records, and root TODO handling.
 - Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Release: Excluded maintainer-only files, scripts, and tests from generated source archives via `.gitattributes`.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
