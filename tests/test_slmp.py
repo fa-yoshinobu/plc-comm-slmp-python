@@ -1825,9 +1825,9 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0080)
         self.assertEqual(payload, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8\x01\x00")
 
-    def test_s_device_is_read_only(self) -> None:
-        """Test test_s_device_is_read_only."""
-        client = FakeClient()
+    def test_s_device_write_policy_follows_profile(self) -> None:
+        """S writes are allowed only when the selected profile marks S writable."""
+        client = FakeClient(plc_profile="melsec:iq-r")
         self.assertEqual(parse_device("S10").code, "S")
 
         client.next_response_data = b"\x10"
@@ -1843,6 +1843,14 @@ class TestDeviceApi(unittest.TestCase):
             client.write_random_bits({"S10": True}, series=PLCSeries.IQR)
         with self.assertRaisesRegex(ValueError, "read-only device S"):
             client.write_block(word_blocks=(), bit_blocks=[("S10", [1])], series=PLCSeries.IQR)
+
+        iqf_client = FakeClient(plc_profile="melsec:iq-f")
+        iqf_client.write_devices("S10", [True], bit_unit=True)
+        self.assertIsNotNone(iqf_client.last_request)
+        iqf_client.write_random_bits({"S10": True})
+        self.assertIsNotNone(iqf_client.last_request)
+        iqf_client.write_block(word_blocks=(), bit_blocks=[("S10", [1])])
+        self.assertIsNotNone(iqf_client.last_request)
 
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_hg."""

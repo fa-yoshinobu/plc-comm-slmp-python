@@ -1254,12 +1254,12 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
 
 
 def _is_read_only_device(ref: DeviceRef, plc_profile: object | None = None) -> bool:
-    return ref.code in _READ_ONLY_DEVICE_CODES or is_profile_read_only_device(plc_profile, ref.code)
+    return is_profile_read_only_device(plc_profile, ref.code)
 
 
 def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool, plc_profile: object | None = None) -> None:
     if _is_read_only_device(ref, plc_profile):
-        raise ValueError(f"{ref.code} is read-only and cannot be written.")
+        raise ValueError(f"{ref.code} is read-only for the selected PLC profile and cannot be written.")
     if bit_unit and ref.code in _LONG_FAMILY_STATE_WRITE_DIRECT_CODES:
         raise ValueError(
             f"Direct bit write is not supported for {ref.code}. "
@@ -1304,7 +1304,9 @@ def _validate_random_write_word_devices(
 ) -> None:
     read_only = next((ref for ref in (*word_refs, *dword_refs) if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
-        raise ValueError(f"Write Random (0x1402) does not support read-only device {read_only.code}.")
+        raise ValueError(
+            f"Write Random (0x1402) does not support read-only device {read_only.code} for the selected PLC profile."
+        )
     if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
         raise ValueError(
             "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
@@ -1319,7 +1321,9 @@ def _validate_random_write_bit_devices(
 ) -> None:
     read_only = next((ref for ref in bit_refs if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
-        raise ValueError(f"Write Random (0x1402) does not support read-only device {read_only.code}.")
+        raise ValueError(
+            f"Write Random (0x1402) does not support read-only device {read_only.code} for the selected PLC profile."
+        )
     if any(ref.code in _G_HG_CODES for ref in bit_refs):
         raise ValueError("Write Random (0x1402) does not support G/HG bit entries. Use U-qualified word access.")
 
@@ -1358,7 +1362,9 @@ def _validate_block_write_devices(
 ) -> None:
     read_only = next((ref for ref in (*word_refs, *bit_refs) if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
-        raise ValueError(f"Write Block (0x1406) does not support read-only device {read_only.code}.")
+        raise ValueError(
+            f"Write Block (0x1406) does not support read-only device {read_only.code} for the selected PLC profile."
+        )
     if any(
         ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in (*word_refs, *bit_refs)
     ):
@@ -1446,7 +1452,6 @@ _LC_CONTACT_CODES = frozenset({"LCS", "LCC"})
 _LONG_FAMILY_STATE_WRITE_DIRECT_CODES = _LT_LST_DIRECT_CODES | _LC_CONTACT_CODES
 _DWORD_ONLY_DIRECT_CODES = frozenset({"LZ"})
 _RANDOM_DWORD_ONLY_DIRECT_CODES = frozenset({"LCN", "LZ"})
-_READ_ONLY_DEVICE_CODES = frozenset({"S"})
 _G_HG_CODES = frozenset({"G", "HG"})
 _HG_VALID_EXTENSION_SPECIFICATIONS = frozenset({0x03E0, 0x03E1, 0x03E2, 0x03E3})
 _TEMPORARILY_UNSUPPORTED_TYPED_CODES = frozenset({"G", "HG"})

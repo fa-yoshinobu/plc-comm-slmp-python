@@ -85,6 +85,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
                 268: 512,
                 270: 128,
                 274: 7680,
+                276: 256,
                 280: 8000,
                 282: 512,
                 284: 512,
@@ -118,6 +119,9 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertEqual(entries["X"].address_range, "X0000-X1777")
         self.assertEqual(entries["X"].notation, SlmpDeviceRangeNotation.Base8)
         self.assertEqual(entries["Y"].address_range, "Y0000-Y1777")
+        self.assertTrue(entries["S"].supported)
+        self.assertEqual(entries["S"].point_count, 256)
+        self.assertEqual(entries["S"].address_range, "S0-S255")
         self.assertEqual(entries["R"].point_count, 32768)
         self.assertEqual(entries["R"].address_range, "R0-R32767")
         self.assertFalse(entries["V"].supported)
