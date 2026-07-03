@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import socket
 from collections.abc import Callable, Mapping, Sequence
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
 
 from . import _operations
@@ -39,6 +40,8 @@ from .core import (
     resolve_extended_device_and_extension,
 )
 from .errors import SlmpError
+
+_EXPECTED_RESPONSE_SERIAL: ContextVar[int | None] = ContextVar("slmp_async_expected_response_serial", default=None)
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -237,7 +240,12 @@ class AsyncSlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        raw = await self._send_and_receive(frame)
+        expected_serial = serial_no if self.frame_type == FrameType.FRAME_4E else None
+        token = _EXPECTED_RESPONSE_SERIAL.set(expected_serial)
+        try:
+            raw = await self._send_and_receive(frame)
+        finally:
+            _EXPECTED_RESPONSE_SERIAL.reset(token)
         resp = decode_response(raw, frame_type=self.frame_type)
 
         if self.trace_hook:
@@ -261,6 +269,7 @@ class AsyncSlmpClient:
                 f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
                 end_code=resp.end_code,
                 data=resp.data,
+                error_info=resp.error_info,
             )
         return resp
 
@@ -1171,21 +1180,28 @@ class AsyncSlmpClient:
         """Send a frame and receive the response."""
         await self.connect()
         async with self._lock:
+            expected_serial = _EXPECTED_RESPONSE_SERIAL.get()
             if self.transport_type == "tcp":
                 assert self._writer is not None
                 self._writer.write(frame)
                 await self._writer.drain()
-                return await self._receive_frame()
+                while True:
+                    raw = await self._receive_frame()
+                    if _response_matches_serial(raw, expected_serial):
+                        return raw
             else:
                 assert self._udp_transport is not None
                 assert self._udp_protocol is not None
                 while not self._udp_protocol.queue.empty():
                     self._udp_protocol.queue.get_nowait()
                 self._udp_transport.sendto(frame)
-                try:
-                    return await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=self.timeout)
-                except asyncio.TimeoutError as err:
-                    raise SlmpError("UDP communication timeout") from err
+                while True:
+                    try:
+                        raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=self.timeout)
+                    except asyncio.TimeoutError as err:
+                        raise SlmpError("UDP communication timeout") from err
+                    if _response_matches_serial(raw, expected_serial):
+                        return raw
 
     async def _receive_frame(self) -> bytes:
         """Receive a single SLMP frame."""
@@ -1209,3 +1225,11 @@ class AsyncSlmpClient:
                     self.trace_hook(trace)
             except Exception:
                 pass
+
+
+def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
+    if expected_serial is None:
+        return True
+    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
+        return True
+    return int.from_bytes(raw[2:4], "little") == expected_serial

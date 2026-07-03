@@ -110,7 +110,12 @@ def build_read_devices_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
-    _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices")
+    _check_direct_device_points(
+        points,
+        bit_unit=bit_unit,
+        name="read_devices",
+        plc_profile=address_profile,
+    )
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
@@ -154,7 +159,12 @@ def build_write_devices_request(
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
-    _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices")
+    _check_direct_device_points(
+        len(values),
+        bit_unit=bit_unit,
+        name="write_devices",
+        plc_profile=address_profile,
+    )
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
@@ -272,7 +282,12 @@ def build_read_devices_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
-    _check_direct_device_points(points, bit_unit=bit_unit, name="read_devices_ext")
+    _check_direct_device_points(
+        points,
+        bit_unit=bit_unit,
+        name="read_devices_ext",
+        plc_profile=address_profile,
+    )
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
@@ -299,7 +314,12 @@ def build_write_devices_ext_request(
 ) -> OperationRequest:
     if not values:
         raise ValueError("values must not be empty")
-    _check_direct_device_points(len(values), bit_unit=bit_unit, name="write_devices_ext")
+    _check_direct_device_points(
+        len(values),
+        bit_unit=bit_unit,
+        name="write_devices_ext",
+        plc_profile=address_profile,
+    )
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit)
@@ -375,6 +395,7 @@ def build_register_monitor_devices_ext_request(
         len(dword_devices),
         series=effective_series,
         name="register_monitor_devices_ext",
+        extension=True,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_devices), len(dword_devices)])
@@ -537,6 +558,7 @@ def build_read_random_ext_request(
         len(dword_devices),
         series=effective_series,
         name="read_random_ext",
+        extension=True,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
 
@@ -632,6 +654,7 @@ def build_write_random_words_ext_request(
         len(dword_values),
         series=effective_series,
         name="write_random_words_ext",
+        extension=True,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_values), len(dword_values)])
@@ -691,7 +714,12 @@ def build_write_random_bits_ext_request(
     if len(bit_values) > 0xFF:
         raise ValueError("bit_values must be <= 255")
     effective_series = _effective_series(series, default_series)
-    _check_random_bit_write_count(len(bit_values), series=effective_series, name="write_random_bits_ext")
+    _check_random_bit_write_count(
+        len(bit_values),
+        series=effective_series,
+        name="write_random_bits_ext",
+        extension=True,
+    )
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
     refs: list[DeviceRef] = []

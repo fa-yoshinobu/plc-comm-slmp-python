@@ -201,22 +201,25 @@ Status:
 
 ## 8. `ZR` Numbering Base
 
-Manual expectation:
+Manual note:
 
-- current device tables suggest hexadecimal-style `ZR`
+- current SH-080003 device tables suggest hexadecimal-style `ZR`
+- this is treated as an official manual table typo
 
 Current implementation:
 
-- the library uses decimal `ZR` numbering on the validated iQ-R target
+- the library uses decimal `ZR` numbering
 
 Reason:
 
-- live verification showed decimal numbering is the working behavior there
+- live verification showed decimal numbering is the working behavior on the validated iQ-R target
+- GX Works3 display also uses decimal `ZR` numbering
 - a separate `ZR1535996` capture also used decimal direct-device numbering on another PLC environment
+- that large-`ZR` target was later revalidated through the current Python client with decimal `ZR1535996` write/readback
 
 Status:
 
-- manual/live discrepancy recorded; implementation follows live behavior
+- official manual typo recorded; implementation follows verified decimal behavior
 
 ## Use Rule
 

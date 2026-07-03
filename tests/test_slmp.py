@@ -1,6 +1,8 @@
 """Tests for SLMP client and core functions."""
 
 import json
+import socket
+import threading
 import unittest
 import warnings
 from pathlib import Path
@@ -153,6 +155,39 @@ class _RecvOnlySocket:
         return data
 
 
+class _SendRecvSocket(_RecvIntoSocket):
+    def __init__(self, chunks: list[bytes]) -> None:
+        super().__init__(chunks)
+        self.sent: list[bytes] = []
+        self.timeout: float | None = None
+
+    def sendall(self, data: bytes) -> None:
+        self.sent.append(bytes(data))
+
+    def gettimeout(self) -> float | None:
+        return self.timeout
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+
+def _build_3e_response(data: bytes, *, end_code: int = 0) -> bytes:
+    payload = end_code.to_bytes(2, "little") + data
+    return b"\xd0\x00" + b"\x00\xff\xff\x03\x00" + len(payload).to_bytes(2, "little") + payload
+
+
+def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
+    payload = end_code.to_bytes(2, "little") + data
+    return (
+        b"\xd4\x00"
+        + serial.to_bytes(2, "little")
+        + b"\x00\x00"
+        + b"\x00\xff\xff\x03\x00"
+        + len(payload).to_bytes(2, "little")
+        + payload
+    )
+
+
 class TestReceiveHelpers(unittest.TestCase):
     def test_recv_exact_prefers_recv_into(self) -> None:
         sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
@@ -166,6 +201,69 @@ class TestReceiveHelpers(unittest.TestCase):
         frame = bytes.fromhex("d00000ffff030002000000")
         sock = _RecvIntoSocket([frame[:4], frame[4:7], frame[7:]])
         self.assertEqual(_recv_tcp_frame(sock, frame_type=FrameType.FRAME_3E), frame)
+
+    def test_4e_request_ignores_mismatched_serial_response(self) -> None:
+        stale = _build_4e_response(1, b"\x11\x11")
+        matching = _build_4e_response(0, b"\x22\x22")
+        sock = _SendRecvSocket([stale + matching])
+        client = SlmpClient("127.0.0.1", plc_profile="melsec:iq-r")
+        client._sock = sock  # type: ignore[attr-defined]
+
+        self.assertEqual(client.read_devices("D0", 1), [0x2222])
+        self.assertEqual(len(sock.sent), 1)
+
+    def test_slmp_error_exposes_structured_error_information(self) -> None:
+        error_data = bytes.fromhex("00 FF FF 03 00 01 04 01 00")
+        sock = _SendRecvSocket([_build_4e_response(0, error_data, end_code=0xC051)])
+        client = SlmpClient("127.0.0.1", plc_profile="melsec:iq-r")
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaises(SlmpError) as ctx:
+            client.read_devices("M0", 3600, bit_unit=True)
+
+        error = ctx.exception
+        self.assertEqual(error.end_code, 0xC051)
+        self.assertEqual(error.data, error_data)
+        self.assertIsNotNone(error.error_info)
+        assert error.error_info is not None
+        self.assertEqual(error.error_info.network, 0x00)
+        self.assertEqual(error.error_info.station, 0xFF)
+        self.assertEqual(error.error_info.module_io, 0x03FF)
+        self.assertEqual(error.error_info.multidrop, 0x00)
+        self.assertEqual(error.error_info.command, 0x0401)
+        self.assertEqual(error.error_info.subcommand, 0x0001)
+        self.assertEqual(error.error_info.raw, error_data)
+
+    def test_udp_ignores_datagrams_from_unconnected_source(self) -> None:
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server_sock.bind(("127.0.0.1", 0))
+        server_sock.settimeout(2.0)
+        host, port = server_sock.getsockname()
+        errors: list[BaseException] = []
+
+        def serve() -> None:
+            try:
+                _request, client_addr = server_sock.recvfrom(65535)
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as rogue_sock:
+                    rogue_sock.sendto(_build_3e_response(b"\x11\x11"), client_addr)
+                server_sock.sendto(_build_3e_response(b"\x22\x22"), client_addr)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                server_sock.close()
+
+        thread = threading.Thread(target=serve)
+        thread.start()
+        client = SlmpClient(host, port, plc_profile="melsec:qcpu", transport="udp", timeout=1.0)
+        try:
+            self.assertEqual(client.read_devices("D0", 1), [0x2222])
+        finally:
+            client.close()
+            thread.join(timeout=2.0)
+
+        self.assertFalse(thread.is_alive())
+        if errors:
+            raise errors[0]
 
 
 class TestTypedHelpers(unittest.TestCase):
@@ -339,6 +437,23 @@ class TestCodec(unittest.TestCase):
             register_mode="z",
         )
         self.assertEqual(flags_ql, 0x48)
+
+        default_ext = ExtensionSpec()
+        self.assertEqual(
+            encode_extended_device_spec("D100", series=PLCSeries.QL, extension=default_ext),
+            b"\x00\x00\x64\x00\x00\xa8\x00\x00\x00\x00\x00",
+        )
+        indexed_ext = ExtensionSpec(
+            device_modification_index=0x04,
+            device_modification_flags=build_device_modification_flags(
+                series=PLCSeries.QL,
+                register_mode="z",
+            ),
+        )
+        self.assertEqual(
+            encode_extended_device_spec("D100", series=PLCSeries.QL, extension=indexed_ext),
+            b"\x04\x40\x64\x00\x00\xa8\x00\x00\x00\x00\x00",
+        )
 
         # 0xF9 = LINK_DIRECT: uses GOT pcap-verified format (j_net from extension_specification)
         # J1\W100 (W hex 0x100=256): 00 00 | 00 01 00 | b4 | 00 00 | 01 | 00 | f9
@@ -1792,6 +1907,25 @@ class TestDeviceApi(unittest.TestCase):
             client.read_random_ext(word_devices=[(r"J1\LCN10", ExtensionSpec())], series=PLCSeries.IQR)
         self.assertIsNone(client.last_request)
 
+    def test_extended_random_ql_uses_extended_point_limits_before_transport(self) -> None:
+        """Extended random 008x commands use documented 96/960/94 limits on Q/L layout."""
+        client = FakeClient()
+        read_devices = [(f"D{index}", ExtensionSpec()) for index in range(97)]
+        with self.assertRaisesRegex(ValueError, r"1..96"):
+            client.read_random_ext(word_devices=read_devices, series=PLCSeries.QL)
+
+        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(81)]
+        with self.assertRaisesRegex(ValueError, r"limit=960"):
+            client.write_random_words_ext(word_values=word_values, series=PLCSeries.QL)
+
+        bit_values = [(f"M{index}", True, ExtensionSpec()) for index in range(95)]
+        with self.assertRaisesRegex(ValueError, r"1..94"):
+            client.write_random_bits_ext(bit_values=bit_values, series=PLCSeries.QL)
+
+        with self.assertRaisesRegex(ValueError, r"1..96"):
+            client.register_monitor_devices_ext(word_devices=read_devices, series=PLCSeries.QL)
+        self.assertIsNone(client.last_request)
+
     def test_write_random_words_ext_rejects_long_current_word_entries_before_transport(self) -> None:
         """Extended random word writes must reject long current values as word entries."""
         client = FakeClient()
@@ -1869,6 +2003,17 @@ class TestDeviceApi(unittest.TestCase):
             client.read_devices("M0", 7169, bit_unit=True, series=PLCSeries.IQR)
         with self.assertRaisesRegex(ValueError, r"1\.\.7168"):
             client.write_devices("M0", [False] * 7169, bit_unit=True, series=PLCSeries.IQR)
+
+        iqf_client = FakeClient(plc_profile="melsec:iq-f")
+        iqf_client.next_response_data = b"\x00" * 1792
+        self.assertEqual(len(iqf_client.read_devices("M0", 3584, bit_unit=True, series=PLCSeries.QL)), 3584)
+        iqf_client.last_request = None
+        with self.assertRaisesRegex(ValueError, r"1\.\.3584"):
+            iqf_client.read_devices("M0", 3585, bit_unit=True, series=PLCSeries.QL)
+        self.assertIsNone(iqf_client.last_request)
+        with self.assertRaisesRegex(ValueError, r"1\.\.3584"):
+            iqf_client.write_devices("M0", [False] * 3585, bit_unit=True, series=PLCSeries.QL)
+        self.assertIsNone(iqf_client.last_request)
 
     def test_manual_point_limits_for_random_write(self) -> None:
         client = FakeClient()

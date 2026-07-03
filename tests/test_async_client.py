@@ -99,6 +99,39 @@ class MockSLMPServer:
             await writer.wait_closed()
 
 
+class SerialSkewSLMPServer(MockSLMPServer):
+    """Server that sends one stale 4E response before the matching response."""
+
+    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            head = await reader.readexactly(13)
+            data_len = int.from_bytes(head[11:13], "little")
+            await reader.readexactly(data_len)
+
+            serial = int.from_bytes(head[2:4], "little")
+            stale = self._response(head, (serial + 1) & 0xFFFF, b"\x11\x11")
+            matching = self._response(head, serial, b"\x22\x22")
+            writer.write(stale + matching)
+            await writer.drain()
+        except asyncio.IncompleteReadError:
+            pass
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    @staticmethod
+    def _response(request_head: bytes, serial: int, data: bytes) -> bytes:
+        body = b"\x00\x00" + data
+        header = (
+            b"\xd4\x00"
+            + serial.to_bytes(2, "little")
+            + b"\x00\x00"
+            + request_head[6:11]
+            + len(body).to_bytes(2, "little")
+        )
+        return header + body
+
+
 class FakeAsyncClient(AsyncSlmpClient):
     """Fake async client for testing."""
 
@@ -163,6 +196,19 @@ async def test_async_read_devices() -> None:
         async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
             val = await cli.read_devices("D100", 1)
             assert val == [1]
+    finally:
+        await mock.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_4e_request_ignores_mismatched_serial_response() -> None:
+    mock = SerialSkewSLMPServer()
+    await mock.start()
+
+    try:
+        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
+            val = await cli.read_devices("D100", 1)
+            assert val == [0x2222]
     finally:
         await mock.stop()
 

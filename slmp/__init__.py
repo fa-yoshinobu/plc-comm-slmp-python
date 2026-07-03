@@ -60,6 +60,7 @@ from .error_codes import (
 from .errors import (
     SlmpBoundaryBehaviorWarning,
     SlmpError,
+    SlmpErrorInfo,
     SlmpPracticalPathWarning,
     SlmpUnsupportedDeviceError,
 )
@@ -139,6 +140,7 @@ __all__ = [
     "SlmpClient",
     "SlmpBoundaryBehaviorWarning",
     "SlmpError",
+    "SlmpErrorInfo",
     "SlmpPlcProfile",
     "SlmpPracticalPathWarning",
     "SlmpUnsupportedDeviceError",

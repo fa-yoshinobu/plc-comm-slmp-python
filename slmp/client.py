@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import Callable, Mapping, Sequence
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from . import _operations
@@ -38,6 +39,8 @@ from .core import (
     resolve_extended_device_and_extension,
 )
 from .errors import SlmpError
+
+_EXPECTED_RESPONSE_SERIAL: ContextVar[int | None] = ContextVar("slmp_expected_response_serial", default=None)
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -156,6 +159,8 @@ class SlmpClient:
         if self.transport == "tcp":
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.connect((self.host, self.port))
+        else:
+            sock.connect((self.host, self.port))
         self._sock = sock
 
     def close(self) -> None:
@@ -217,7 +222,12 @@ class SlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        raw = self._send_and_receive(frame)
+        expected_serial = serial_no if self.frame_type == FrameType.FRAME_4E else None
+        token = _EXPECTED_RESPONSE_SERIAL.set(expected_serial)
+        try:
+            raw = self._send_and_receive(frame)
+        finally:
+            _EXPECTED_RESPONSE_SERIAL.reset(token)
         resp = decode_response(raw, frame_type=self.frame_type)
         self._emit_trace(
             SlmpTraceFrame(
@@ -239,6 +249,7 @@ class SlmpClient:
                 f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
                 end_code=resp.end_code,
                 data=resp.data,
+                error_info=resp.error_info,
             )
         return resp
 
@@ -1472,7 +1483,7 @@ class SlmpClient:
                 )
             )
             return
-        self._sock.sendto(frame, (self.host, self.port))
+        self._sock.send(frame)
         self._emit_trace(
             SlmpTraceFrame(
                 serial=serial_no,
@@ -1495,13 +1506,20 @@ class SlmpClient:
     def _send_and_receive(self, frame: bytes) -> bytes:
         self.connect()
         assert self._sock is not None
+        expected_serial = _EXPECTED_RESPONSE_SERIAL.get()
 
         if self.transport == "tcp":
             self._sock.sendall(frame)
-            return self._receive_frame()
+            while True:
+                raw = self._receive_frame()
+                if _response_matches_serial(raw, expected_serial):
+                    return raw
 
-        self._sock.sendto(frame, (self.host, self.port))
-        return self._receive_frame()
+        self._sock.send(frame)
+        while True:
+            raw = self._receive_frame()
+            if _response_matches_serial(raw, expected_serial):
+                return raw
 
     def _receive_frame(self, *, timeout: float | None = None) -> bytes:
         self.connect()
@@ -1512,8 +1530,7 @@ class SlmpClient:
         try:
             if self.transport == "tcp":
                 return _recv_tcp_frame(self._sock, frame_type=self.frame_type)
-            data, _ = self._sock.recvfrom(65535)
-            return data
+            return self._sock.recv(65535)
         finally:
             if timeout is not None:
                 self._sock.settimeout(previous_timeout)
@@ -1539,6 +1556,14 @@ def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
     frame[:head_size] = head
     _recv_exact_into(sock, memoryview(frame)[head_size:])
     return bytes(frame)
+
+
+def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
+    if expected_serial is None:
+        return True
+    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
+        return True
+    return int.from_bytes(raw[2:4], "little") == expected_serial
 
 
 def _recv_exact(sock: socket.socket, size: int) -> bytes:

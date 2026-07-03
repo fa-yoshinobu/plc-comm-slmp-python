@@ -141,8 +141,8 @@ These are not pure range issues. They are command-path or target-specific behavi
   - `extend_unit_*`
 
 4. `ZR`
-- The current manual device table and the validated target do not agree on the `ZR` numbering base.
-- The validated target behavior is decimal, and the current implementation follows that live result.
+- The current manual device table's hexadecimal-style `ZR` numbering note is treated as an official manual typo.
+- The validated target behavior is decimal, GX Works3 displays decimal `ZR` numbers, and the current implementation follows that verified behavior.
 - The configured upper bound corresponds to `ZR163839` in this client.
 - `ZR163840` start is rejected with `0x4031`.
 - However, requests starting at `ZR163838` / `ZR163839` still succeeded even when the requested span clearly crossed into `ZR163840` or later.

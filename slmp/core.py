@@ -35,6 +35,7 @@ from .constants import (
 from .errors import (
     SlmpBoundaryBehaviorWarning,
     SlmpError,
+    SlmpErrorInfo,
     SlmpPracticalPathWarning,
     SlmpUnsupportedDeviceError,
 )
@@ -279,6 +280,7 @@ class SlmpResponse:
         end_code: Response end code (0x0000 for success).
         data: Command-specific response payload.
         raw: Full raw binary response frame.
+        error_info: Structured PLC error information when end_code is non-zero and present.
     """
 
     serial: int
@@ -286,6 +288,7 @@ class SlmpResponse:
     end_code: int
     data: bytes
     raw: bytes
+    error_info: SlmpErrorInfo | None = None
 
     @property
     def is_success(self) -> bool:
@@ -724,7 +727,8 @@ def decode_3e_response(frame: bytes) -> SlmpResponse:
 
     end_code = int.from_bytes(frame[9:11], "little")
     data = frame[11:]
-    return SlmpResponse(serial=0, target=target, end_code=end_code, data=data, raw=frame)
+    error_info = SlmpErrorInfo.parse(data) if end_code != 0 else None
+    return SlmpResponse(serial=0, target=target, end_code=end_code, data=data, raw=frame, error_info=error_info)
 
 
 def decode_response(frame: bytes, *, frame_type: FrameType) -> SlmpResponse:
@@ -773,7 +777,8 @@ def decode_4e_response(frame: bytes) -> SlmpResponse:
 
     end_code = int.from_bytes(frame[13:15], "little")
     data = frame[15:]
-    return SlmpResponse(serial=serial, target=target, end_code=end_code, data=data, raw=frame)
+    error_info = SlmpErrorInfo.parse(data) if end_code != 0 else None
+    return SlmpResponse(serial=serial, target=target, end_code=end_code, data=data, raw=frame, error_info=error_info)
 
 
 def resolve_device_subcommand(
@@ -850,11 +855,7 @@ def _validate_g_hg_extended_device_qualification(device: ExtendedDevice) -> None
     _validate_hg_extension_specification(device.extension_specification)
 
 
-def _uses_capture_aligned_g_hg_layout(ref: DeviceRef, *, extension: ExtensionSpec) -> bool:
-    return ref.code in _G_HG_CODES and extension.direct_memory_specification in {0xF8, 0xFA}
-
-
-def _encode_capture_aligned_g_hg_extension_spec(
+def _encode_manual_extended_device_spec(
     ref: DeviceRef,
     *,
     series: PLCSeries,
@@ -863,11 +864,10 @@ def _encode_capture_aligned_g_hg_extension_spec(
 ) -> bytes:
     _validate_extension_spec(extension)
     payload = bytearray()
-    payload += extension.extension_specification_modification.to_bytes(1, "little")
     payload += extension.device_modification_index.to_bytes(1, "little")
-    payload += encode_device_spec(ref, series=series)
     payload += extension.device_modification_flags.to_bytes(1, "little")
-    # Real U3E0\G10, U3E0\HG20, and U01\G22 captures include one zero byte here.
+    payload += encode_device_spec(ref, series=series)
+    payload += extension.extension_specification_modification.to_bytes(1, "little")
     payload += b"\x00"
     payload += extension.extension_specification.to_bytes(2, "little")
     if include_direct_memory_at_end:
@@ -932,19 +932,12 @@ def encode_resolved_extended_device_spec(
             extension=extension,
             include_direct_memory_at_end=include_direct_memory_at_end,
         )
-    if _uses_capture_aligned_g_hg_layout(ref, extension=extension):
-        return _encode_capture_aligned_g_hg_extension_spec(
-            ref,
-            series=series,
-            extension=extension,
-            include_direct_memory_at_end=include_direct_memory_at_end,
-        )
-    payload = bytearray()
-    payload += encode_extension_spec(extension)
-    payload += encode_device_spec(ref, series=series)
-    if include_direct_memory_at_end:
-        payload += extension.direct_memory_specification.to_bytes(1, "little")
-    return bytes(payload)
+    return _encode_manual_extended_device_spec(
+        ref,
+        series=series,
+        extension=extension,
+        include_direct_memory_at_end=include_direct_memory_at_end,
+    )
 
 
 def build_device_modification_flags(
@@ -1056,16 +1049,41 @@ def _check_points_u16(points: int, name: str) -> None:
         raise ValueError(f"{name} out of range (0..65535): {points}")
 
 
-def _check_direct_device_points(points: int, *, bit_unit: bool, name: str) -> None:
-    limit = 7168 if bit_unit else 960
+def _uses_iqf_direct_bit_limit(plc_profile: object | None) -> bool:
+    if plc_profile is None:
+        return False
+    try:
+        return SlmpPlcProfile(plc_profile) is SlmpPlcProfile.IqF
+    except ValueError:
+        return False
+
+
+def _check_direct_device_points(
+    points: int,
+    *,
+    bit_unit: bool,
+    name: str,
+    plc_profile: object | None = None,
+) -> None:
+    if bit_unit:
+        limit = 3584 if _uses_iqf_direct_bit_limit(plc_profile) else 7168
+    else:
+        limit = 960
     unit = "bit" if bit_unit else "word"
     if points < 1 or points > limit:
         raise ValueError(f"{name} {unit} access points out of range (1..{limit}): {points}")
 
 
-def _check_random_read_like_counts(word_points: int, dword_points: int, *, series: PLCSeries, name: str) -> None:
+def _check_random_read_like_counts(
+    word_points: int,
+    dword_points: int,
+    *,
+    series: PLCSeries,
+    name: str,
+    extension: bool = False,
+) -> None:
     total = word_points + dword_points
-    limit = 96 if series == PLCSeries.IQR else 192
+    limit = 96 if extension or series == PLCSeries.IQR else 192
     if total < 1 or total > limit:
         raise ValueError(
             f"{name} total access points out of range (1..{limit}) for {series.value}: "
@@ -1073,18 +1091,31 @@ def _check_random_read_like_counts(word_points: int, dword_points: int, *, serie
         )
 
 
-def _check_random_bit_write_count(points: int, *, series: PLCSeries, name: str) -> None:
-    limit = 94 if series == PLCSeries.IQR else 188
+def _check_random_bit_write_count(
+    points: int,
+    *,
+    series: PLCSeries,
+    name: str,
+    extension: bool = False,
+) -> None:
+    limit = 94 if extension or series == PLCSeries.IQR else 188
     if points < 1 or points > limit:
         raise ValueError(f"{name} bit access points out of range (1..{limit}) for {series.value}: {points}")
 
 
-def _check_random_write_word_counts(word_points: int, dword_points: int, *, series: PLCSeries, name: str) -> None:
+def _check_random_write_word_counts(
+    word_points: int,
+    dword_points: int,
+    *,
+    series: PLCSeries,
+    name: str,
+    extension: bool = False,
+) -> None:
     total = word_points + dword_points
     if total < 1:
         raise ValueError(f"{name} word/dword access points out of range: word={word_points}, dword={dword_points}")
     weighted = word_points * 12 + dword_points * 14
-    limit = 960 if series == PLCSeries.IQR else 1920
+    limit = 960 if extension or series == PLCSeries.IQR else 1920
     if weighted > limit:
         raise ValueError(
             f"{name} word/dword access points out of range for {series.value}: "
@@ -1151,6 +1182,7 @@ def _raise_response_error(response: SlmpResponse, *, command: int | Command, sub
         f"SLMP error end_code=0x{response.end_code:04X} command=0x{int(command):04X} subcommand=0x{subcommand:04X}",
         end_code=response.end_code,
         data=response.data,
+        error_info=response.error_info,
     )
 
 
