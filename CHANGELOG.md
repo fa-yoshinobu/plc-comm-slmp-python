@@ -25,7 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Added SLMP `S` step relay device-code support for reads and rejected writes to `S` as read-only.
 - Library: Rejected `G/HG` random bit writes; callers should use U-qualified word access for buffer-memory devices.
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.
-- Library: Rejected Read Block (`0x0406`) and Write Block (`0x1406`) for `melsec:qcpu`, `melsec:qnu`, and `melsec:qnudv` before transport; callers should use direct or random device commands for those profiles.
+- Library: Added built-in SLMP capability profiles from `plc-comm-slmp-profiles` v1.0.0 and `strict_profile=True` defaults for sync and async clients so high-level APIs reject profile `blocked` / `unverified` features before transport.
+- Library: Added `SlmpProfileFeatureError` for profile guard failures with profile ID, feature key, state, evidence, and the `strict_profile=False` bypass hint.
+- Library: Moved direct/random point limits to the capability table for defined profiles while preserving legacy fallback behavior for profiles without capability data such as `melsec:qcpu` and `melsec:qnu`.
+- Library: Enforced capability write policies independently of `strict_profile`, including `X` as read-only for `melsec:iq-f` and `LCS` as read-only for iQ-R-compatible profiles.
+- Library: Kept the legacy Read Block (`0x0406`) and Write Block (`0x1406`) guard for `melsec:qcpu` and `melsec:qnu`; `melsec:lcpu` and `melsec:qnudv` now use the capability profile guard and can be intentionally sent with `strict_profile=False`.
 - Library: Batched named plain-bit reads through random word-read only for `SM/X/Y/M/L/F/V/B/SB`; `TS/TC/STS/STC/CS/CC/DX/DY` stay on direct bit reads.
 - Docs: Documented `S` as a read-only bit device in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
 - Docs: Documented the Q-series Read Block (`0x0406`) and Write Block (`0x1406`) profile guard in user profiles and gotchas.
@@ -35,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Release: Excluded maintainer-only files, scripts, and tests from generated source archives via `.gitattributes`.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
-- Tests: Added sync and async guard coverage that Q-series profiles reject block read/write before transport.
+- Tests: Added canonical capability fixture comparison plus sync and async strict-profile coverage for qnudv block/type-name guards, qnudv `strict_profile=False`, iQ-F link-direct, iQ-F `U\G`, iQ-L HG, profile limits, and profile write policies.
+- Tests: Kept coverage that `melsec:qcpu` and `melsec:qnu` reject block read/write before transport through the legacy guard.
 - Tests: Added named-read planning coverage for random-word-safe plain bit families versus the direct-bit-only families seen on R-series hardware.
 - Tooling: Added a release check that requires `pyproject.toml` and `slmp.__version__` to match.
 

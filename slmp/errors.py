@@ -73,6 +73,23 @@ class SlmpUnsupportedDeviceError(ValueError):
     """Project-level validation error for device families intentionally disabled in typed APIs."""
 
 
+class SlmpProfileFeatureError(ValueError):
+    """Raised before transport when strict profile checks block a high-level feature."""
+
+    def __init__(self, profile_id: str, feature_key: str, state: str, evidence: str | None = None) -> None:
+        """Initialize a profile feature guard error."""
+        self.profile_id = profile_id
+        self.feature_key = feature_key
+        self.state = state
+        self.evidence = evidence
+        self.disable_hint = "Set strict_profile=False to send the request anyway."
+        evidence_text = "" if not evidence else f" Evidence: {evidence}."
+        super().__init__(
+            f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}."
+            f"{evidence_text} {self.disable_hint}"
+        )
+
+
 class SlmpPracticalPathWarning(UserWarning):
     """Warning for paths that are implemented but known to be problematic on validated targets."""
 

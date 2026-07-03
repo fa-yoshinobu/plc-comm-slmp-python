@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
 
 from . import _operations
+from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
 from .client import SlmpClient
 from .constants import Command, FrameType, PLCSeries
 from .core import (
@@ -88,6 +89,7 @@ class AsyncSlmpClient:
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], Any] | None = None,
         address_profile: object | None = None,
+        strict_profile: bool = True,
         _allow_manual_profile: bool = False,
     ) -> None:
         """Initialize the asynchronous SLMP client.
@@ -130,6 +132,7 @@ class AsyncSlmpClient:
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
         self.trace_hook = trace_hook
+        self.strict_profile = strict_profile
 
         self._serial = 0
         self._lock = asyncio.Lock()
@@ -154,6 +157,18 @@ class AsyncSlmpClient:
             plc_profile=self.address_profile,
         )
         return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref), effective_extension
+
+    def _ensure_profile_feature_allowed(self, feature_key: str) -> None:
+        ensure_profile_feature_allowed(self.plc_profile, feature_key, strict_profile=self.strict_profile)
+
+    def _ensure_extended_profile_feature_allowed(self, device: str | DeviceRef, extension: ExtensionSpec) -> None:
+        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
+        ensure_extended_profile_feature_allowed(
+            self.plc_profile,
+            ref,
+            effective_extension,
+            strict_profile=self.strict_profile,
+        )
 
     async def connect(self) -> None:
         """Open the connection to the PLC."""
@@ -334,6 +349,7 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[int] | list[bool]:
         """Read device values from the PLC."""
+        self._ensure_profile_feature_allowed("direct")
         request = _operations.build_read_devices_request(
             device,
             points,
@@ -354,6 +370,7 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write device values to the PLC."""
+        self._ensure_profile_feature_allowed("direct")
         request = _operations.build_write_devices_request(
             device,
             values,
@@ -482,6 +499,8 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[int] | list[bool]:
         """Read device values using Extended Device extension."""
+        self._ensure_profile_feature_allowed("direct")
+        self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_read_devices_ext_request(
             device,
             points,
@@ -504,6 +523,8 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write device values using Extended Device extension."""
+        self._ensure_profile_feature_allowed("direct")
+        self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_devices_ext_request(
             device,
             values,
@@ -523,6 +544,7 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> RandomReadResult:
         """Read multiple word and double-word devices in a single request."""
+        self._ensure_profile_feature_allowed("random")
         operation = _operations.build_read_random_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -542,6 +564,9 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> RandomReadResult:
         """Read multiple word and double-word devices using Extended Device extension."""
+        self._ensure_profile_feature_allowed("random")
+        for device, extension in (*word_devices, *dword_devices):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         operation = _operations.build_read_random_ext_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -561,11 +586,13 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple word and double-word devices in a single request."""
+        self._ensure_profile_feature_allowed("random")
         request = _operations.build_write_random_words_request(
             word_values=word_values,
             dword_values=dword_values,
             series=series,
             default_series=self.plc_series,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -577,6 +604,9 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple word and double-word devices using Extended Device extension."""
+        self._ensure_profile_feature_allowed("random")
+        for device, _, extension in (*word_values, *dword_values):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_random_words_ext_request(
             word_values=word_values,
             dword_values=dword_values,
@@ -593,10 +623,12 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple bit devices in a single request."""
+        self._ensure_profile_feature_allowed("random")
         request = _operations.build_write_random_bits_request(
             bit_values,
             series=series,
             default_series=self.plc_series,
+            address_profile=self.address_profile,
         )
         await self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -607,6 +639,9 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple bit devices using Extended Device extension."""
+        self._ensure_profile_feature_allowed("random")
+        for device, _, extension in bit_values:
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_random_bits_ext_request(
             bit_values,
             series=series,
@@ -623,6 +658,7 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Register devices for monitoring."""
+        self._ensure_profile_feature_allowed("monitor")
         request = _operations.build_register_monitor_devices_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -640,6 +676,9 @@ class AsyncSlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Register devices for monitoring using Extended Device extension."""
+        self._ensure_profile_feature_allowed("monitor")
+        for device, extension in (*word_devices, *dword_devices):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_register_monitor_devices_ext_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -651,6 +690,7 @@ class AsyncSlmpClient:
 
     async def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
         """Execute one cycle of monitoring and return the results."""
+        self._ensure_profile_feature_allowed("monitor")
         request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
         resp = await self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
@@ -664,6 +704,7 @@ class AsyncSlmpClient:
         split_mixed_blocks: bool = False,
     ) -> BlockReadResult:
         """Read multiple blocks of devices."""
+        self._ensure_profile_feature_allowed("block")
         if not word_blocks and not bit_blocks:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -702,6 +743,7 @@ class AsyncSlmpClient:
         split_mixed_blocks: bool = False,
     ) -> None:
         """Write multiple blocks of devices."""
+        self._ensure_profile_feature_allowed("block")
         if not word_blocks and not bit_blocks:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -744,6 +786,7 @@ class AsyncSlmpClient:
 
     async def read_type_name(self) -> TypeNameInfo:
         """Read the PLC type name and model code."""
+        self._ensure_profile_feature_allowed("type_name")
         request = _operations.build_read_type_name_request()
         resp = await self.request(request.command, request.subcommand, request.payload)
         return _operations.decode_read_type_name_response(resp)
@@ -882,12 +925,14 @@ class AsyncSlmpClient:
 
     async def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int = 0x03E0) -> list[int]:
         """Read words from the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_words(head_address, word_length, module_no)
 
     async def cpu_buffer_write_words(
         self, head_address: int, values: Sequence[int], *, module_no: int = 0x03E0
     ) -> None:
         """Write words to the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_words(head_address, module_no, values)
 
     async def read_long_timer(
@@ -991,26 +1036,32 @@ class AsyncSlmpClient:
 
     async def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int = 0x03E0) -> bytes:
         """Read bytes from the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_bytes(head_address, byte_length, module_no)
 
     async def cpu_buffer_read_word(self, head_address: int, *, module_no: int = 0x03E0) -> int:
         """Read a single word from the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_word(head_address, module_no)
 
     async def cpu_buffer_read_dword(self, head_address: int, *, module_no: int = 0x03E0) -> int:
         """Read a double word from the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_dword(head_address, module_no)
 
     async def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int = 0x03E0) -> None:
         """Write bytes to the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_bytes(head_address, module_no, data)
 
     async def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
         """Write a single word to the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_word(head_address, module_no, value)
 
     async def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
         """Write a double word to the CPU buffer."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_dword(head_address, module_no, value)
 
     @staticmethod

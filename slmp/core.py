@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any
 
+from .capability_profiles import is_profile_read_only_device, profile_limit
 from .constants import (
     DEVICE_CODES,
     DIRECT_MEMORY_CPU_BUFFER,
@@ -1066,9 +1067,12 @@ def _check_direct_device_points(
     plc_profile: object | None = None,
 ) -> None:
     if bit_unit:
-        limit = 3584 if _uses_iqf_direct_bit_limit(plc_profile) else 7168
+        fallback = 3584 if _uses_iqf_direct_bit_limit(plc_profile) else 7168
+        limit_info = profile_limit(plc_profile, "direct_bit_read")
     else:
-        limit = 960
+        fallback = 960
+        limit_info = profile_limit(plc_profile, "direct_word_read")
+    limit = limit_info.max if limit_info is not None else fallback
     unit = "bit" if bit_unit else "word"
     if points < 1 or points > limit:
         raise ValueError(f"{name} {unit} access points out of range (1..{limit}): {points}")
@@ -1081,9 +1085,12 @@ def _check_random_read_like_counts(
     series: PLCSeries,
     name: str,
     extension: bool = False,
+    plc_profile: object | None = None,
+    limit_key: str = "random_read_word",
 ) -> None:
     total = word_points + dword_points
-    limit = 96 if extension or series == PLCSeries.IQR else 192
+    limit_info = profile_limit(plc_profile, limit_key)
+    limit = limit_info.max if limit_info is not None else 96 if extension or series == PLCSeries.IQR else 192
     if total < 1 or total > limit:
         raise ValueError(
             f"{name} total access points out of range (1..{limit}) for {series.value}: "
@@ -1097,8 +1104,10 @@ def _check_random_bit_write_count(
     series: PLCSeries,
     name: str,
     extension: bool = False,
+    plc_profile: object | None = None,
 ) -> None:
-    limit = 94 if extension or series == PLCSeries.IQR else 188
+    limit_info = profile_limit(plc_profile, "random_write_bit")
+    limit = limit_info.max if limit_info is not None else 94 if extension or series == PLCSeries.IQR else 188
     if points < 1 or points > limit:
         raise ValueError(f"{name} bit access points out of range (1..{limit}) for {series.value}: {points}")
 
@@ -1110,11 +1119,26 @@ def _check_random_write_word_counts(
     series: PLCSeries,
     name: str,
     extension: bool = False,
+    plc_profile: object | None = None,
 ) -> None:
     total = word_points + dword_points
     if total < 1:
         raise ValueError(f"{name} word/dword access points out of range: word={word_points}, dword={dword_points}")
     weighted = word_points * 12 + dword_points * 14
+    limit_info = profile_limit(plc_profile, "random_write_word")
+    if limit_info is not None:
+        if total > limit_info.max:
+            raise ValueError(
+                f"{name} word/dword access points out of range (1..{limit_info.max}): "
+                f"word={word_points}, dword={dword_points}"
+            )
+        if limit_info.weighted_max is not None and weighted > limit_info.weighted_max:
+            raise ValueError(
+                f"{name} word/dword access points out of range for {series.value}: "
+                f"word={word_points}, dword={dword_points}, weighted={weighted}, "
+                f"limit={limit_info.weighted_max}"
+            )
+        return
     limit = 960 if extension or series == PLCSeries.IQR else 1920
     if weighted > limit:
         raise ValueError(
@@ -1137,6 +1161,7 @@ def _check_block_request_limits(
     series: PLCSeries,
     name: str,
     write: bool = False,
+    plc_profile: object | None = None,
 ) -> None:
     total_blocks = len(word_blocks) + len(bit_blocks)
     block_limit = 60 if series == PLCSeries.IQR else 120
@@ -1152,14 +1177,17 @@ def _check_block_request_limits(
     if write:
         per_block_overhead = 9 if series == PLCSeries.IQR else 4
         limit_value += total_blocks * per_block_overhead
-    if limit_value > 960:
+    limit_key = "direct_word_write" if write else "direct_word_read"
+    limit_info = profile_limit(plc_profile, limit_key)
+    limit = limit_info.max if limit_info is not None else 960
+    if limit_value > limit:
         detail = f"weighted={limit_value}, total_points={total_points}" if write else f"total_points={total_points}"
-        raise ValueError(f"{name} total device points out of range (<=960): {detail}")
+        raise ValueError(f"{name} total device points out of range (<={limit}): {detail}")
 
 
 def _validate_block_route_for_profile(plc_profile: object | None, command_label: str) -> None:
     normalized = _normalize_plc_profile_hint(plc_profile)
-    if normalized in {SlmpPlcProfile.QCpu.value, SlmpPlcProfile.QnU.value, SlmpPlcProfile.QnUDV.value}:
+    if normalized in {SlmpPlcProfile.QCpu.value, SlmpPlcProfile.QnU.value}:
         raise ValueError(
             f"{command_label} is not supported for plc_profile '{normalized}'. Use direct or random device commands."
         )
@@ -1167,12 +1195,14 @@ def _validate_block_route_for_profile(plc_profile: object | None, command_label:
 
 def _normalize_items(
     values: Mapping[str | DeviceRef, Any] | Sequence[tuple[str | DeviceRef, Any]],
+    *,
+    plc_profile: object | None = None,
 ) -> list[tuple[DeviceRef, Any]]:
     if isinstance(values, Mapping):
         items = list(values.items())
     else:
         items = list(values)
-    return [(parse_device(device), value) for device, value in items]
+    return [(parse_device(device, plc_profile=plc_profile), value) for device, value in items]
 
 
 def _raise_response_error(response: SlmpResponse, *, command: int | Command, subcommand: int) -> None:
@@ -1227,8 +1257,12 @@ def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool)
         )
 
 
-def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool) -> None:
-    if ref.code in _READ_ONLY_DEVICE_CODES:
+def _is_read_only_device(ref: DeviceRef, plc_profile: object | None = None) -> bool:
+    return ref.code in _READ_ONLY_DEVICE_CODES or is_profile_read_only_device(plc_profile, ref.code)
+
+
+def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool, plc_profile: object | None = None) -> None:
+    if _is_read_only_device(ref, plc_profile):
         raise ValueError(f"{ref.code} is read-only and cannot be written.")
     if bit_unit and ref.code in _LONG_FAMILY_STATE_WRITE_DIRECT_CODES:
         raise ValueError(
@@ -1269,9 +1303,12 @@ def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Se
 def _validate_random_write_word_devices(
     word_refs: Sequence[DeviceRef],
     dword_refs: Sequence[DeviceRef] = (),
+    *,
+    plc_profile: object | None = None,
 ) -> None:
-    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in (*word_refs, *dword_refs)):
-        raise ValueError("Write Random (0x1402) does not support read-only devices such as S.")
+    read_only = next((ref for ref in (*word_refs, *dword_refs) if _is_read_only_device(ref, plc_profile)), None)
+    if read_only is not None:
+        raise ValueError(f"Write Random (0x1402) does not support read-only device {read_only.code}.")
     if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
         raise ValueError(
             "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
@@ -1279,9 +1316,14 @@ def _validate_random_write_word_devices(
         )
 
 
-def _validate_random_write_bit_devices(bit_refs: Sequence[DeviceRef]) -> None:
-    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in bit_refs):
-        raise ValueError("Write Random (0x1402) does not support read-only devices such as S.")
+def _validate_random_write_bit_devices(
+    bit_refs: Sequence[DeviceRef],
+    *,
+    plc_profile: object | None = None,
+) -> None:
+    read_only = next((ref for ref in bit_refs if _is_read_only_device(ref, plc_profile)), None)
+    if read_only is not None:
+        raise ValueError(f"Write Random (0x1402) does not support read-only device {read_only.code}.")
     if any(ref.code in _G_HG_CODES for ref in bit_refs):
         raise ValueError("Write Random (0x1402) does not support G/HG bit entries. Use U-qualified word access.")
 
@@ -1312,9 +1354,15 @@ def _validate_block_read_devices(
         )
 
 
-def _validate_block_write_devices(word_refs: Sequence[DeviceRef], bit_refs: Sequence[DeviceRef]) -> None:
-    if any(ref.code in _READ_ONLY_DEVICE_CODES for ref in (*word_refs, *bit_refs)):
-        raise ValueError("Write Block (0x1406) does not support read-only devices such as S.")
+def _validate_block_write_devices(
+    word_refs: Sequence[DeviceRef],
+    bit_refs: Sequence[DeviceRef],
+    *,
+    plc_profile: object | None = None,
+) -> None:
+    read_only = next((ref for ref in (*word_refs, *bit_refs) if _is_read_only_device(ref, plc_profile)), None)
+    if read_only is not None:
+        raise ValueError(f"Write Block (0x1406) does not support read-only device {read_only.code}.")
     if any(
         ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in (*word_refs, *bit_refs)
     ):

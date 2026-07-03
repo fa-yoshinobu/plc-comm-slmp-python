@@ -167,7 +167,7 @@ def build_write_devices_request(
     )
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_address_profile(device, address_profile)
-    _validate_direct_write_device(ref, bit_unit=bit_unit)
+    _validate_direct_write_device(ref, bit_unit=bit_unit, plc_profile=address_profile)
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
     _warn_boundary_behavior(
@@ -322,7 +322,7 @@ def build_write_devices_ext_request(
     )
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
-    _validate_direct_write_device(ref, bit_unit=bit_unit)
+    _validate_direct_write_device(ref, bit_unit=bit_unit, plc_profile=address_profile)
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
     _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
@@ -357,6 +357,8 @@ def build_register_monitor_devices_request(
         len(dword_devices),
         series=effective_series,
         name="register_monitor_devices",
+        plc_profile=address_profile,
+        limit_key="monitor_register_word",
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
@@ -396,6 +398,8 @@ def build_register_monitor_devices_ext_request(
         series=effective_series,
         name="register_monitor_devices_ext",
         extension=True,
+        plc_profile=address_profile,
+        limit_key="monitor_register_word",
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_devices), len(dword_devices)])
@@ -519,6 +523,7 @@ def build_read_random_request(
         len(dword_devices),
         series=effective_series,
         name="read_random",
+        plc_profile=address_profile,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
@@ -559,6 +564,7 @@ def build_read_random_ext_request(
         series=effective_series,
         name="read_random_ext",
         extension=True,
+        plc_profile=address_profile,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
 
@@ -604,9 +610,10 @@ def build_write_random_words_request(
     dword_values: Mapping[str | DeviceRef, int] | Sequence[tuple[str | DeviceRef, int]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
+    address_profile: object | None,
 ) -> OperationRequest:
-    word_items = _normalize_items(word_values)
-    dword_items = _normalize_items(dword_values)
+    word_items = _normalize_items(word_values, plc_profile=address_profile)
+    dword_items = _normalize_items(dword_values, plc_profile=address_profile)
     if not word_items and not dword_items:
         raise ValueError("word_values and dword_values must not both be empty")
     if len(word_items) > 0xFF or len(dword_items) > 0xFF:
@@ -618,10 +625,12 @@ def build_write_random_words_request(
         len(dword_items),
         series=effective_series,
         name="write_random_words",
+        plc_profile=address_profile,
     )
     _validate_random_write_word_devices(
         [device for device, _ in word_items],
         [device for device, _ in dword_items],
+        plc_profile=address_profile,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
     payload = bytearray([len(word_items), len(dword_items)])
@@ -655,6 +664,7 @@ def build_write_random_words_ext_request(
         series=effective_series,
         name="write_random_words_ext",
         extension=True,
+        plc_profile=address_profile,
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_values), len(dword_values)])
@@ -672,7 +682,7 @@ def build_write_random_words_ext_request(
         dword_refs.append(ref)
         payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(4, "little", signed=False)
-    _validate_random_write_word_devices(word_refs, dword_refs)
+    _validate_random_write_word_devices(word_refs, dword_refs, plc_profile=address_profile)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
@@ -681,15 +691,21 @@ def build_write_random_bits_request(
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
+    address_profile: object | None,
 ) -> OperationRequest:
-    items = _normalize_items(bit_values)
+    items = _normalize_items(bit_values, plc_profile=address_profile)
     if not items:
         raise ValueError("bit_values must not be empty")
     if len(items) > 0xFF:
         raise ValueError("bit_values must be <= 255")
     effective_series = _effective_series(series, default_series)
-    _check_random_bit_write_count(len(items), series=effective_series, name="write_random_bits")
-    _validate_random_write_bit_devices([device for device, _ in items])
+    _check_random_bit_write_count(
+        len(items),
+        series=effective_series,
+        name="write_random_bits",
+        plc_profile=address_profile,
+    )
+    _validate_random_write_bit_devices([device for device, _ in items], plc_profile=address_profile)
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=False)
     payload = bytearray([len(items)])
     for device, state in items:
@@ -719,6 +735,7 @@ def build_write_random_bits_ext_request(
         series=effective_series,
         name="write_random_bits_ext",
         extension=True,
+        plc_profile=address_profile,
     )
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
@@ -732,7 +749,7 @@ def build_write_random_bits_ext_request(
             payload += b"\x01\x00" if bool(state) else b"\x00\x00"
         else:
             payload += b"\x01" if bool(state) else b"\x00"
-    _validate_random_write_bit_devices(refs)
+    _validate_random_write_bit_devices(refs, plc_profile=address_profile)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
@@ -750,7 +767,13 @@ def build_read_block_request(
         raise ValueError("word_blocks and bit_blocks must be <= 255 each")
     effective_series = _effective_series(series, default_series)
     _validate_block_route_for_profile(address_profile, "Read Block (0x0406)")
-    _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="read_block")
+    _check_block_request_limits(
+        word_blocks,
+        bit_blocks,
+        series=effective_series,
+        name="read_block",
+        plc_profile=address_profile,
+    )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
     payload = bytearray([len(word_blocks), len(bit_blocks)])
@@ -819,7 +842,14 @@ def build_write_block_request(
         raise ValueError("word_blocks and bit_blocks must be <= 255 each")
     effective_series = _effective_series(series, default_series)
     _validate_block_route_for_profile(address_profile, "Write Block (0x1406)")
-    _check_block_request_limits(word_blocks, bit_blocks, series=effective_series, name="write_block", write=True)
+    _check_block_request_limits(
+        word_blocks,
+        bit_blocks,
+        series=effective_series,
+        name="write_block",
+        write=True,
+        plc_profile=address_profile,
+    )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
 
     word_refs: list[DeviceRef] = []
@@ -836,7 +866,7 @@ def build_write_block_request(
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "bit block size")
         bit_refs.append(ref)
-    _validate_block_write_devices(word_refs, bit_refs)
+    _validate_block_write_devices(word_refs, bit_refs, plc_profile=address_profile)
 
     # Each block's write data follows that block's own spec (SLMP reference
     # manual Write Block request format); data must not be batched after the

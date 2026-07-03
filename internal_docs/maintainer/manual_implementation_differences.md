@@ -221,6 +221,50 @@ Status:
 
 - official manual typo recorded; implementation follows verified decimal behavior
 
+## 9. Built-in Ethernet Capability Profiles
+
+Manual expectation:
+
+- SLMP manuals list commands and device routes broadly, but the built-in
+  Ethernet port of each PLC family does not necessarily support every command
+  route
+- the same command may be accepted on one PLC family and rejected on another
+  with end codes such as `C059` or `C070`
+
+Current implementation:
+
+- the library embeds the canonical capability data from
+  `plc-comm-slmp-profiles` v1.0.0
+- synchronous and asynchronous clients expose `strict_profile=True` by default
+- when a selected profile marks a high-level feature as `blocked` or
+  `unverified`, strict mode raises `SlmpProfileFeatureError` before transport
+- `strict_profile=False` intentionally allows that high-level request to be
+  sent so the PLC can answer
+- `supported`, `config-dependent`, and `delegated` features are not blocked by
+  this profile guard
+- point limits and read-only write policies are always enforced, regardless of
+  `strict_profile`
+- raw request APIs are not feature-guarded by the profile layer
+- `melsec:qcpu` and `melsec:qnu` do not have capability entries and keep their
+  legacy behavior
+
+Reason:
+
+- 2026-07-03 live verification showed built-in Ethernet behavior differs by
+  profile:
+  - `melsec:qnudv` / `melsec:lcpu` reject type-name and block routes
+  - `melsec:iq-f` rejects monitor routes and treats link-direct as unverified
+  - `melsec:iq-r` supports HG CPU-buffer access, while other profiles do not
+- sending known-bad high-level routes by default made library behavior look
+  accidental instead of profile-defined
+- keeping `strict_profile=False` preserves an explicit escape hatch for
+  configuration-dependent or future validation work
+
+Status:
+
+- settled profile policy; update only through the canonical
+  `plc-comm-slmp-profiles` capability JSON and matching fixture tests
+
 ## Use Rule
 
 If a future change introduces another manual-vs-live rule, add it here immediately with:

@@ -83,6 +83,7 @@ class SlmpConnectionOptions:
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.
         trace_hook: Optional callback for transport tracing.
+        strict_profile: Whether high-level APIs reject blocked/unverified features before transport.
         plc_series: Derived access profile fixed by ``plc_profile``.
         frame_type: Derived frame type fixed by ``plc_profile``.
         address_profile: Derived address profile used for string device parsing.
@@ -98,6 +99,7 @@ class SlmpConnectionOptions:
     monitoring_timer: int = 0x0010
     raise_on_error: bool = True
     trace_hook: Any | None = None
+    strict_profile: bool = True
     plc_series: PLCSeries = field(init=False)
     frame_type: FrameType = field(init=False)
     address_profile: str = field(init=False)
@@ -1503,6 +1505,7 @@ async def open_and_connect(
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
+        strict_profile=options.strict_profile,
     )
     await inner.connect()
     return QueuedAsyncSlmpClient(inner)
@@ -1532,6 +1535,7 @@ def open_and_connect_sync(
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
         trace_hook=options.trace_hook,
+        strict_profile=options.strict_profile,
     )
     client.connect()
     return client

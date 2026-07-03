@@ -11,6 +11,8 @@ Python library for MELSEC SLMP (Binary 3E/4E) PLC communication.
 
 The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md). Choose one exact canonical PLC profile from that table.
 
+The library embeds built-in Ethernet capability profiles from `plc-comm-slmp-profiles` v1.0.0. Sync and async clients use `strict_profile=True` by default; with a known profile, high-level APIs reject features marked `blocked` or `unverified` before transport by raising `SlmpProfileFeatureError`. Set `strict_profile=False` only when you intentionally want to send that request and let the PLC answer. Point limits and read-only write policies are always enforced.
+
 ## Supported device types
 
 The maintained device and range tables are in [Supported registers](docsrc/user/SUPPORTED_REGISTERS.md). Use that page for supported device families, address syntax, and profile-specific notes.

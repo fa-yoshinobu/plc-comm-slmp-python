@@ -37,6 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 from slmp.async_client import AsyncSlmpClient
 from slmp.constants import Command, PLCSeries
 from slmp.core import DeviceRef, ExtensionSpec, SlmpError, SlmpResponse, SlmpTarget, pack_bit_values
+from slmp.errors import SlmpProfileFeatureError
 
 # --- Mock SLMP Server for Testing ---
 
@@ -400,11 +401,27 @@ async def test_async_read_block_rejects_lcs_lcc() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu", "melsec:qnudv"])
+@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
 async def test_async_read_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
     with pytest.raises(ValueError, match=rf"Read Block \(0x0406\).*{profile}"):
         await cli.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_block_rejects_qnudv_by_profile_guard() -> None:
+    cli = FakeAsyncClient(plc_profile="melsec:qnudv")
+    with pytest.raises(SlmpProfileFeatureError, match="block"):
+        await cli.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_read_type_name_qnudv_rejects_by_profile_guard() -> None:
+    cli = FakeAsyncClient(plc_profile="melsec:qnudv")
+    with pytest.raises(SlmpProfileFeatureError, match="type_name.*C059"):
+        await cli.read_type_name()
     assert cli.last_request is None
 
 
@@ -417,7 +434,7 @@ async def test_async_write_block_rejects_lcs_lcc() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu", "melsec:qnudv"])
+@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
 async def test_async_write_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
     with pytest.raises(ValueError, match=rf"Write Block \(0x1406\).*{profile}"):

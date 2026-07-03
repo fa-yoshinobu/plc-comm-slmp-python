@@ -62,6 +62,7 @@ from .errors import (
     SlmpError,
     SlmpErrorInfo,
     SlmpPracticalPathWarning,
+    SlmpProfileFeatureError,
     SlmpUnsupportedDeviceError,
 )
 from .utils import (
@@ -142,6 +143,7 @@ __all__ = [
     "SlmpError",
     "SlmpErrorInfo",
     "SlmpPlcProfile",
+    "SlmpProfileFeatureError",
     "SlmpPracticalPathWarning",
     "SlmpUnsupportedDeviceError",
     "SlmpResponse",

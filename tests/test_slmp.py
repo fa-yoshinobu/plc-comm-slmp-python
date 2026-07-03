@@ -48,6 +48,7 @@ from slmp.core import (
     parse_extended_device,
     unpack_bit_values,
 )
+from slmp.errors import SlmpProfileFeatureError
 
 print(f"DEBUG: core file = {slmp.core.__file__}")
 
@@ -1838,9 +1839,9 @@ class TestDeviceApi(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "S is read-only"):
             client.write_devices("S0", [True], bit_unit=True, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(ValueError, "read-only devices such as S"):
+        with self.assertRaisesRegex(ValueError, "read-only device S"):
             client.write_random_bits({"S10": True}, series=PLCSeries.IQR)
-        with self.assertRaisesRegex(ValueError, "read-only devices such as S"):
+        with self.assertRaisesRegex(ValueError, "read-only device S"):
             client.write_block(word_blocks=(), bit_blocks=[("S10", [1])], series=PLCSeries.IQR)
 
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:
@@ -2843,12 +2844,85 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_block_rejects_q_profiles_before_transport(self) -> None:
         """Q-series Ethernet profiles must not send Read Block."""
-        for profile in ("melsec:qcpu", "melsec:qnu", "melsec:qnudv"):
+        for profile in ("melsec:qcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
                 with self.assertRaisesRegex(ValueError, f"Read Block \\(0x0406\\).*{profile}"):
                     client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
                 self.assertIsNone(client.last_request)
+
+    def test_read_block_rejects_qnudv_by_profile_guard_before_transport(self) -> None:
+        """QnUDV block is a canonical blocked feature and uses the profile guard error."""
+        client = FakeClient(plc_profile="melsec:qnudv")
+        with self.assertRaises(SlmpProfileFeatureError) as raised:
+            client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+        self.assertEqual(raised.exception.profile_id, "melsec:qnudv")
+        self.assertEqual(raised.exception.feature_key, "block")
+        self.assertEqual(raised.exception.state, "blocked")
+        self.assertIsNone(client.last_request)
+
+    def test_read_block_qnudv_strict_profile_false_sends_request(self) -> None:
+        """strict_profile=False intentionally bypasses feature guard for live probing."""
+        client = FakeClient(plc_profile="melsec:qnudv", strict_profile=False)
+        client.next_response_data = b"\x34\x12\x10\x00"
+        out = client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
+        self.assertEqual(out.word_blocks[0].values, [0x1234])
+        self.assertIsNotNone(client.last_request)
+
+    def test_read_type_name_qnudv_rejects_by_profile_guard(self) -> None:
+        """QnUDV Read Type Name is blocked by the canonical profile."""
+        client = FakeClient(plc_profile="melsec:qnudv")
+        with self.assertRaisesRegex(SlmpProfileFeatureError, "type_name.*C059"):
+            client.read_type_name()
+        self.assertIsNone(client.last_request)
+
+    def test_register_monitor_iqf_rejects_by_profile_guard(self) -> None:
+        """iQ-F monitor is blocked by the canonical profile."""
+        client = FakeClient(plc_profile="melsec:iq-f")
+        with self.assertRaises(SlmpProfileFeatureError) as raised:
+            client.register_monitor_devices(word_devices=["D0"])
+        self.assertEqual(raised.exception.feature_key, "monitor")
+        self.assertIsNone(client.last_request)
+
+    def test_link_direct_iqf_rejects_unverified_by_profile_guard(self) -> None:
+        """iQ-F link-direct is unverified and is guarded in strict mode."""
+        client = FakeClient(plc_profile="melsec:iq-f")
+        with self.assertRaises(SlmpProfileFeatureError) as raised:
+            client.read_devices_ext(r"J2\SW10", 1, extension=ExtensionSpec())
+        self.assertEqual(raised.exception.feature_key, "ext_link_direct")
+        self.assertEqual(raised.exception.state, "unverified")
+        self.assertIsNone(client.last_request)
+
+    def test_hg_iql_rejects_by_profile_guard(self) -> None:
+        """CPU-buffer HG is guarded outside iQ-R."""
+        client = FakeClient(plc_profile="melsec:iq-l")
+        with self.assertRaises(SlmpProfileFeatureError) as raised:
+            client.read_devices_ext(r"U3E0\HG20", 1, extension=ExtensionSpec())
+        self.assertEqual(raised.exception.feature_key, "hg_cpu_buffer")
+        self.assertIsNone(client.last_request)
+
+    def test_module_access_iqf_config_dependent_is_not_guarded(self) -> None:
+        """Config-dependent U\\G access is sent and left to PLC response."""
+        client = FakeClient(plc_profile="melsec:iq-f")
+        client.next_response_data = b"\x78\x56"
+        out = client.read_devices_ext(r"U1\G0", 1, extension=ExtensionSpec())
+        self.assertEqual(out, [0x5678])
+        self.assertIsNotNone(client.last_request)
+
+    def test_iqf_write_policy_rejects_input_device_even_when_not_strict(self) -> None:
+        """write_policy is always enforced, even with strict_profile=False."""
+        client = FakeClient(plc_profile="melsec:iq-f", strict_profile=False)
+        with self.assertRaisesRegex(ValueError, "X is read-only"):
+            client.write_devices("X0", [True], bit_unit=True)
+        self.assertIsNone(client.last_request)
+
+    def test_iql_random_write_word_uses_profile_total_limit_without_weighted_limit(self) -> None:
+        """iQ-L canonical limit is max=80 without the iQ-R weighted limit."""
+        client = FakeClient(plc_profile="melsec:iq-l")
+        client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(80)])
+        self.assertIsNotNone(client.last_request)
+        with self.assertRaisesRegex(ValueError, "1..80"):
+            client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(81)])
 
     def test_read_block_rejects_lcn_lz_and_non_block_long_current_routes(self) -> None:
         """Read Block must not use unsupported long-current word-block routes."""
@@ -2934,7 +3008,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_write_block_rejects_q_profiles_before_transport(self) -> None:
         """Q-series Ethernet profiles must not send Write Block."""
-        for profile in ("melsec:qcpu", "melsec:qnu", "melsec:qnudv"):
+        for profile in ("melsec:qcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
                 with self.assertRaisesRegex(ValueError, f"Write Block \\(0x1406\\).*{profile}"):

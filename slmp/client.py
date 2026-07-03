@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from . import _operations
+from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
 from .constants import Command, FrameType, PLCSeries
 from .core import (
     BlockReadResult,
@@ -76,6 +77,7 @@ class SlmpClient:
         raise_on_error: bool = True,
         trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
         address_profile: object | None = None,
+        strict_profile: bool = True,
         _allow_manual_profile: bool = False,
     ) -> None:
         """Initialize the SLMP client.
@@ -125,6 +127,7 @@ class SlmpClient:
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
         self.trace_hook = trace_hook
+        self.strict_profile = strict_profile
 
         self._serial = 0
         self._sock: socket.socket | None = None
@@ -144,6 +147,18 @@ class SlmpClient:
             plc_profile=self.address_profile,
         )
         return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref), effective_extension
+
+    def _ensure_profile_feature_allowed(self, feature_key: str) -> None:
+        ensure_profile_feature_allowed(self.plc_profile, feature_key, strict_profile=self.strict_profile)
+
+    def _ensure_extended_profile_feature_allowed(self, device: str | DeviceRef, extension: ExtensionSpec) -> None:
+        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
+        ensure_extended_profile_feature_allowed(
+            self.plc_profile,
+            ref,
+            effective_extension,
+            strict_profile=self.strict_profile,
+        )
 
     def connect(self) -> None:
         """Open the connection to the PLC.
@@ -340,6 +355,7 @@ class SlmpClient:
             SlmpError: If the PLC returns an error code.
             ValueError: If `points` is out of valid range (0-65535).
         """
+        self._ensure_profile_feature_allowed("direct")
         request = _operations.build_read_devices_request(
             device,
             points,
@@ -372,6 +388,7 @@ class SlmpClient:
             SlmpError: If the PLC returns an error code.
             ValueError: If `values` is empty or exceeds valid protocol limits.
         """
+        self._ensure_profile_feature_allowed("direct")
         request = _operations.build_write_devices_request(
             device,
             values,
@@ -500,6 +517,8 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> list[int] | list[bool]:
         """Extended Device extension read (subcommand 0081/0080 or 0083/0082)."""
+        self._ensure_profile_feature_allowed("direct")
+        self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_read_devices_ext_request(
             device,
             points,
@@ -522,6 +541,8 @@ class SlmpClient:
         series: PLCSeries | str | None = None,
     ) -> None:
         """Extended Device extension write (subcommand 0081/0080 or 0083/0082)."""
+        self._ensure_profile_feature_allowed("direct")
+        self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_devices_ext_request(
             device,
             values,
@@ -548,6 +569,7 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
         operation = _operations.build_read_random_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -577,6 +599,9 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
+        for device, extension in (*word_devices, *dword_devices):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         operation = _operations.build_read_random_ext_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -606,11 +631,13 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
         request = _operations.build_write_random_words_request(
             word_values=word_values,
             dword_values=dword_values,
             series=series,
             default_series=self.plc_series,
+            address_profile=self.address_profile,
         )
         self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -629,6 +656,9 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
+        for device, _, extension in (*word_values, *dword_values):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_random_words_ext_request(
             word_values=word_values,
             dword_values=dword_values,
@@ -651,10 +681,12 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
         request = _operations.build_write_random_bits_request(
             bit_values,
             series=series,
             default_series=self.plc_series,
+            address_profile=self.address_profile,
         )
         self.request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -671,6 +703,9 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("random")
+        for device, _, extension in bit_values:
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_write_random_bits_ext_request(
             bit_values,
             series=series,
@@ -694,6 +729,7 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("monitor")
         request = _operations.build_register_monitor_devices_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -718,6 +754,9 @@ class SlmpClient:
             series: Optional PLC series override.
 
         """
+        self._ensure_profile_feature_allowed("monitor")
+        for device, extension in (*word_devices, *dword_devices):
+            self._ensure_extended_profile_feature_allowed(device, extension)
         request = _operations.build_register_monitor_devices_ext_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
@@ -738,6 +777,7 @@ class SlmpClient:
             MonitorResult containing the read values.
 
         """
+        self._ensure_profile_feature_allowed("monitor")
         request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
         resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
@@ -751,6 +791,7 @@ class SlmpClient:
         split_mixed_blocks: bool = False,
     ) -> BlockReadResult:
         """Read word blocks and bit-device word blocks."""
+        self._ensure_profile_feature_allowed("block")
         if not word_blocks and not bit_blocks:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -792,6 +833,7 @@ class SlmpClient:
         split_mixed_blocks: bool = False,
     ) -> None:
         """Write word blocks and bit-device word blocks."""
+        self._ensure_profile_feature_allowed("block")
         if not word_blocks and not bit_blocks:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -1037,34 +1079,42 @@ class SlmpClient:
 
     def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int = 0x03E0) -> bytes:
         """Read CPU buffer memory by extend-unit command using the CPU start I/O number."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_bytes(head_address, byte_length, module_no)
 
     def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int = 0x03E0) -> list[int]:
         """Read CPU buffer memory words by extend-unit command using the CPU start I/O number."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_words(head_address, word_length, module_no)
 
     def cpu_buffer_read_word(self, head_address: int, *, module_no: int = 0x03E0) -> int:
         """Read one 16-bit CPU buffer word via the verified extend-unit path."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_word(head_address, module_no)
 
     def cpu_buffer_read_dword(self, head_address: int, *, module_no: int = 0x03E0) -> int:
         """Read one 32-bit CPU buffer value via the verified extend-unit path."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_dword(head_address, module_no)
 
     def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int = 0x03E0) -> None:
         """Write CPU buffer memory by extend-unit command using the CPU start I/O number."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_bytes(head_address, module_no, data)
 
     def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module_no: int = 0x03E0) -> None:
         """Write CPU buffer memory words by extend-unit command using the CPU start I/O number."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_words(head_address, module_no, values)
 
     def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
         """Write one 16-bit CPU buffer word via the verified extend-unit path."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_word(head_address, module_no, value)
 
     def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
         """Write one 32-bit CPU buffer value via the verified extend-unit path."""
+        self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_dword(head_address, module_no, value)
 
     def remote_run(self, *, force: bool = False, clear_mode: int = 0) -> None:
@@ -1399,6 +1449,7 @@ class SlmpClient:
 
     def read_type_name(self) -> TypeNameInfo:
         """Read the PLC model name and code."""
+        self._ensure_profile_feature_allowed("type_name")
         request = _operations.build_read_type_name_request()
         resp = self.request(request.command, request.subcommand, request.payload)
         return _operations.decode_read_type_name_response(resp)
