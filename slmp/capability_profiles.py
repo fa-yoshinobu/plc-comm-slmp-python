@@ -105,14 +105,14 @@ def _ql_features(source: str) -> dict[str, CapabilityFeature]:
     )
 
 
-def _iqr_limits(*, weighted_random_write: bool = True) -> dict[str, CapabilityLimit]:
+def _iqr_limits() -> dict[str, CapabilityLimit]:
     return _limits(
         ("direct_word_read", 960, "C051", "live", None, None),
         ("direct_word_write", 960, "C051", "live", None, None),
         ("direct_bit_read", 7168, "C052", "live", None, None),
         ("direct_bit_write", 7168, "C052", "live", None, None),
         ("random_read_word", 96, "C054", "live", None, None),
-        ("random_write_word", 80, "C054", "live", 960 if weighted_random_write else None, None),
+        ("random_write_word", 80, "C054", "live", 960, None),
         ("random_write_bit", 94, "C053", "live", None, None),
         ("monitor_register_word", 96, "C054", "live", None, None),
     )
@@ -125,7 +125,7 @@ def _iqf_limits() -> dict[str, CapabilityLimit]:
         ("direct_bit_read", 3584, "C052", "live", None, None),
         ("direct_bit_write", 3584, "C052", "live", None, None),
         ("random_read_word", 192, "C054", "live", None, None),
-        ("random_write_word", 160, "C054", "live", None, None),
+        ("random_write_word", 160, "C054", "live", 1920, None),
         ("random_write_bit", 188, "C053", "live", None, None),
     )
 
@@ -149,7 +149,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="4E",
         compat="iQ-R",
         features=_iqr_common_features("supported"),
-        limits=_iqr_limits(weighted_random_write=True),
+        limits=_iqr_limits(),
         write_policy=_write_policy("S"),
     ),
     "melsec:iq-l": CapabilityProfile(
@@ -157,7 +157,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="4E",
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
-        limits=_iqr_limits(weighted_random_write=False),
+        limits=_iqr_limits(),
         write_policy=_write_policy("S"),
     ),
     "melsec:mx-r": CapabilityProfile(
@@ -165,7 +165,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="4E",
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
-        limits=_iqr_limits(weighted_random_write=True),
+        limits=_iqr_limits(),
         write_policy=_write_policy("S"),
     ),
     "melsec:mx-f": CapabilityProfile(
@@ -173,7 +173,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="4E",
         compat="iQ-R",
         features=_iqr_common_features("blocked"),
-        limits=_iqr_limits(weighted_random_write=True),
+        limits=_iqr_limits(),
         write_policy=_write_policy("S"),
     ),
     "melsec:iq-f": CapabilityProfile(

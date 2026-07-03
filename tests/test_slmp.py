@@ -8,6 +8,7 @@ import warnings
 from pathlib import Path
 from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from typing import Any, NoReturn
 from unittest.mock import patch
 
@@ -1947,6 +1948,29 @@ class TestDeviceApi(unittest.TestCase):
             client.register_monitor_devices_ext(word_devices=read_devices, series=PLCSeries.QL)
         self.assertIsNone(client.last_request)
 
+    def test_extended_random_profile_limits_do_not_relax_008x_limits(self) -> None:
+        """Profile-specific 192/160/188 limits must not relax 008x extended limits."""
+        client = FakeClient(plc_profile="melsec:iq-f")
+
+        read_devices = [(f"D{index}", ExtensionSpec()) for index in range(97)]
+        with self.assertRaisesRegex(ValueError, r"1..96"):
+            client.read_random_ext(word_devices=read_devices)
+
+        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(81)]
+        with self.assertRaisesRegex(ValueError, r"limit=960"):
+            client.write_random_words_ext(word_values=word_values)
+
+        bit_values = [(f"M{index}", True, ExtensionSpec()) for index in range(95)]
+        with self.assertRaisesRegex(ValueError, r"1..94"):
+            client.write_random_bits_ext(bit_values=bit_values)
+
+        monitor_client = FakeClient(plc_profile="melsec:lcpu")
+        with self.assertRaisesRegex(ValueError, r"1..96"):
+            monitor_client.register_monitor_devices_ext(word_devices=read_devices)
+
+        self.assertIsNone(client.last_request)
+        self.assertIsNone(monitor_client.last_request)
+
     def test_write_random_words_ext_rejects_long_current_word_entries_before_transport(self) -> None:
         """Extended random word writes must reject long current values as word entries."""
         client = FakeClient()
@@ -2035,6 +2059,37 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"1\.\.3584"):
             iqf_client.write_devices("M0", [False] * 3585, bit_unit=True, series=PLCSeries.QL)
         self.assertIsNone(iqf_client.last_request)
+
+    def test_direct_write_limits_use_write_profile_keys(self) -> None:
+        limits = {
+            "direct_word_read": 2,
+            "direct_word_write": 3,
+            "direct_bit_read": 4,
+            "direct_bit_write": 5,
+        }
+
+        def fake_profile_limit(_profile: object, key: str) -> SimpleNamespace:
+            return SimpleNamespace(max=limits[key])
+
+        client = FakeClient(plc_profile="melsec:iq-r")
+        with patch.object(slmp.core, "profile_limit", side_effect=fake_profile_limit):
+            client.next_response_data = b"\x00\x00" * 2
+            self.assertEqual(client.read_devices("D0", 2, bit_unit=False), [0, 0])
+            with self.assertRaisesRegex(ValueError, r"1\.\.2"):
+                client.read_devices("D0", 3, bit_unit=False)
+
+            client.write_devices("D0", [1, 2, 3], bit_unit=False)
+            with self.assertRaisesRegex(ValueError, r"1\.\.3"):
+                client.write_devices("D0", [1, 2, 3, 4], bit_unit=False)
+
+            client.next_response_data = b"\x00\x00"
+            self.assertEqual(client.read_devices("M0", 4, bit_unit=True), [False, False, False, False])
+            with self.assertRaisesRegex(ValueError, r"1\.\.4"):
+                client.read_devices("M0", 5, bit_unit=True)
+
+            client.write_devices("M0", [False] * 5, bit_unit=True)
+            with self.assertRaisesRegex(ValueError, r"1\.\.5"):
+                client.write_devices("M0", [False] * 6, bit_unit=True)
 
     def test_direct_access_does_not_use_device_range_upper_bounds_as_send_guard(self) -> None:
         client = FakeClient(plc_profile="melsec:iq-r")
@@ -2948,13 +3003,22 @@ class TestDeviceApi(unittest.TestCase):
             client.write_devices("S0", [True], bit_unit=True)
         self.assertIsNone(client.last_request)
 
-    def test_iql_random_write_word_uses_profile_total_limit_without_weighted_limit(self) -> None:
-        """iQ-L canonical limit is max=80 without the iQ-R weighted limit."""
+    def test_iql_random_write_word_uses_profile_total_and_weighted_limits(self) -> None:
+        """iQ-L canonical random word writes enforce both count and weighted limits."""
         client = FakeClient(plc_profile="melsec:iq-l")
-        client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(80)])
+        client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(80)])
         self.assertIsNotNone(client.last_request)
         with self.assertRaisesRegex(ValueError, "1..80"):
-            client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(81)])
+            client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(81)])
+        with self.assertRaisesRegex(ValueError, "limit=960"):
+            client.write_random_words(
+                word_values=[(f"D{8100 + i}", 0) for i in range(40)],
+                dword_values=[(f"D{8200 + i * 2}", 0) for i in range(40)],
+            )
+
+        iqf_client = FakeClient(plc_profile="melsec:iq-f")
+        with self.assertRaisesRegex(ValueError, "limit=1920"):
+            iqf_client.write_random_words(dword_values=[(f"D{9000 + i * 2}", 0) for i in range(138)])
 
     def test_read_block_rejects_lcn_lz_and_non_block_long_current_routes(self) -> None:
         """Read Block must not use unsupported long-current word-block routes."""

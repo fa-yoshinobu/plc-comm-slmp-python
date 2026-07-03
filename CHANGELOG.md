@@ -28,7 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Added built-in SLMP capability profiles from `plc-comm-slmp-profiles` v1.0.0 and `strict_profile=True` defaults for sync and async clients so high-level APIs reject profile `blocked` / `unverified` features before transport.
 - Library: Added `SlmpProfileFeatureError` for profile guard failures with profile ID, feature key, state, evidence, and the `strict_profile=False` bypass hint.
 - Library: Moved direct/random point limits to the capability table for all canonical built-in Ethernet profiles, including `melsec:qcpu` and `melsec:qnu`.
+- Library: Kept the 008x extended random/monitor limits at 96 points, weighted 960, and 94 bits even when the selected profile allows larger plain random/monitor counts.
+- Library: Added canonical weighted random-word write limits for `melsec:iq-l` and `melsec:iq-f`, so mixed word/dword random writes are guarded before transport.
 - Library: Enforced capability write policies independently of `strict_profile`; `S` is read-only on iQ-R/iQ-L/MX/Q/L profiles and read-write on iQ-F.
+- Library: Used direct write capability-limit keys for direct write requests instead of reusing direct read keys.
 - Library: Rejected profile-unsupported device families before transport while leaving device address upper-bound checks to application/live-probe code.
 - Library: Moved Q/L profile Read Block (`0x0406`) and Write Block (`0x1406`) rejection to the capability profile guard so `strict_profile=False` can intentionally send the request and let the PLC answer.
 - Library: Batched named plain-bit reads through random word-read only for `SM/X/Y/M/L/F/V/B/SB`; `TS/TC/STS/STC/CS/CC/DX/DY` stay on direct bit reads.
@@ -39,8 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Cleaned up maintainer notes, obsolete probe records, and root TODO handling.
 - Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Release: Excluded maintainer-only files, scripts, and tests from generated source archives via `.gitattributes`.
+- Tooling: Changed the canonical profile update script default ref from `main` to fixed tag `v1.0.0`; `SLMP_PROFILES_REF` can still override it.
 - Tests: Added guard coverage for `S` read-only writes and `G/HG` random bit write rejection.
 - Tests: Added canonical capability fixture comparison plus sync and async strict-profile coverage for qnudv block/type-name guards, qnudv `strict_profile=False`, iQ-F link-direct, iQ-F `U\G`, iQ-L HG, profile limits, and profile write policies.
+- Tests: Added regression coverage that profile-specific plain random/monitor limits do not relax 008x extended command limits.
+- Tests: Added regression coverage that direct writes use direct write capability-limit keys.
 - Tests: Updated coverage so `melsec:qcpu` and `melsec:qnu` reject block read/write through the capability profile guard.
 - Tests: Added named-read planning coverage for random-word-safe plain bit families versus the direct-bit-only families seen on R-series hardware.
 - Tooling: Added a release check that requires `pyproject.toml` and `slmp.__version__` to match.
