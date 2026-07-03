@@ -2024,6 +2024,15 @@ class TestDeviceApi(unittest.TestCase):
             iqf_client.write_devices("M0", [False] * 3585, bit_unit=True, series=PLCSeries.QL)
         self.assertIsNone(iqf_client.last_request)
 
+    def test_direct_access_does_not_use_device_range_upper_bounds_as_send_guard(self) -> None:
+        client = FakeClient(plc_profile="melsec:iq-r")
+        client.next_response_data = b"\x34\x12"
+
+        self.assertEqual(client.read_devices("D999999", 1, series=PLCSeries.IQR), [0x1234])
+        client.write_devices("D999999", [0x5678], series=PLCSeries.IQR)
+
+        self.assertEqual(len(client.requests), 2)
+
     def test_manual_point_limits_for_random_write(self) -> None:
         client = FakeClient()
         client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(80)], series=PLCSeries.IQR)
