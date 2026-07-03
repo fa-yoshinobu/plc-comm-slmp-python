@@ -183,6 +183,7 @@ asyncio.run(main())
 ## Device range catalog
 
 `read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model.
+The catalog is for diagnostics and application-layer validation. Normal read/write helpers do not use it to reject addresses by configured upper bound before sending a request.
 
 ```python
 import asyncio
