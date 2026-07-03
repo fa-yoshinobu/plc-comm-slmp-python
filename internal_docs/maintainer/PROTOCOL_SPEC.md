@@ -272,16 +272,17 @@ Binary payload builder:
 
 For `G/HG`, the practical meaning is that the access is unit/module-scoped, not a standalone normal device address.
 - `G` corresponds to a module access device (`U\\G` style, for example `U4\\G0` in engineering-tool notation).
-- `HG` is CPU-buffer related and is only meaningful in the `U3E0\\HG`, `U3E1\\HG`,
-  `U3E2\\HG`, and `U3E3\\HG` forms in the current iQ-R multi-CPU context. Do not
-  treat lower unit forms such as `U1\\HG` as valid `HG` targets.
+- `HG` is CPU-buffer related and is iQ-R-only. It is only meaningful in the
+  `U3E0\\HG`, `U3E1\\HG`, `U3E2\\HG`, and `U3E3\\HG` forms in the current
+  iQ-R multi-CPU context. Do not treat lower unit forms such as `U1\\HG`, or
+  non-iQ-R profiles, as valid `HG` targets.
 - In both cases, plain `G0` / `HG0` without surrounding `U...` context is not a valid access target for this library.
 - The `Uxxxx` qualifier is syntax only at the protocol builder level. The repository can encode it as an protocol extension specification, but the actual meaning depends on the PLC configuration and on whether the corresponding unit exists.
 - In the currently verified iQ-R path, that unit context is provided by `0601/1601` with `module_no=0x03E0`.
-- On the user's current multi-CPU environment, the practical Extended Specification qualifiers for `G/HG` are `U3E0`, `U3E1`, `U3E2`, and `U3E3`, representing CPU memories for CPU No.1 through CPU No.4 respectively.
+- On the user's current iQ-R multi-CPU environment, the practical Extended Specification qualifiers for `G/HG` are `U3E0`, `U3E1`, `U3E2`, and `U3E3`, representing CPU memories for CPU No.1 through CPU No.4 respectively. This HG CPU-buffer interpretation is iQ-R-only.
 - Lower `U**` values must not be read as CPU-memory selectors by default. In the same workspace context, lower `U**` values are ordinary I/O unit addresses for `G`, while `HG` is limited to `U3E0..U3E3`.
 - Therefore, `U1\\G*`, `U4\\G*`, `U01\\G*`, and `U3E0\\G*` must not be generalized from one another unless a capture or live verification proves that the target interprets them in the same way.
-- For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository special-cases qualified `G/HG` requests to match the captured reordered payload layout. That layout has direct capture evidence for `U3E0\G10`, `U3E0\HG20`, and `U01\G22`. The iQ-R `U3E0\G10` / `U3E0\HG20` path was revalidated on the current R120PCPU target for single-word read-write-readback with restore.
+- For Extended Specification, the same idea appears as module-access / CPU-buffer access fields. The current repository special-cases qualified `G/HG` requests to match the captured reordered payload layout. That layout has direct capture evidence for `U3E0\G10`, iQ-R-only `U3E0\HG20`, and `U01\G22`. The iQ-R `U3E0\G10` / `U3E0\HG20` path was revalidated on the current R120PCPU target for single-word read-write-readback with restore.
 
 ## 5.3 Typed Extension APIs
 
@@ -291,7 +292,7 @@ For `G/HG`, the practical meaning is that the access is unit/module-scoped, not 
 4. `register_monitor_devices_ext`
 5. `make_extension_spec(...)`
 
-For convenience, the typed `_ext` APIs also accept qualified device strings such as `U3E0\G10`, `U3E0\HG20`, and `U01\G22`.
+For convenience, the typed `_ext` APIs also accept qualified device strings such as `U3E0\G10`, iQ-R-only `U3E0\HG20`, and `U01\G22`.
 
 - `Uxxxx\...` overrides `extension_specification` with hex `xxxx`
 - the device part after `\` is still parsed by the normal device parser

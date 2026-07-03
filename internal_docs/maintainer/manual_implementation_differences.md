@@ -40,14 +40,14 @@ Status:
 Manual expectation:
 
 - `G` is unit-qualified module access
-- `HG` is CPU-buffer related
+- `HG` is CPU-buffer related and iQ-R-only
 - Extended Specification access requires an explicit `U...` context such as
-  `U3E0\G10` or `U3E0\HG20`
+  `U3E0\G10`; `U3E0\HG20` is valid only for the iQ-R CPU-buffer path
 
 Current implementation:
 
 - standalone typed device APIs intentionally reject `G` and `HG`
-- Extended Specification `_ext` APIs now build a capture-aligned `G/HG` payload that matches the recorded `U3E0\G10`, `U3E0\HG20`, and `U01\G22` sessions
+- Extended Specification `_ext` APIs now build a capture-aligned `G/HG` payload that matches the recorded `U3E0\G10`, iQ-R-only `U3E0\HG20`, and `U01\G22` sessions
 - the current R120PCPU target passed live single-word `U3E0\G10` / `U3E0\HG20` read-write-readback with restore
 - the practical supported path is:
   - `cpu_buffer_read_*`
