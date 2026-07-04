@@ -1,4 +1,6 @@
-.gitattributes export-ignore
+*.py text eol=lf
+tests/fixtures/*.json text eol=lf
+.gitattributes text eol=lf export-ignore
 .github export-ignore
 .github/** export-ignore
 .gitignore export-ignore

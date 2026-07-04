@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
