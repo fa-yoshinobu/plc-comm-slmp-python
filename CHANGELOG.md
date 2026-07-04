@@ -41,7 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Removed the per-library Error Codes page; shared SLMP end-code guidance now lives in the PLC Setup Guide.
 - Docs: Added a Usage Guide example showing how to read `SlmpError.end_code` and structured `error_info`.
 - Docs: Slimmed Gotchas to library-specific items and moved shared setup/end-code symptoms to the PLC Setup Guide.
+- Docs: Standardized the Gotchas page structure with KV Host Link so library-specific caveats have the same destination across protocols.
 - Docs: Merged bit-device packed access and extended-device access into the Usage Guide and removed the standalone user pages.
+- Docs: Removed the manual page-navigation block from Getting Started and rely on site navigation instead.
+- Docs: Moved shared SLMP gotcha items to the common troubleshooting page and kept Gotchas focused on Python-specific behavior.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
 - Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
 - Docs: Cleaned up maintainer notes, obsolete probe records, and root TODO handling.

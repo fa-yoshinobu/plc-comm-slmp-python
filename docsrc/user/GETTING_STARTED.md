@@ -111,10 +111,3 @@ D100=42
 | Reads work but writes fail | Confirm RUN-time write permission in the PLC setup guide and the selected profile write policy. |
 | The connection uses the wrong frame | Do not set `frame_type` manually. It is derived from `plc_profile`. |
 | The first read fails on an advanced family | Start with `D` word reads. Do not start with `G`, `HG`, `LTN`, or `LCN`. |
-
-## Next pages
-
-| Page | Link |
-| --- | --- |
-| Usage guide | [USAGE_GUIDE.md](USAGE_GUIDE.md) |
-| SLMP profile reference | [https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/) |
