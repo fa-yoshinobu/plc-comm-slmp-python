@@ -18,7 +18,7 @@ def _iter_source_files() -> list[Path]:
     return sorted(PACKAGE_ROOT.glob("*.py"))
 
 
-def _load_ast(path: Path) -> ast.AST:
+def _load_ast(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
