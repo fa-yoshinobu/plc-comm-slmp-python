@@ -45,6 +45,26 @@ async with await open_and_connect(options) as client:
 asyncio.run(main())
 ```
 
+## Remote password
+
+Remote password lock/unlock commands are available through the async and sync clients.
+The Python high-level connection does not automatically unlock or lock a remote password.
+If your PLC route uses remote password protection, unlock after opening the connection
+and lock before closing it.
+
+```python
+async with await open_and_connect(options) as client:
+    await client.remote_password_unlock("secret")
+    try:
+        value = await read_typed(client, "D100", "U")
+    finally:
+        await client.remote_password_lock("secret")
+```
+
+For `C200`-series password end codes, see the shared
+[SLMP Troubleshooting & End Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/troubleshooting-end-codes/)
+page.
+
 ## Routing / target station
 
 Most applications keep the default target, which means the directly connected

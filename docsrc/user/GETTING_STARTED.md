@@ -95,16 +95,20 @@ D100=42
 ## Confirm success
 
 1. Confirm your PLC accepts a TCP connection to `192.168.250.100:1025`.
-2. Confirm `plc_profile` matches your PLC family.
-3. Confirm the first read uses a simple word register such as `D100`.
-4. Confirm writes use only a known-safe test address and restore the original value.
-5. Confirm the value read back matches the test value you wrote.
+2. Confirm the PLC-side communication data code is Binary and the port/open setting matches your transport; see the [MELSEC SLMP PLC Setup Guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/).
+3. Confirm PLC-side RUN-time write permission before running a write example where the PLC exposes that setting.
+4. Confirm `plc_profile` matches your PLC family.
+5. Confirm the first read uses a simple word register such as `D100`.
+6. Confirm writes use only a known-safe test address and restore the original value.
+7. Confirm the value read back matches the test value you wrote.
 
 ## If it does not work
 
 | Symptom | Check |
 | --- | --- |
 | The PLC returns an end code error | `plc_profile` must match the actual PLC hardware. A wrong profile can cause end code errors. |
+| Connection opens but all requests fail | Confirm Binary communication data code in the PLC setup guide. |
+| Reads work but writes fail | Confirm RUN-time write permission in the PLC setup guide and the selected profile write policy. |
 | The connection uses the wrong frame | Do not set `frame_type` manually. It is derived from `plc_profile`. |
 | The first read fails on an advanced family | Start with `D` word reads. Do not start with `G`, `HG`, `LTN`, or `LCN`. |
 
