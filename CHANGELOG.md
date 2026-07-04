@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Exposed structured PLC error information on `SlmpResponse.error_info` and `SlmpError.error_info` when a non-zero end-code response carries the 9-byte error information block.
 - Library: Enforced documented point limits before transport: iQ-F direct bit access is limited to 3584 points, and 008x extended random/monitor routes use the 96-point / weighted-960 / 94-bit limits.
 - Library: Connected UDP sockets before sending and receiving so datagrams from unrelated sources are not accepted as PLC responses.
+- Tooling: Changed the canonical profile update script default ref from `v1.0.0` to `v1.1.0`.
 - Library: Added SLMP `S` step relay device-code support for reads and profile-specific write policy enforcement.
 - Library: Rejected `G/HG` random bit writes; callers should use U-qualified word access for buffer-memory devices.
 - Library: Aligned long counter state helper metadata so `LCS/LCC` remain long-helper entries while using their direct bit-read route internally.

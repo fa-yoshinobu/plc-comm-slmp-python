@@ -1,6 +1,6 @@
 """Built-in SLMP capability profiles.
 
-Source: plc-comm-slmp-profiles v1.0.0
+Source: plc-comm-slmp-profiles v1.1.0
 capability/slmp_builtin_ethernet_profiles.json
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.0.0 capability/slmp_builtin_ethernet_profiles.json"
+CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.1.0 capability/slmp_builtin_ethernet_profiles.json"
 
 
 @dataclass(frozen=True)
@@ -115,6 +115,10 @@ def _iqr_limits() -> dict[str, CapabilityLimit]:
         ("random_write_word", 80, "C054", "live", 960, None),
         ("random_write_bit", 94, "C053", "live", None, None),
         ("monitor_register_word", 96, "C054", "live", None, None),
+        ("random_read_word_ext", 96, "C054", "live", None, None),
+        ("random_write_word_ext", 80, "C054", "live", 960, None),
+        ("random_write_bit_ext", 94, "C053", "live", None, None),
+        ("monitor_register_word_ext", 96, "C054", "live", None, None),
     )
 
 
@@ -127,6 +131,9 @@ def _iqf_limits() -> dict[str, CapabilityLimit]:
         ("random_read_word", 192, "C054", "live", None, None),
         ("random_write_word", 160, "C054", "live", 1920, None),
         ("random_write_bit", 188, "C053", "live", None, None),
+        ("random_read_word_ext", 96, "C054", "live", None, None),
+        ("random_write_word_ext", 80, "C054", "live", 960, None),
+        ("random_write_bit_ext", 94, "C053", "live", None, None),
     )
 
 
@@ -140,6 +147,10 @@ def _ql_limits() -> dict[str, CapabilityLimit]:
         ("random_write_word", 160, "C054", "live", 1920, None),
         ("random_write_bit", 188, "C053", "live", None, None),
         ("monitor_register_word", 192, "C054", "live", None, None),
+        ("random_read_word_ext", 96, "C054", "live", None, None),
+        ("random_write_word_ext", 80, "C054", "live", 960, None),
+        ("random_write_bit_ext", 94, "C053", "live", None, None),
+        ("monitor_register_word_ext", 96, "C054", "live", None, None),
     )
 
 

@@ -1093,11 +1093,10 @@ def _check_random_read_like_counts(
     limit_key: str = "random_read_word",
 ) -> None:
     total = word_points + dword_points
-    limit_info = profile_limit(plc_profile, limit_key)
+    effective_limit_key = f"{limit_key}_ext" if extension else limit_key
+    limit_info = profile_limit(plc_profile, effective_limit_key)
     fallback_limit = 96 if extension or series == PLCSeries.IQR else 192
-    limit = min(limit_info.max, fallback_limit) if limit_info is not None and extension else (
-        limit_info.max if limit_info is not None else fallback_limit
-    )
+    limit = limit_info.max if limit_info is not None else fallback_limit
     if total < 1 or total > limit:
         raise ValueError(
             f"{name} total access points out of range (1..{limit}) for {series.value}: "
@@ -1113,11 +1112,9 @@ def _check_random_bit_write_count(
     extension: bool = False,
     plc_profile: object | None = None,
 ) -> None:
-    limit_info = profile_limit(plc_profile, "random_write_bit")
+    limit_info = profile_limit(plc_profile, "random_write_bit_ext" if extension else "random_write_bit")
     fallback_limit = 94 if extension or series == PLCSeries.IQR else 188
-    limit = min(limit_info.max, fallback_limit) if limit_info is not None and extension else (
-        limit_info.max if limit_info is not None else fallback_limit
-    )
+    limit = limit_info.max if limit_info is not None else fallback_limit
     if points < 1 or points > limit:
         raise ValueError(f"{name} bit access points out of range (1..{limit}) for {series.value}: {points}")
 
@@ -1135,22 +1132,15 @@ def _check_random_write_word_counts(
     if total < 1:
         raise ValueError(f"{name} word/dword access points out of range: word={word_points}, dword={dword_points}")
     weighted = word_points * 12 + dword_points * 14
-    limit_info = profile_limit(plc_profile, "random_write_word")
+    limit_info = profile_limit(plc_profile, "random_write_word_ext" if extension else "random_write_word")
     if limit_info is not None:
-        count_limit = min(limit_info.max, 96) if extension else limit_info.max
+        count_limit = limit_info.max
         if total > count_limit:
             raise ValueError(
                 f"{name} word/dword access points out of range (1..{count_limit}): "
                 f"word={word_points}, dword={dword_points}"
             )
-        fallback_weighted_limit = 960 if extension or series == PLCSeries.IQR else 1920
         weighted_limit = limit_info.weighted_max
-        if extension:
-            weighted_limit = (
-                min(limit_info.weighted_max, fallback_weighted_limit)
-                if limit_info.weighted_max is not None
-                else fallback_weighted_limit
-            )
         if weighted_limit is not None and weighted > weighted_limit:
             raise ValueError(
                 f"{name} word/dword access points out of range for {series.value}: "

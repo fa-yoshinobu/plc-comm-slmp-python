@@ -1956,9 +1956,10 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"1..96"):
             client.read_random_ext(word_devices=read_devices)
 
-        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(81)]
+        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(40)]
+        dword_values = [(f"D{200 + (index * 2)}", index, ExtensionSpec()) for index in range(40)]
         with self.assertRaisesRegex(ValueError, r"limit=960"):
-            client.write_random_words_ext(word_values=word_values)
+            client.write_random_words_ext(word_values=word_values, dword_values=dword_values)
 
         bit_values = [(f"M{index}", True, ExtensionSpec()) for index in range(95)]
         with self.assertRaisesRegex(ValueError, r"1..94"):
