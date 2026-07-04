@@ -12,13 +12,14 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from slmp import SlmpConnectionOptions, open_and_connect, read_typed
+from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
 RETRYABLE_ERRORS = (OSError, ConnectionError, TimeoutError, EOFError, asyncio.TimeoutError)
@@ -126,7 +127,7 @@ async def poll_forever(args: argparse.Namespace) -> None:
                 backoff = args.initial_backoff
 
             try:
-                value = await read_typed(client, args.device, args.dtype)
+                value = await read_typed(cast(AsyncSlmpClient, client), args.device, args.dtype)
                 log_state("read", f"{args.device}:{args.dtype}={value!r}")
                 await asyncio.sleep(args.interval)
             except Exception as exc:
