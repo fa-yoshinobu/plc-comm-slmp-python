@@ -30,9 +30,5 @@ nav:
   - User Docs:
       - Getting Started: user/GETTING_STARTED.md
       - Usage Guide: user/USAGE_GUIDE.md
-      - Supported PLC Registers: user/SUPPORTED_REGISTERS.md
       - PLC Profiles: user/PROFILES.md
       - Gotchas: user/GOTCHAS.md
-      - Error Codes: user/ERROR_CODES.md
-      - Bit Device Access: user/BIT_DEVICE_ACCESS_TABLE.md
-      - Extended Device Access: user/EXTENDED_DEVICE_ACCESS.md

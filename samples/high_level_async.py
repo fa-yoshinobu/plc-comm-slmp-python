@@ -345,6 +345,14 @@ def main() -> None:
         asyncio.run(run(args))
     except SlmpError as e:
         print(f"SLMP error: {e}", file=sys.stderr)
+        if e.end_code is not None:
+            print(f"SLMP end_code=0x{e.end_code:04X}", file=sys.stderr)
+        if e.error_info is not None:
+            print(
+                f"SLMP error_info command=0x{e.error_info.command:04X} "
+                f"subcommand=0x{e.error_info.subcommand:04X}",
+                file=sys.stderr,
+            )
         sys.exit(1)
     except OSError as e:
         print(f"Connection error: {e}", file=sys.stderr)

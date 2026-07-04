@@ -17,6 +17,8 @@
 | `read_dwords_chunked` | `async def read_dwords_chunked(client, device, count, max_dwords_per_request=480) -> list[int]` | Read a large 32-bit range with explicit chunking. |
 | `write_bit_in_word` | `async def write_bit_in_word(client, device, bit_index, value) -> None` | Set or clear one bit in a word device. |
 | `poll` | `async def poll(client, addresses, interval)` | Yield repeated mixed snapshots. |
+| `SlmpClient.read_devices_ext` | `read_devices_ext(device, count, extension=None, bit_unit=False)` | Read routed devices such as `Un\G...` and `Jn\...`. |
+| `SlmpClient.write_devices_ext` | `write_devices_ext(device, values, extension=None, bit_unit=False)` | Write routed devices such as `Un\G...` and `Jn\...`. |
 
 The synchronous helpers use the same names with `_sync`.
 
@@ -62,7 +64,7 @@ async with await open_and_connect(options) as client:
 ```
 
 For `C200`-series password end codes, see the shared
-[SLMP Troubleshooting & End Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/troubleshooting-end-codes/)
+[SLMP Troubleshooting & End Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/troubleshooting-end-codes/)
 page.
 
 ## Routing / target station
@@ -98,6 +100,82 @@ target = SlmpTarget(module_io="MULTIPLE_CPU_2")
 ```
 
 Use the default target unless the PLC routing setup gives you specific values.
+
+## Extended device access
+
+Use the extended-device APIs for routed device forms such as `Un\G...`,
+`Un\HG...`, and `Jn\...`. Normal typed and named helpers cover ordinary
+device families such as `D`, `M`, `X`, and `Y`.
+
+`SlmpTarget` controls the SLMP destination header. It does not replace routed
+device notation: `Un\G...` and `Jn\...` still need their own address syntax.
+
+### Module buffer access
+
+Use `read_devices_ext()` and `write_devices_ext()` for intelligent module
+buffer memory.
+
+| Notation | Description | Example |
+| --- | --- | --- |
+| `Un\G` | Buffer memory word access | `U3\G100` |
+| `Un\HG` | Extended buffer memory word access | `U3E0\HG1000` |
+
+```python
+from slmp import ExtensionSpec, SlmpClient
+
+
+with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
+    values = client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
+    client.write_devices_ext("U3\\G100", [1, 2, 3, 4], extension=ExtensionSpec())
+    print(values)
+```
+
+`Un` is the module number in hexadecimal text, for example `U3` or `U3E0`.
+
+### Link direct device access
+
+Use link direct device notation for devices on a CC-Link IE network routed
+through the connected PLC.
+
+| Access type | Example |
+| --- | --- |
+| Word read/write | `J2\SW10`, `J1\W13` |
+| Bit read/write | `J1\X10`, `J1\SB10` |
+
+```python
+from slmp import ExtensionSpec, SlmpClient
+
+
+with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
+    value = client.read_devices_ext("J2\\SW10", 1, extension=ExtensionSpec())
+    bits = client.read_devices_ext("J1\\X10", 16, extension=ExtensionSpec(), bit_unit=True)
+    client.write_devices_ext("J1\\SW14", [2], extension=ExtensionSpec())
+    client.write_devices_ext("J1\\X11", [True], extension=ExtensionSpec(), bit_unit=True)
+    print(value, bits)
+```
+
+The available link direct device families depend on the PLC route and link
+module configuration.
+
+## SLMP response end codes
+
+When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
+Read `end_code` for the PLC response code and `error_info` when the PLC returned the structured error-information block.
+
+```python
+from slmp import SlmpError
+
+
+try:
+    value = await read_typed(client, "D100", "U")
+    print(f"D100={value}")
+except SlmpError as exc:
+    if exc.end_code is not None:
+        print(f"SLMP end_code=0x{exc.end_code:04X}")
+    if exc.error_info is not None:
+        print(f"command=0x{exc.error_info.command:04X}")
+        print(f"subcommand=0x{exc.error_info.subcommand:04X}")
+```
 
 ## Read a single value
 
@@ -189,6 +267,48 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Packed bit-device word access
+
+Bit-device families such as `M`, `B`, `X`, and `Y` can be read or written as
+packed 16-bit word values. The device code stays the same; the command
+subcommand and interpretation unit decide whether the result is one bit per
+point or one packed 16-bit value.
+
+If `M1000=1`, `M1001=0`, `M1002=1`, and `M1003=0`, the packed word beginning
+at `M1000` is `0x0005`.
+
+| Family | Bit read example | Packed word read example | Address number format |
+| --- | --- | --- | --- |
+| `M` | `read_named(client, ["M1000:BIT"])` | `read_typed(client, "M1000", "U")` | decimal |
+| `B` | `read_named(client, ["B20:BIT"])` | `read_typed(client, "B20", "U")` | hexadecimal |
+| `X` | `read_named(client, ["X20:BIT"])` | `read_typed(client, "X20", "U")` | profile-dependent |
+| `Y` | `read_named(client, ["Y20:BIT"])` | `read_typed(client, "Y20", "U")` | profile-dependent |
+
+For `X` and `Y`, set `plc_profile` explicitly. `melsec:iq-f` uses octal text
+for `X` and `Y`; the other supported profiles use hexadecimal text.
+
+The same packed-unit rule applies when writing one word value to a bit-device
+group:
+
+```python
+import asyncio
+
+from slmp import SlmpConnectionOptions, open_and_connect, write_typed
+
+
+async def main() -> None:
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    async with await open_and_connect(options) as client:
+        await write_typed(client, "M1000", "U", 0x0005)
+
+
+asyncio.run(main())
+```
+
+This writes the packed pattern for `M1000..M1015`. Use bit access when you
+want individual boolean states; use packed word access when you want one
+16-bit snapshot from a bit-device group.
+
 ## Bit in word
 
 Use `write_bit_in_word` when a PLC stores flags inside a word register. Use `.n` notation when reading or writing mixed named values.
@@ -238,6 +358,7 @@ asyncio.run(main())
 
 `read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model.
 The catalog is for diagnostics and application-layer validation. Normal read/write helpers do not use it to reject addresses by configured upper bound before sending a request.
+The source rules for this catalog are maintained in the shared [SLMP device ranges](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/device-ranges/) reference.
 
 ```python
 import asyncio

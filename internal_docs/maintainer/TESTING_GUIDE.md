@@ -418,7 +418,7 @@ Common examples in this project:
 
 Use:
 
-- `docsrc/user/ERROR_CODES.md` for the quick table
+- The shared PLC Setup SLMP troubleshooting and end-code page for the quick table
 - [TODO](../../TODO.md) for current active items
 - [Communication Test Record](communication_test_record.md) for chronology
 

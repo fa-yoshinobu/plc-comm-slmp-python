@@ -1,4 +1,4 @@
-# Profiles
+# PLC profiles
 
 Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
 
