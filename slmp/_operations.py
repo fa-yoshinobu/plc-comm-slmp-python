@@ -63,6 +63,8 @@ from .errors import SlmpError
 
 @dataclass(frozen=True)
 class OperationRequest:
+    """Encoded SLMP operation request ready for transport."""
+
     command: Command
     subcommand: int
     payload: bytes
@@ -70,6 +72,8 @@ class OperationRequest:
 
 @dataclass(frozen=True)
 class RandomReadOperation:
+    """Random-read request plus the refs needed to decode the response."""
+
     request: OperationRequest
     word_refs: tuple[DeviceRef, ...]
     dword_refs: tuple[DeviceRef, ...]
@@ -77,6 +81,8 @@ class RandomReadOperation:
 
 @dataclass(frozen=True)
 class BlockReadOperation:
+    """Block-read request plus block metadata needed to decode the response."""
+
     request: OperationRequest
     word_blocks: tuple[tuple[DeviceRef, int], ...]
     bit_blocks: tuple[tuple[DeviceRef, int], ...]
@@ -109,6 +115,8 @@ def build_read_devices_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a direct device read request."""
+
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -139,6 +147,8 @@ def decode_read_devices_response(
     points: int,
     bit_unit: bool,
 ) -> list[int] | list[bool]:
+    """Decode a direct device read response into word or bit values."""
+
     if bit_unit:
         return unpack_bit_values(response.data, points)
     words = decode_device_words(response.data)
@@ -156,6 +166,8 @@ def build_write_devices_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a direct device write request."""
+
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -198,6 +210,8 @@ def build_read_dwords_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a direct dword read request using word-unit transfer."""
+
     if count < 1:
         raise ValueError("count must be >= 1")
     ref = _parse_device_for_address_profile(device, address_profile)
@@ -213,6 +227,8 @@ def build_read_dwords_request(
 
 
 def decode_read_dwords_response(response: SlmpResponse, *, count: int) -> list[int]:
+    """Decode a direct dword read response into unsigned 32-bit values."""
+
     words = [int(value) for value in decode_read_devices_response(response, points=count * 2, bit_unit=False)]
     values: list[int] = []
     for offset in range(0, len(words), 2):
@@ -228,6 +244,8 @@ def build_write_dwords_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a direct dword write request using word-unit transfer."""
+
     if not values:
         raise ValueError("values must not be empty")
     words: list[int] = []
@@ -246,6 +264,8 @@ def build_write_dwords_request(
 
 
 def decode_read_float32s_response(response: SlmpResponse, *, count: int) -> list[float]:
+    """Decode a dword read response as little-endian float32 values."""
+
     values: list[float] = []
     for bits in decode_read_dwords_response(response, count=count):
         values.append(struct.unpack("<f", struct.pack("<I", bits))[0])
@@ -260,6 +280,8 @@ def build_write_float32s_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a direct float32 write request using dword transfer."""
+
     dwords: list[int] = []
     for value in values:
         dwords.append(struct.unpack("<I", struct.pack("<f", float(value)))[0])
@@ -282,6 +304,8 @@ def build_read_devices_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build an extended-device direct read request."""
+
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -312,6 +336,8 @@ def build_write_devices_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build an extended-device direct write request."""
+
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -348,6 +374,8 @@ def build_register_monitor_devices_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a monitor registration request for direct devices."""
+
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
     if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
@@ -388,6 +416,8 @@ def build_register_monitor_devices_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a monitor registration request for extended devices."""
+
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
     if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
@@ -421,6 +451,8 @@ def build_register_monitor_devices_ext_request(
 
 
 def build_run_monitor_cycle_request(*, word_points: int, dword_points: int) -> OperationRequest:
+    """Build a monitor execution request for registered monitor points."""
+
     if word_points < 0 or dword_points < 0:
         raise ValueError("word_points and dword_points must be >= 0")
     return OperationRequest(Command.DEVICE_EXECUTE_MONITOR, 0x0000, b"")
@@ -432,6 +464,8 @@ def decode_run_monitor_cycle_response(
     word_points: int,
     dword_points: int,
 ) -> MonitorResult:
+    """Decode monitor execution data into word and dword result lists."""
+
     expected = word_points * 2 + dword_points * 4
     if len(response.data) != expected:
         raise SlmpError(f"monitor response size mismatch: expected={expected}, actual={len(response.data)}")
@@ -443,10 +477,14 @@ def decode_run_monitor_cycle_response(
 
 
 def build_read_type_name_request() -> OperationRequest:
+    """Build a PLC type-name read request."""
+
     return OperationRequest(Command.READ_TYPE_NAME, 0x0000, b"")
 
 
 def decode_read_type_name_response(response: SlmpResponse) -> TypeNameInfo:
+    """Decode a type-name response into model text and model code metadata."""
+
     data = response.data
     model = ""
     model_code = None
@@ -458,6 +496,8 @@ def decode_read_type_name_response(response: SlmpResponse) -> TypeNameInfo:
 
 
 def build_remote_run_request(*, force: bool, clear_mode: int) -> OperationRequest:
+    """Build a remote RUN request."""
+
     if clear_mode not in {0, 1, 2}:
         raise ValueError(f"clear_mode must be one of 0,1,2: {clear_mode}")
     mode = 0x0003 if force else 0x0001
@@ -466,19 +506,27 @@ def build_remote_run_request(*, force: bool, clear_mode: int) -> OperationReques
 
 
 def build_remote_stop_request() -> OperationRequest:
+    """Build a remote STOP request."""
+
     return OperationRequest(Command.REMOTE_STOP, 0x0000, b"\x01\x00")
 
 
 def build_remote_pause_request(*, force: bool) -> OperationRequest:
+    """Build a remote PAUSE request."""
+
     mode = 0x0003 if force else 0x0001
     return OperationRequest(Command.REMOTE_PAUSE, 0x0000, mode.to_bytes(2, "little"))
 
 
 def build_remote_latch_clear_request() -> OperationRequest:
+    """Build a remote latch-clear request."""
+
     return OperationRequest(Command.REMOTE_LATCH_CLEAR, 0x0000, b"\x01\x00")
 
 
 def build_remote_reset_request(*, subcommand: int) -> OperationRequest:
+    """Build a remote RESET request."""
+
     if subcommand != 0x0000:
         raise ValueError(f"remote reset subcommand must be 0x0000: 0x{subcommand:04X}")
     return OperationRequest(Command.REMOTE_RESET, subcommand, b"\x01\x00")
@@ -490,6 +538,8 @@ def build_remote_password_lock_request(
     series: PLCSeries | str | None,
     default_series: PLCSeries,
 ) -> OperationRequest:
+    """Build a remote-password lock request."""
+
     effective_series = _effective_series(series, default_series)
     payload = _encode_remote_password_payload(password, series=effective_series)
     return OperationRequest(Command.REMOTE_PASSWORD_LOCK, 0x0000, payload)
@@ -501,6 +551,8 @@ def build_remote_password_unlock_request(
     series: PLCSeries | str | None,
     default_series: PLCSeries,
 ) -> OperationRequest:
+    """Build a remote-password unlock request."""
+
     effective_series = _effective_series(series, default_series)
     payload = _encode_remote_password_payload(password, series=effective_series)
     return OperationRequest(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, payload)
@@ -514,6 +566,8 @@ def build_read_random_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> RandomReadOperation:
+    """Build a random word/dword read request for direct devices."""
+
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
     if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
@@ -554,6 +608,8 @@ def build_read_random_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> RandomReadOperation:
+    """Build a random word/dword read request for extended devices."""
+
     if not word_devices and not dword_devices:
         raise ValueError("word_devices and dword_devices must not both be empty")
     if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
@@ -591,6 +647,8 @@ def build_read_random_ext_request(
 
 
 def decode_read_random_response(response: SlmpResponse, operation: RandomReadOperation) -> RandomReadResult:
+    """Decode a random read response using its original operation metadata."""
+
     expected = len(operation.word_refs) * 2 + len(operation.dword_refs) * 4
     if len(response.data) != expected:
         raise SlmpError(f"random read response size mismatch: expected={expected}, actual={len(response.data)}")
@@ -613,6 +671,8 @@ def build_write_random_words_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a random word/dword write request for direct devices."""
+
     word_items = _normalize_items(word_values, plc_profile=address_profile)
     dword_items = _normalize_items(dword_values, plc_profile=address_profile)
     if not word_items and not dword_items:
@@ -654,6 +714,8 @@ def build_write_random_words_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a random word/dword write request for extended devices."""
+
     if not word_values and not dword_values:
         raise ValueError("word_values and dword_values must not both be empty")
     if len(word_values) > 0xFF or len(dword_values) > 0xFF:
@@ -694,6 +756,8 @@ def build_write_random_bits_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a random bit write request for direct devices."""
+
     items = _normalize_items(bit_values, plc_profile=address_profile)
     if not items:
         raise ValueError("bit_values must not be empty")
@@ -726,6 +790,8 @@ def build_write_random_bits_ext_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a random bit write request for extended devices."""
+
     if not bit_values:
         raise ValueError("bit_values must not be empty")
     if len(bit_values) > 0xFF:
@@ -762,6 +828,8 @@ def build_read_block_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> BlockReadOperation:
+    """Build a block read request for word and bit block groups."""
+
     if not word_blocks and not bit_blocks:
         raise ValueError("word_blocks and bit_blocks must not both be empty")
     if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -804,6 +872,8 @@ def build_read_block_request(
 
 
 def decode_read_block_response(response: SlmpResponse, operation: BlockReadOperation) -> BlockReadResult:
+    """Decode a block read response using its original operation metadata."""
+
     offset = 0
     word_result: list[DeviceBlockResult] = []
     for ref, points in operation.word_blocks:
@@ -836,6 +906,8 @@ def build_write_block_request(
     default_series: PLCSeries,
     address_profile: object | None,
 ) -> OperationRequest:
+    """Build a block write request for word and bit block groups."""
+
     if not word_blocks and not bit_blocks:
         raise ValueError("word_blocks and bit_blocks must not both be empty")
     if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
@@ -885,6 +957,8 @@ def build_write_block_request(
 
 
 def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
+    """Build a self-test loopback request."""
+
     loopback = data.encode("ascii") if isinstance(data, str) else bytes(data)
     if len(loopback) < 1 or len(loopback) > 960:
         raise ValueError(f"loopback data size out of range (1..960): {len(loopback)}")
@@ -895,6 +969,8 @@ def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
 
 
 def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
+    """Decode a self-test loopback response body."""
+
     data = response.data
     if len(data) < 2:
         raise SlmpError(f"self test response too short: {len(data)}")
@@ -906,6 +982,8 @@ def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
 
 
 def build_memory_read_words_request(head_address: int, word_length: int) -> OperationRequest:
+    """Build a direct memory read request for words."""
+
     _check_u32(head_address, "head_address")
     if word_length < 1 or word_length > 0x01E0:
         raise ValueError(f"word_length out of range (1..480): {word_length}")
@@ -914,6 +992,8 @@ def build_memory_read_words_request(head_address: int, word_length: int) -> Oper
 
 
 def decode_memory_read_words_response(response: SlmpResponse, *, word_length: int) -> list[int]:
+    """Decode a direct memory word-read response."""
+
     words = decode_device_words(response.data)
     if len(words) != word_length:
         raise SlmpError(f"memory read size mismatch: expected={word_length}, actual={len(words)}")
@@ -921,6 +1001,8 @@ def decode_memory_read_words_response(response: SlmpResponse, *, word_length: in
 
 
 def build_memory_write_words_request(head_address: int, values: Sequence[int]) -> OperationRequest:
+    """Build a direct memory write request for words."""
+
     _check_u32(head_address, "head_address")
     if not values:
         raise ValueError("values must not be empty")
@@ -935,6 +1017,8 @@ def build_memory_write_words_request(head_address: int, values: Sequence[int]) -
 
 
 def build_extend_unit_read_bytes_request(head_address: int, byte_length: int, module_no: int) -> OperationRequest:
+    """Build an extension-unit byte-read request."""
+
     _check_u32(head_address, "head_address")
     _check_u16(module_no, "module_no")
     if byte_length < 2 or byte_length > 0x0780:
@@ -944,12 +1028,16 @@ def build_extend_unit_read_bytes_request(head_address: int, byte_length: int, mo
 
 
 def decode_extend_unit_read_bytes_response(response: SlmpResponse, *, byte_length: int) -> bytes:
+    """Decode an extension-unit byte-read response."""
+
     if len(response.data) != byte_length:
         raise SlmpError(f"extend unit read size mismatch: expected={byte_length}, actual={len(response.data)}")
     return response.data
 
 
 def build_extend_unit_read_words_request(head_address: int, word_length: int, module_no: int) -> OperationRequest:
+    """Build an extension-unit word-read request."""
+
     _check_u32(head_address, "head_address")
     if word_length < 1 or word_length > 0x03C0:
         raise ValueError(f"word_length out of range (1..960): {word_length}")
@@ -957,6 +1045,8 @@ def build_extend_unit_read_words_request(head_address: int, word_length: int, mo
 
 
 def decode_extend_unit_read_words_response(response: SlmpResponse, *, word_length: int) -> list[int]:
+    """Decode an extension-unit word-read response."""
+
     data = decode_extend_unit_read_bytes_response(response, byte_length=word_length * 2)
     words = decode_device_words(data)
     if len(words) != word_length:
@@ -965,6 +1055,8 @@ def decode_extend_unit_read_words_response(response: SlmpResponse, *, word_lengt
 
 
 def build_extend_unit_write_bytes_request(head_address: int, module_no: int, data: bytes) -> OperationRequest:
+    """Build an extension-unit byte-write request."""
+
     _check_u32(head_address, "head_address")
     _check_u16(module_no, "module_no")
     if len(data) < 2 or len(data) > 0x0780:
@@ -981,6 +1073,8 @@ def build_extend_unit_write_words_request(
     module_no: int,
     values: Sequence[int],
 ) -> OperationRequest:
+    """Build an extension-unit word-write request."""
+
     _check_u32(head_address, "head_address")
     if not values:
         raise ValueError("values must not be empty")
@@ -993,11 +1087,15 @@ def build_extend_unit_write_words_request(
 
 
 def build_extend_unit_write_word_request(head_address: int, module_no: int, value: int) -> OperationRequest:
+    """Build an extension-unit single-word write request."""
+
     _check_u16(value, "value")
     return build_extend_unit_write_words_request(head_address, module_no, [value])
 
 
 def build_extend_unit_write_dword_request(head_address: int, module_no: int, value: int) -> OperationRequest:
+    """Build an extension-unit single-dword write request."""
+
     _check_u32(value, "value")
     return build_extend_unit_write_bytes_request(
         head_address,
@@ -1011,6 +1109,8 @@ def build_array_label_read_payload(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> bytes:
+    """Build payload bytes for array label read operations."""
+
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
@@ -1035,6 +1135,8 @@ def build_array_label_write_payload(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> bytes:
+    """Build payload bytes for array label write operations."""
+
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
@@ -1068,6 +1170,8 @@ def build_label_read_random_payload(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> bytes:
+    """Build payload bytes for random label read operations."""
+
     if not labels:
         raise ValueError("labels must not be empty")
     _check_u16(len(labels), "number of read data points")
@@ -1087,6 +1191,8 @@ def build_label_write_random_payload(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> bytes:
+    """Build payload bytes for random label write operations."""
+
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of write data points")
@@ -1110,6 +1216,8 @@ def build_read_array_labels_request(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> OperationRequest:
+    """Build an array label read request."""
+
     payload = build_array_label_read_payload(points, abbreviation_labels=abbreviation_labels)
     return OperationRequest(Command.LABEL_ARRAY_READ, 0x0000, payload)
 
@@ -1119,6 +1227,8 @@ def build_write_array_labels_request(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> OperationRequest:
+    """Build an array label write request."""
+
     payload = build_array_label_write_payload(points, abbreviation_labels=abbreviation_labels)
     return OperationRequest(Command.LABEL_ARRAY_WRITE, 0x0000, payload)
 
@@ -1128,6 +1238,8 @@ def build_read_random_labels_request(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> OperationRequest:
+    """Build a random label read request."""
+
     payload = build_label_read_random_payload(labels, abbreviation_labels=abbreviation_labels)
     return OperationRequest(Command.LABEL_READ_RANDOM, 0x0000, payload)
 
@@ -1137,6 +1249,8 @@ def build_write_random_labels_request(
     *,
     abbreviation_labels: Sequence[str] = (),
 ) -> OperationRequest:
+    """Build a random label write request."""
+
     payload = build_label_write_random_payload(points, abbreviation_labels=abbreviation_labels)
     return OperationRequest(Command.LABEL_WRITE_RANDOM, 0x0000, payload)
 
@@ -1146,6 +1260,8 @@ def parse_array_label_read_response(
     *,
     expected_points: int | None = None,
 ) -> list[LabelArrayReadResult]:
+    """Parse an array label read response payload."""
+
     if len(data) < 2:
         raise SlmpError(f"array label read response too short: {len(data)}")
     points = int.from_bytes(data[:2], "little")
@@ -1187,6 +1303,8 @@ def parse_label_read_random_response(
     *,
     expected_points: int | None = None,
 ) -> list[LabelRandomReadResult]:
+    """Parse a random label read response payload."""
+
     if len(data) < 2:
         raise SlmpError(f"label random read response too short: {len(data)}")
     points = int.from_bytes(data[:2], "little")

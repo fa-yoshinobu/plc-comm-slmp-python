@@ -46,10 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Merged bit-device packed access and extended-device access into the Usage Guide and removed the standalone user pages.
 - Docs: Removed the manual page-navigation block from Getting Started and rely on site navigation instead.
 - Docs: Moved shared SLMP gotcha items to the common troubleshooting page and kept Gotchas focused on Python-specific behavior.
+- Docs: Added public API docstrings for the shared operation builders and a CI coverage check for public API documentation.
+- Docs: Documented read-only operational recipes for multiple PLC monitoring and config-file polling.
 - Docs: Fixed recent maintainer release/process and R120PCPU audit-note text issues.
 - Docs: Fixed remaining PowerShell release/test command placeholders in maintainer docs.
 - Docs: Cleaned up maintainer notes, obsolete probe records, and root TODO handling.
 - Samples: Print `SlmpError.end_code` and structured command/subcommand details when high-level samples catch a PLC response error.
+- Samples: Added read-only `multi_plc_monitor.py` and `config_polling.py` operational recipes, plus an example JSON config.
 - Release: Aligned `slmp.__version__` with package metadata version `1.1.1`.
 - Release: Excluded maintainer-only files, scripts, and tests from generated source archives via `.gitattributes`.
 - Tooling: Changed the canonical profile update script default ref from `main` to fixed tag `v1.0.0`; `SLMP_PROFILES_REF` can still override it.

@@ -13,6 +13,8 @@ python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-prof
 python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 python samples/polling_reconnect.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
 python samples/polling_reconnect.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
+python samples/multi_plc_monitor.py --plc line-a=192.168.250.100,melsec:iq-r,1035,udp --plc line-b=192.168.250.101,melsec:iq-r,1035,udp --tag d100=D100:U --cycles 3 --dry-run
+python samples/config_polling.py --config samples/config_polling.example.json --dry-run
 python samples/07_async_sample.py 192.168.250.100:1025
 ```
 
@@ -23,6 +25,9 @@ python samples/07_async_sample.py 192.168.250.100:1025
 | `high_level_async.py` | Async connection, typed reads and writes, named snapshots, polling, queued shared connection use. | High-level helpers |
 | `high_level_sync.py` | Sync connection, typed reads and writes, named snapshots, polling, contiguous reads. | High-level helpers |
 | `polling_reconnect.py` | Read-only polling loop with automatic reconnect and backoff after transport loss. | High-level helpers |
+| `multi_plc_monitor.py` | Read-only monitoring of the same tag set across multiple PLCs, with one async task per PLC. | Operational recipe |
+| `config_polling.py` | Read-only periodic collection from a JSON or YAML config file, with optional CSV output. | Operational recipe |
+| `config_polling.example.json` | Example config for `config_polling.py`. | Operational recipe |
 | `07_async_sample.py` | Async client reads from one or more PLC endpoints concurrently. | Async client |
 | `01_read_type_name.py` | Read PLC type name and model code. | Sync client |
 | `02_device_reads.py` | Read normal word and bit devices. | Sync client |
@@ -61,3 +66,18 @@ Start with `high_level_async.py` against `D100`, then use `high_level_sync.py` i
 
 The older numbered samples remain for protocol-focused demonstrations. The
 recommended user path is the high-level helper layer.
+
+## Operational recipes
+
+`multi_plc_monitor.py` is for live dashboards or watch windows where several
+PLCs should be monitored independently. Each PLC has its own connection and
+reconnect loop, so a timeout on one PLC does not pause reads from the others.
+The sample is read-only and uses `read_named`.
+
+`config_polling.py` is for periodic collection where tags should be changed
+without editing Python code. JSON works with the Python standard library.
+YAML files are also accepted when `PyYAML` is installed. CSV output uses long
+rows: `timestamp,plc,tag,value`.
+
+Use `--dry-run` with either operational recipe to validate arguments or config
+without opening a PLC connection.

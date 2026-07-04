@@ -354,6 +354,70 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Operational recipes
+
+The repository includes two read-only operational samples for application
+shapes that come up after the first connection test.
+
+### Multiple PLC monitoring
+
+Use `samples/multi_plc_monitor.py` when several PLCs should be watched at the
+same time. Each PLC runs in its own async task with its own connection and
+reconnect loop, so one offline PLC does not block the others.
+
+```powershell
+python samples/multi_plc_monitor.py `
+  --plc line-a=192.168.250.100,melsec:iq-r,1035,udp `
+  --plc line-b=192.168.250.101,melsec:iq-r,1035,udp `
+  --tag d100=D100:U `
+  --tag temperature=D200:F `
+  --cycles 3 `
+  --dry-run
+```
+
+This sample only calls read helpers. For cable-pull recovery checks, prefer
+UDP on the PLC-side UDP port so reconnect behavior is not delayed by TCP socket
+cleanup.
+
+### Config-file polling
+
+Use `samples/config_polling.py` when tag lists and PLC endpoints should live
+in a config file instead of Python code.
+
+```powershell
+python samples/config_polling.py --config samples/config_polling.example.json --dry-run
+```
+
+Config files are JSON by default. YAML files are accepted when `PyYAML` is
+installed. CSV output is optional and uses long rows:
+`timestamp,plc,tag,value`.
+Remove `--dry-run` when you are ready to open PLC connections.
+
+```json
+{
+  "defaults": {
+    "transport": "udp",
+    "port": 1035,
+    "timeout": 3.0,
+    "interval": 1.0
+  },
+  "output": {
+    "csv": "config_polling_output.csv"
+  },
+  "plcs": [
+    {
+      "name": "line-a",
+      "host": "192.168.250.100",
+      "plc_profile": "melsec:iq-r",
+      "tags": [
+        { "name": "d100", "address": "D100:U" },
+        { "name": "temperature", "address": "D200:F" }
+      ]
+    }
+  ]
+}
+```
+
 ## Device range catalog
 
 `read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model.
