@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Documented profile-specific `S` write policy in supported-register, bit-device table, gotcha, audit-reflection, and maintainer difference notes.
 - Docs: Documented the Q-series Read Block (`0x0406`) and Write Block (`0x1406`) profile guard in user profiles and gotchas.
 - Docs: Removed the duplicated SLMP supported-register user page and linked users to the shared SLMP Profile Reference.
-- Docs: Removed the per-library Error Codes page; shared SLMP end-code guidance now lives in the PLC Setup Guide.
+- Docs: Removed the per-library troubleshooting/code page; shared SLMP troubleshooting and code guidance now lives in the PLC Setup Guide.
 - Docs: Added a Usage Guide example showing how to read `SlmpError.end_code` and structured `error_info`.
 - Docs: Slimmed Gotchas to library-specific items and moved shared setup/end-code symptoms to the PLC Setup Guide.
 - Docs: Standardized the Gotchas page structure with KV Host Link so library-specific caveats have the same destination across protocols.
