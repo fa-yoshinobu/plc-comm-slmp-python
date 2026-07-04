@@ -349,8 +349,7 @@ def main() -> None:
             print(f"SLMP end_code=0x{e.end_code:04X}", file=sys.stderr)
         if e.error_info is not None:
             print(
-                f"SLMP error_info command=0x{e.error_info.command:04X} "
-                f"subcommand=0x{e.error_info.subcommand:04X}",
+                f"SLMP error_info command=0x{e.error_info.command:04X} subcommand=0x{e.error_info.subcommand:04X}",
                 file=sys.stderr,
             )
         sys.exit(1)

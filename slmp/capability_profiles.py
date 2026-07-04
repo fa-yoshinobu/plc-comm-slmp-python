@@ -287,8 +287,10 @@ def ensure_profile_feature_allowed(plc_profile: object | None, feature_key: str,
 
     from .errors import SlmpProfileFeatureError
 
-    evidence = f"{feature.source}; {CANONICAL_SOURCE}" if feature.note is None else (
-        f"{feature.source}: {feature.note}; {CANONICAL_SOURCE}"
+    evidence = (
+        f"{feature.source}; {CANONICAL_SOURCE}"
+        if feature.note is None
+        else (f"{feature.source}: {feature.note}; {CANONICAL_SOURCE}")
     )
     raise SlmpProfileFeatureError(profile.profile_id, feature_key, feature.state, evidence)
 

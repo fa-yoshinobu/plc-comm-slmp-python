@@ -85,8 +85,7 @@ class SlmpProfileFeatureError(ValueError):
         self.disable_hint = "Set strict_profile=False to send the request anyway."
         evidence_text = "" if not evidence else f" Evidence: {evidence}."
         super().__init__(
-            f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}."
-            f"{evidence_text} {self.disable_hint}"
+            f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}.{evidence_text} {self.disable_hint}"
         )
 
 
