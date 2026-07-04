@@ -1,237 +1,98 @@
 # Gotchas
 
-Each entry starts with the symptom you are likely to see, then shows the root cause and a safe fix. The examples use TCP `192.168.250.100:1025` and the canonical `melsec:iq-r` profile.
+Use this page as a short symptom index. For PLC response codes, use the shared
+[SLMP Troubleshooting & End Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/troubleshooting-end-codes/)
+page. For profile limits and device availability, use the shared
+[SLMP Profile Parameters](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/parameters/)
+page.
 
-## LTN/LSTN/LCN/LZ reads return wrong values
+## Connection fails or times out
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `LTN0`, `LSTN0`, `LCN0`, or `LZ0` looks truncated or is rejected. | These current-value families are 32-bit values, not normal 16-bit word values. | Use `:D` for unsigned 32-bit or `:L` for signed 32-bit. |
+| `open_and_connect()` cannot open the PLC connection. | Host, port, transport, PLC Ethernet setting, or network route is wrong. | Check the PLC setup first. Built-in Ethernet examples use TCP `192.168.250.100:1025`; use UDP only when the PLC port is configured for UDP. |
+
+## Connection opens but every request returns an end code
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| Simple reads such as `D100:U` connect but fail with an SLMP end code. | The selected `plc_profile` does not match the PLC, or the PLC port data code does not match the library request format. | Select the canonical profile for the PLC and confirm the PLC Ethernet port is configured for binary SLMP. Use the shared end-code page for codes such as `C050`, `C059`, and `4031`. |
+
+## Reads work but writes fail
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| Reads work, but writes are rejected. | PLC-side write permission during RUN, remote password state, or profile write policy blocks the write. | Check the PLC setup guide and the selected profile's write policy. `S` is read-only except on iQ-F profiles. |
+
+## Large requests fail with point-limit end codes
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| A large read, write, random request, or monitor request fails with `C051`, `C052`, `C053`, or `C054`. | The request exceeds the selected profile's per-request point limit. | Split the request or use the chunked helper. Check the shared profile parameter table for the limit. |
 
 ```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, read_named
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        values = await read_named(client, ["LTN0:D", "LSTN0:D", "LCN0:L", "LZ0:D"])
-        print(values)
-
-
-asyncio.run(main())
+words = await read_words_chunked(client, "D1000", 2000, max_per_request=480)
 ```
 
-## LCS/LCC reads look incorrect
+## Block commands are rejected on Q/L profiles
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `LCS0` or `LCC0` does not behave like a normal word read. | Long counter state devices are state bits. | Use `read_named` or `write_typed` with `BIT`. |
-
-```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_typed
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        state = await read_named(client, ["LCS0:BIT", "LCC0:BIT"])
-        await write_typed(client, "LCC0", "BIT", True)
-        print(state)
-
-
-asyncio.run(main())
-```
-
-## LTS/LTC/LSTS/LSTC write rejected
-
-| Symptom | Root cause | Fix |
-| --- | --- | --- |
-| Direct bit writes to long timer or long retentive timer state devices are rejected. | These families need the helper route that selects the supported random bit write behavior. | Use `write_typed` or `write_named` for the state device. |
-
-```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, write_named
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        await write_named(client, {"LTS0:BIT": True, "LTC0:BIT": False})
-        await write_named(client, {"LSTS0:BIT": True, "LSTC0:BIT": False})
-
-
-asyncio.run(main())
-```
-
-## S write rejected
-
-| Symptom | Root cause | Fix |
-| --- | --- | --- |
-| `S10:BIT` can be read but a write route rejects it. | The selected profile marks `S` as read-only. iQ-F profiles allow `S` writes. | Follow the selected profile's write policy. |
-
-## G/HG fails
-
-| Symptom | Root cause | Fix |
-| --- | --- | --- |
-| `G100` or `HG1000` fails through the high-level typed helpers. | Module buffer access is not part of the public high-level typed surface. | Use the extended-device API and qualify the module with `Ux\G` or `Ux\HG`. |
-
-```python
-import asyncio
-
-from slmp import AsyncSlmpClient, ExtensionSpec
-
-
-async def main() -> None:
-    async with AsyncSlmpClient("192.168.250.100", 1025, plc_profile="melsec:iq-r") as client:
-        values = await client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
-        print(values)
-
-
-asyncio.run(main())
-```
+| `read_block()` or `write_block()` fails for `melsec:qcpu`, `melsec:qnu`, `melsec:qnudv`, or `melsec:lcpu`. | These profiles do not use block commands for normal high-level access. | Use normal direct/random read and write helpers. Disable strict profile only for deliberate compatibility investigation. |
 
 ## Mixed word and bit write fails
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A mixed write containing word devices and bit devices returns a PLC-side error. | Some PLCs reject mixed word and bit block writes. | Split word writes and bit writes into separate helper calls. |
+| One write containing word values and bit values fails. | Some PLC paths reject mixed word and bit block writes. | Send word writes and bit writes as separate calls. |
 
-## Q-series profiles reject block commands
+```python
+await write_named(client, {"D9000:U": 1234})
+await write_named(client, {"M9000:BIT": True})
+```
+
+## iQ-F X/Y or DX/DY addresses fail
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `read_block()` or `write_block()` raises when `plc_profile` is `melsec:qcpu`, `melsec:qnu`, or `melsec:qnudv`. | These Q-series profiles do not use block access for normal high-level flows. | Use direct or random device commands for those profiles. |
+| `X`/`Y` points look shifted, or `DX`/`DY` is rejected on iQ-F. | iQ-F uses octal text for `X`/`Y`, and the iQ-F profile does not support `DX`/`DY`. | Parse and format addresses with `plc_profile="melsec:iq-f"`; use `X` and `Y` on iQ-F. |
 
 ```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, write_named
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        await write_named(client, {"D100:U": 42, "D101:U": 43})
-        await write_named(client, {"M100:BIT": True})
-
-
-asyncio.run(main())
+normalized = normalize_address("X100", plc_profile="melsec:iq-f")
 ```
 
-## DX/DY fails on melsec:iq-f
+## Long timer/counter/index values look wrong
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `DX` or `DY` raises an unsupported-device error with `melsec:iq-f`. | The iQ-F profile does not support `DX` and `DY`. | Use `X` and `Y` with `melsec:iq-f`; their text numbering is octal. |
+| `LTN`, `LSTN`, `LCN`, or `LZ` looks truncated or shifted. | These current-value families are 32-bit values. | Use `:D` or `:L` in named addresses. |
+| `LCS` or `LCC` behaves unlike a word value. | Long counter state devices are bits. | Read or write them as `BIT`. |
 
 ```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, read_named
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-f")
-    async with await open_and_connect(options) as client:
-        values = await read_named(client, ["X100:BIT", "Y100:BIT"])
-        print(values)
-
-
-asyncio.run(main())
+values = await read_named(client, ["LTN0:D", "LSTN0:L", "LCN0:D", "LZ0:L", "LCS0:BIT"])
 ```
 
-## All reads return an end code
+## G/HG fails as a normal address
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Simple reads such as `D100` connect but return an SLMP end code. | The selected `plc_profile` does not match the actual PLC family, so the frame type, access mode, or address grammar is wrong. | Choose the canonical profile from [PROFILES.md](PROFILES.md) in configuration or UI. |
+| `G` or `HG` fails in high-level typed or named access. | Module buffer memory is not a standalone normal device route. | Use qualified routed forms such as `U3\G100` through the extended-device APIs. `HG` CPU-buffer access is profile-specific. |
 
-```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, SlmpError, open_and_connect, read_typed
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        try:
-            value = await read_typed(client, "D100", "U")
-            print(f"D100={value}")
-        except SlmpError as exc:
-            print(f"PLC rejected the request: 0x{exc.end_code:04X}")
-
-
-asyncio.run(main())
-```
-
-## Missing or non-canonical plc_profile is rejected
+## Missing or non-canonical profile is rejected
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Connection setup raises `ValueError` before any PLC request is sent. | `plc_profile` is required and only canonical profiles are accepted. There is no model-name auto-detection fallback. | Set an exact canonical profile such as `melsec:iq-r`. |
+| Connection setup raises `ValueError` before any PLC request is sent. | `plc_profile` is required and only canonical profiles are accepted. There is no safe default profile. | Set an exact canonical profile such as `melsec:iq-r`. |
 
-```python
-from slmp import SlmpConnectionOptions
-
-
-def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    print(options.plc_profile)
-
-
-main()
-```
-
-## Concurrent callers crash or interleave responses
+## Concurrent callers interleave responses
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
 | Several coroutines share one raw client and responses appear mismatched or fail intermittently. | A raw client represents one frame stream and is not a multi-caller scheduler. | Use `open_and_connect`, which returns a queued async client that serializes calls. |
 
 ```python
-import asyncio
-
-from slmp import SlmpConnectionOptions, open_and_connect, read_typed
-
-
-async def read_one(client: object, address: str) -> int | float:
-    return await read_typed(client, address, "U")
-
-
-async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
-    async with await open_and_connect(options) as client:
-        values = await asyncio.gather(
-            read_one(client, "D100"),
-            read_one(client, "D101"),
-        )
-        print(values)
-
-
-asyncio.run(main())
-```
-
-## X/Y uses the wrong address
-
-| Symptom | Root cause | Fix |
-| --- | --- | --- |
-| `X20` or `Y20` points at a different physical address than expected. | `melsec:iq-f` uses octal `X`/`Y` text, while other profiles use hexadecimal text. | Select the correct canonical profile before parsing string addresses. |
-
-```python
-from slmp import normalize_address
-
-
-def main() -> None:
-    print(normalize_address("X100", plc_profile="melsec:iq-f"))
-    print(normalize_address("X20", plc_profile="melsec:iq-r"))
-
-
-main()
+values = await asyncio.gather(
+    read_typed(client, "D100", "U"),
+    read_typed(client, "D101", "U"),
+)
 ```

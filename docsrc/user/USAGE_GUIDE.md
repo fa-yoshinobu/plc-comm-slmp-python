@@ -38,12 +38,46 @@ async def main() -> None:
         monitoring_timer=0x0010,
         raise_on_error=True,
     )
-    async with await open_and_connect(options) as client:
-        print(f"connected profile={client.plc_profile}")
+async with await open_and_connect(options) as client:
+    print(f"connected profile={client.plc_profile}")
 
 
 asyncio.run(main())
 ```
+
+## Routing / target station
+
+Most applications keep the default target, which means the directly connected
+own station/control CPU. Change the target only when your PLC network is
+configured for another station, multi-CPU module I/O, or multidrop access.
+
+`SlmpTarget` controls the SLMP destination header. It is not a device family
+selector; routed devices such as `Un\Gn` and `Jn\...` still need their own
+address syntax.
+
+```python
+from slmp import SlmpConnectionOptions, SlmpTarget
+
+options = SlmpConnectionOptions(
+    host="192.168.250.100",
+    port=1025,
+    plc_profile="melsec:iq-r",
+    default_target=SlmpTarget(
+        network=0x01,
+        station=0x02,
+        module_io=0x03FF,
+        multidrop=0x00,
+    ),
+)
+```
+
+For a multi-CPU self target, you can also use the named module I/O helpers:
+
+```python
+target = SlmpTarget(module_io="MULTIPLE_CPU_2")
+```
+
+Use the default target unless the PLC routing setup gives you specific values.
 
 ## Read a single value
 
