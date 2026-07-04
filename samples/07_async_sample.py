@@ -36,7 +36,7 @@ async def main() -> None:
     # --- Target configuration ------------------------------------------------
     # Edit these to match your environment. The script accepts an optional
     # list of HOST:PORT pairs on the command line:
-    #   python samples/08_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
+    #   python samples/07_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
     targets: list[tuple[str, int]] = []
 
     for arg in sys.argv[1:]:

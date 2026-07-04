@@ -111,3 +111,8 @@ D100=42
 | Reads work but writes fail | Confirm RUN-time write permission in the PLC setup guide and the selected profile write policy. |
 | The connection uses the wrong frame | Do not set `frame_type` manually. It is derived from `plc_profile`. |
 | The first read fails on an advanced family | Start with `D` word reads. Do not start with `G`, `HG`, `LTN`, or `LCN`. |
+
+## Next steps
+
+- Open the runnable samples: [samples README](https://github.com/fa-yoshinobu/plc-comm-slmp-python/tree/main/samples).
+- Continue with the [Usage guide](USAGE_GUIDE.md) and [Gotchas](GOTCHAS.md).
