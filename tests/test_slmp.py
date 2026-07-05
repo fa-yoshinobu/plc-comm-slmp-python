@@ -256,7 +256,7 @@ class TestReceiveHelpers(unittest.TestCase):
 
         thread = threading.Thread(target=serve)
         thread.start()
-        client = SlmpClient(host, port, plc_profile="melsec:qcpu", transport="udp", timeout=1.0)
+        client = SlmpClient(host, port, plc_profile="melsec:qnu", transport="udp", timeout=1.0)
         try:
             self.assertEqual(client.read_devices("D0", 1), [0x2222])
         finally:
@@ -1709,6 +1709,10 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             FakeClient(plc_profile="bad-profile")
 
+    def test_base_qcpu_profile_is_rejected_for_connections(self) -> None:
+        with self.assertRaisesRegex(ValueError, "melsec:qcpu is a base profile.*melsec:qcpu:qj71e71-100"):
+            FakeClient(plc_profile="melsec:qcpu")
+
     def test_plc_profile_derives_fixed_profile_defaults(self) -> None:
         client = FakeClient(plc_profile="melsec:iq-l")
 
@@ -1717,6 +1721,15 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(client.frame_type, FrameType.FRAME_4E)
         self.assertEqual(client.address_profile, "melsec:iq-l")
         self.assertEqual(client.range_profile, "melsec:iq-l")
+
+    def test_unit_profile_keeps_frame_and_series_independent(self) -> None:
+        client = FakeClient(plc_profile="melsec:qcpu:qj71e71-100")
+
+        self.assertEqual(client.plc_profile, "melsec:qcpu:qj71e71-100")
+        self.assertEqual(client.plc_series, PLCSeries.QL)
+        self.assertEqual(client.frame_type, FrameType.FRAME_4E)
+        self.assertEqual(client.address_profile, "melsec:qcpu")
+        self.assertEqual(client.range_profile, "melsec:qcpu:qj71e71-100")
 
     def test_plc_profile_rejects_manual_profile_override(self) -> None:
         with self.assertRaisesRegex(ValueError, "plc_profile already determines"):
@@ -2929,7 +2942,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_block_rejects_q_profiles_before_transport(self) -> None:
         """Q-series Ethernet profiles reject Read Block through the capability guard."""
-        for profile in ("melsec:qcpu", "melsec:qnu"):
+        for profile in ("melsec:lcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
                 with self.assertRaises(SlmpProfileFeatureError) as raised:
@@ -3105,7 +3118,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_write_block_rejects_q_profiles_before_transport(self) -> None:
         """Q-series Ethernet profiles reject Write Block through the capability guard."""
-        for profile in ("melsec:qcpu", "melsec:qnu"):
+        for profile in ("melsec:lcpu", "melsec:qnu"):
             with self.subTest(profile=profile):
                 client = FakeClient(plc_profile=profile)
                 with self.assertRaises(SlmpProfileFeatureError) as raised:

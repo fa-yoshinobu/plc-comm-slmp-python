@@ -190,6 +190,37 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertEqual(entries["LCS"].point_count, 64)
         self.assertEqual(entries["LCS"].address_range, "LCS0-LCS63")
 
+    def test_qcpu_unit_uses_base_rules_but_reports_unit_profile(self) -> None:
+        registers = {register: 0 for register in range(290, 305)}
+        registers[290] = 123
+
+        catalog = build_device_range_catalog_for_plc_profile(
+            SlmpPlcProfile.QCpuQj71E71100,
+            registers,
+        )
+
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.QCpuQj71E71100)
+        self.assertEqual(catalog.model, "QCPU via QJ71E71-100")
+        entries = {entry.device: entry for entry in catalog.entries}
+        self.assertEqual(entries["X"].point_count, 123)
+        self.assertEqual(entries["X"].address_range, "X000-X07A")
+
+    def test_iqr_unit_uses_iqr_rules_but_reports_unit_profile(self) -> None:
+        registers = {register: 0 for register in range(260, 310)}
+        registers[280] = 0x0034
+        registers[281] = 0x0001
+
+        catalog = build_device_range_catalog_for_plc_profile(
+            SlmpPlcProfile.IqRRj71En71,
+            registers,
+        )
+
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.IqRRj71En71)
+        self.assertEqual(catalog.model, "iQ-R via RJ71EN71")
+        entries = {entry.device: entry for entry in catalog.entries}
+        self.assertEqual(entries["D"].point_count, 0x00010034)
+        self.assertEqual(entries["D"].address_range, "D0-D65587")
+
     def test_mx_profiles_keep_s_supported_from_sd276(self) -> None:
         for plc_profile in (SlmpPlcProfile.MxF, SlmpPlcProfile.MxR):
             with self.subTest(plc_profile=plc_profile):

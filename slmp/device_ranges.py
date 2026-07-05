@@ -181,6 +181,13 @@ _ROWS: dict[str, _RangeRow] = {
 }
 
 _CANONICAL_FAMILIES = {member.value: member for member in SlmpPlcProfile}
+_RANGE_RULE_PROFILE = {
+    SlmpPlcProfile.IqRRj71En71: SlmpPlcProfile.IqR,
+    SlmpPlcProfile.QCpuQj71E71100: SlmpPlcProfile.QCpu,
+    SlmpPlcProfile.LCpuLj71E71100: SlmpPlcProfile.LCpu,
+    SlmpPlcProfile.QnUQj71E71100: SlmpPlcProfile.QnU,
+    SlmpPlcProfile.QnUDVQj71E71100: SlmpPlcProfile.QnUDV,
+}
 
 
 def _fixed(value: int, source: str) -> _RangeValueSpec:
@@ -531,14 +538,19 @@ def plc_profile_label(plc_profile: SlmpPlcProfile | str) -> str:
     normalized = normalize_plc_profile(plc_profile)
     return {
         SlmpPlcProfile.IqR: "IQ-R",
+        SlmpPlcProfile.IqRRj71En71: "iQ-R via RJ71EN71",
         SlmpPlcProfile.IqL: "iQ-L",
         SlmpPlcProfile.MxF: "MX-F",
         SlmpPlcProfile.MxR: "MX-R",
         SlmpPlcProfile.IqF: "IQ-F",
         SlmpPlcProfile.QCpu: "QCPU",
+        SlmpPlcProfile.QCpuQj71E71100: "QCPU via QJ71E71-100",
         SlmpPlcProfile.LCpu: "LCPU",
+        SlmpPlcProfile.LCpuLj71E71100: "LCPU via LJ71E71-100",
         SlmpPlcProfile.QnU: "QnU",
+        SlmpPlcProfile.QnUQj71E71100: "QnU via QJ71E71-100",
         SlmpPlcProfile.QnUDV: "QnUDV",
+        SlmpPlcProfile.QnUDVQj71E71100: "QnUDV via QJ71E71-100",
     }[normalized]
 
 
@@ -549,7 +561,7 @@ def build_device_range_catalog_for_plc_profile(
     """Build one catalog from already-read profile SD registers."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
-    profile = _PROFILES[normalized_profile]
+    profile = _PROFILES[_RANGE_RULE_PROFILE.get(normalized_profile, normalized_profile)]
     entries: list[SlmpDeviceRangeEntry] = []
     for item in _ORDERED_ITEMS:
         row = _ROWS[item]
@@ -590,7 +602,7 @@ def read_device_range_catalog_for_plc_profile_sync(
     """Read one canonical profile SD window in a single request and build a catalog."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
-    profile = _PROFILES[normalized_profile]
+    profile = _PROFILES[_RANGE_RULE_PROFILE.get(normalized_profile, normalized_profile)]
     words = cast(
         list[int],
         client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
@@ -607,7 +619,7 @@ async def read_device_range_catalog_for_plc_profile(
     """Async variant of the canonical explicit-profile device-range catalog read."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
-    profile = _PROFILES[normalized_profile]
+    profile = _PROFILES[_RANGE_RULE_PROFILE.get(normalized_profile, normalized_profile)]
     words = cast(
         list[int],
         await client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
@@ -618,10 +630,11 @@ async def read_device_range_catalog_for_plc_profile(
 
 
 def _resolve_runtime_limits_sync(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
-    if catalog.plc_profile not in _ZR_RUNTIME_FAMILIES:
+    runtime_profile = _RANGE_RULE_PROFILE.get(catalog.plc_profile, catalog.plc_profile)
+    if runtime_profile not in _ZR_RUNTIME_FAMILIES:
         return catalog
 
-    if catalog.plc_profile is SlmpPlcProfile.QCpu:
+    if runtime_profile is SlmpPlcProfile.QCpu:
         z_count = 16 if _can_read_one_word_sync(client, "Z15") else 10
         catalog = _replace_fixed_point_count(
             catalog,
@@ -649,10 +662,11 @@ def _resolve_runtime_limits_sync(client: Any, catalog: SlmpDeviceRangeCatalog) -
 
 
 async def _resolve_runtime_limits_async(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
-    if catalog.plc_profile not in _ZR_RUNTIME_FAMILIES:
+    runtime_profile = _RANGE_RULE_PROFILE.get(catalog.plc_profile, catalog.plc_profile)
+    if runtime_profile not in _ZR_RUNTIME_FAMILIES:
         return catalog
 
-    if catalog.plc_profile is SlmpPlcProfile.QCpu:
+    if runtime_profile is SlmpPlcProfile.QCpu:
         z_count = 16 if await _can_read_one_word_async(client, "Z15") else 10
         catalog = _replace_fixed_point_count(
             catalog,

@@ -680,6 +680,24 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(options.address_profile, "melsec:iq-l")
         self.assertEqual(options.range_profile, "melsec:iq-l")
 
+    def test_connection_options_derive_unit_profile_with_independent_frame_and_series(self):
+        options = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:qcpu:qj71e71-100", port=1025)
+
+        self.assertEqual(options.plc_profile, "melsec:qcpu:qj71e71-100")
+        self.assertEqual(options.plc_series.value, "ql")
+        self.assertEqual(options.frame_type.value, "4e")
+        self.assertEqual(options.address_profile, "melsec:qcpu")
+        self.assertEqual(options.range_profile, "melsec:qcpu:qj71e71-100")
+
+    def test_connection_options_derive_iqr_unit_profile_with_iqr_address_rules(self):
+        options = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r:rj71en71", port=1025)
+
+        self.assertEqual(options.plc_profile, "melsec:iq-r:rj71en71")
+        self.assertEqual(options.plc_series.value, "iqr")
+        self.assertEqual(options.frame_type.value, "4e")
+        self.assertEqual(options.address_profile, "melsec:iq-r")
+        self.assertEqual(options.range_profile, "melsec:iq-r:rj71en71")
+
     def test_connection_options_default_port_tracks_transport(self):
         tcp = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r")
         udp = SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r", transport="udp")
@@ -698,6 +716,10 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
     def test_connection_options_reject_noncanonical_profile_case(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             SlmpConnectionOptions("127.0.0.1", plc_profile="MELSEC:IQ-L", port=1025)
+
+    def test_connection_options_reject_base_qcpu_profile(self):
+        with self.assertRaisesRegex(ValueError, "melsec:qcpu is a base profile.*melsec:qcpu:qj71e71-100"):
+            SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:qcpu", port=1025)
 
 
 # ---------------------------------------------------------------------------

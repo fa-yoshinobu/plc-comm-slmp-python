@@ -289,6 +289,11 @@ def test_async_client_rejects_invalid_plc_profile() -> None:
         FakeAsyncClient(plc_profile="bad-profile")
 
 
+def test_async_client_rejects_base_qcpu_profile() -> None:
+    with pytest.raises(ValueError, match="melsec:qcpu is a base profile.*melsec:qcpu:qj71e71-100"):
+        FakeAsyncClient(plc_profile="melsec:qcpu")
+
+
 def test_async_client_plc_profile_derives_fixed_profile_defaults() -> None:
     cli = FakeAsyncClient(plc_profile="melsec:iq-l")
 
@@ -297,6 +302,16 @@ def test_async_client_plc_profile_derives_fixed_profile_defaults() -> None:
     assert cli.frame_type.value == "4e"
     assert cli.address_profile == "melsec:iq-l"
     assert cli.range_profile == "melsec:iq-l"
+
+
+def test_async_client_unit_profile_keeps_frame_and_series_independent() -> None:
+    cli = FakeAsyncClient(plc_profile="melsec:qcpu:qj71e71-100")
+
+    assert cli.plc_profile == "melsec:qcpu:qj71e71-100"
+    assert cli.plc_series == PLCSeries.QL
+    assert cli.frame_type.value == "4e"
+    assert cli.address_profile == "melsec:qcpu"
+    assert cli.range_profile == "melsec:qcpu:qj71e71-100"
 
 
 @pytest.mark.asyncio
@@ -401,7 +416,7 @@ async def test_async_read_block_rejects_lcs_lcc() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
+@pytest.mark.parametrize("profile", ["melsec:lcpu", "melsec:qnu"])
 async def test_async_read_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
     with pytest.raises(SlmpProfileFeatureError, match=rf"block.*{profile}|{profile}.*block"):
@@ -434,7 +449,7 @@ async def test_async_write_block_rejects_lcs_lcc() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", ["melsec:qcpu", "melsec:qnu"])
+@pytest.mark.parametrize("profile", ["melsec:lcpu", "melsec:qnu"])
 async def test_async_write_block_rejects_q_profiles_before_transport(profile: str) -> None:
     cli = FakeAsyncClient(plc_profile=profile)
     with pytest.raises(SlmpProfileFeatureError, match=rf"block.*{profile}|{profile}.*block"):

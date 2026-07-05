@@ -1,6 +1,6 @@
 """Built-in SLMP capability profiles.
 
-Source: plc-comm-slmp-profiles v1.1.2
+Source: plc-comm-slmp-profiles v1.2.0
 capability/slmp_builtin_ethernet_profiles.json
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.1.2 capability/slmp_builtin_ethernet_profiles.json"
+CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.0 capability/slmp_builtin_ethernet_profiles.json"
 
 
 @dataclass(frozen=True)
@@ -105,6 +105,21 @@ def _ql_features(source: str) -> dict[str, CapabilityFeature]:
     )
 
 
+def _ql_unit_features() -> dict[str, CapabilityFeature]:
+    return _features(
+        ("type_name", "supported", "live", None),
+        ("direct", "supported", "live", None),
+        ("random", "supported", "live", None),
+        ("block", "supported", "live", None),
+        ("monitor", "supported", "live", None),
+        ("ext_module_access", "config-dependent", "live", None),
+        ("ext_link_direct", "config-dependent", "live", None),
+        ("hg_cpu_buffer", "blocked", "spec", "CPU-buffer HG is an iQ-R-only path."),
+        ("long_device_path", "blocked", "live", None),
+        ("lz_32bit_path", "blocked", "live", None),
+    )
+
+
 def _iqr_limits() -> dict[str, CapabilityLimit]:
     return _limits(
         ("direct_word_read", 960, "C051", "live", None, None),
@@ -137,26 +152,49 @@ def _iqf_limits() -> dict[str, CapabilityLimit]:
     )
 
 
-def _ql_limits() -> dict[str, CapabilityLimit]:
+def _ql_limits(source: str) -> dict[str, CapabilityLimit]:
     return _limits(
+        ("direct_word_read", 960, "C051", source, None, None),
+        ("direct_word_write", 960, "C051", source, None, None),
+        ("direct_bit_read", 7168, "C052", source, None, None),
+        ("direct_bit_write", 7168, "C052", source, None, None),
+        ("random_read_word", 192, "C054", source, None, None),
+        ("random_write_word", 160, "C054", source, 1920, None),
+        ("random_write_bit", 188, "C053", source, None, None),
+        ("monitor_register_word", 192, "C054", source, None, None),
+    )
+
+
+def _ql_unit_limits(*, ext_read_max: int, include_bit_ext: bool) -> dict[str, CapabilityLimit]:
+    entries: list[tuple[str, int, str | None, str, int | None, str | None]] = [
         ("direct_word_read", 960, "C051", "live", None, None),
         ("direct_word_write", 960, "C051", "live", None, None),
         ("direct_bit_read", 7168, "C052", "live", None, None),
         ("direct_bit_write", 7168, "C052", "live", None, None),
         ("random_read_word", 192, "C054", "live", None, None),
-        ("random_write_word", 160, "C054", "live", 1920, None),
+        ("random_write_word", 160, "4080", "live", 1920, None),
         ("random_write_bit", 188, "C053", "live", None, None),
         ("monitor_register_word", 192, "C054", "live", None, None),
-        ("random_read_word_ext", 96, "C054", "live", None, None),
-        ("random_write_word_ext", 80, "C054", "live", 960, None),
-        ("random_write_bit_ext", 94, "C053", "live", None, None),
-        ("monitor_register_word_ext", 96, "C054", "live", None, None),
-    )
+        ("random_read_word_ext", ext_read_max, "4080" if ext_read_max == 185 else "C054", "live", None, None),
+        ("random_write_word_ext", 160, "4080", "live", 1920, None),
+        ("monitor_register_word_ext", 192, "C054", "live", None, None),
+    ]
+    if include_bit_ext:
+        entries.append(("random_write_bit_ext", 188, "C053", "live", None, None))
+    return _limits(*entries)
 
 
 BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
     "melsec:iq-r": CapabilityProfile(
         profile_id="melsec:iq-r",
+        frame="4E",
+        compat="iQ-R",
+        features=_iqr_common_features("supported"),
+        limits=_iqr_limits(),
+        write_policy=_write_policy("S"),
+    ),
+    "melsec:iq-r:rj71en71": CapabilityProfile(
+        profile_id="melsec:iq-r:rj71en71",
         frame="4E",
         compat="iQ-R",
         features=_iqr_common_features("supported"),
@@ -211,32 +249,64 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="3E",
         compat="Q/L",
         features=_ql_features("policy"),
-        limits=_ql_limits(),
+        limits=_ql_limits("inferred"),
         write_policy=_write_policy("S"),
+    ),
+    "melsec:qcpu:qj71e71-100": CapabilityProfile(
+        profile_id="melsec:qcpu:qj71e71-100",
+        frame="4E",
+        compat="Q/L",
+        features=_ql_unit_features(),
+        limits=_ql_unit_limits(ext_read_max=185, include_bit_ext=True),
+        write_policy=_policy(S="read-write"),
     ),
     "melsec:lcpu": CapabilityProfile(
         profile_id="melsec:lcpu",
         frame="3E",
         compat="Q/L",
         features=_ql_features("live"),
-        limits=_ql_limits(),
+        limits=_ql_limits("live"),
         write_policy=_write_policy("S"),
+    ),
+    "melsec:lcpu:lj71e71-100": CapabilityProfile(
+        profile_id="melsec:lcpu:lj71e71-100",
+        frame="4E",
+        compat="Q/L",
+        features=_ql_unit_features(),
+        limits=_ql_unit_limits(ext_read_max=192, include_bit_ext=False),
+        write_policy=_policy(S="read-write"),
     ),
     "melsec:qnu": CapabilityProfile(
         profile_id="melsec:qnu",
         frame="3E",
         compat="Q/L",
         features=_ql_features("live"),
-        limits=_ql_limits(),
+        limits=_ql_limits("live"),
         write_policy=_write_policy("S"),
+    ),
+    "melsec:qnu:qj71e71-100": CapabilityProfile(
+        profile_id="melsec:qnu:qj71e71-100",
+        frame="4E",
+        compat="Q/L",
+        features=_ql_unit_features(),
+        limits=_ql_unit_limits(ext_read_max=192, include_bit_ext=True),
+        write_policy=_policy(S="read-write"),
     ),
     "melsec:qnudv": CapabilityProfile(
         profile_id="melsec:qnudv",
         frame="3E",
         compat="Q/L",
         features=_ql_features("live"),
-        limits=_ql_limits(),
+        limits=_ql_limits("live"),
         write_policy=_write_policy("S"),
+    ),
+    "melsec:qnudv:qj71e71-100": CapabilityProfile(
+        profile_id="melsec:qnudv:qj71e71-100",
+        frame="4E",
+        compat="Q/L",
+        features=_ql_unit_features(),
+        limits=_ql_unit_limits(ext_read_max=192, include_bit_ext=True),
+        write_policy=_policy(S="read-write"),
     ),
 }
 

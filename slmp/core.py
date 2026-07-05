@@ -124,16 +124,22 @@ class SlmpPlcProfile(str, Enum):
 
     IqF = "melsec:iq-f"
     IqR = "melsec:iq-r"
+    IqRRj71En71 = "melsec:iq-r:rj71en71"
     IqL = "melsec:iq-l"
     MxF = "melsec:mx-f"
     MxR = "melsec:mx-r"
     QCpu = "melsec:qcpu"
+    QCpuQj71E71100 = "melsec:qcpu:qj71e71-100"
     LCpu = "melsec:lcpu"
+    LCpuLj71E71100 = "melsec:lcpu:lj71e71-100"
     QnU = "melsec:qnu"
+    QnUQj71E71100 = "melsec:qnu:qj71e71-100"
     QnUDV = "melsec:qnudv"
+    QnUDVQj71E71100 = "melsec:qnudv:qj71e71-100"
 
 
 _PLC_PROFILES = frozenset(profile.value for profile in SlmpPlcProfile)
+_QCPU_BASE_PROFILE_MESSAGE = "melsec:qcpu is a base profile; use melsec:qcpu:qj71e71-100."
 
 
 @dataclass(frozen=True)
@@ -147,13 +153,43 @@ class _PlcProfileDefaults:
 _PLC_PROFILE_DEFAULTS: dict[str, _PlcProfileDefaults] = {
     "melsec:iq-f": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:iq-f", "melsec:iq-f"),
     "melsec:iq-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:iq-r", "melsec:iq-r"),
+    "melsec:iq-r:rj71en71": _PlcProfileDefaults(
+        FrameType.FRAME_4E,
+        PLCSeries.IQR,
+        "melsec:iq-r",
+        "melsec:iq-r:rj71en71",
+    ),
     "melsec:iq-l": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:iq-l", "melsec:iq-l"),
     "melsec:mx-f": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-f", "melsec:mx-f"),
     "melsec:mx-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-r", "melsec:mx-r"),
     "melsec:qcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qcpu", "melsec:qcpu"),
+    "melsec:qcpu:qj71e71-100": _PlcProfileDefaults(
+        FrameType.FRAME_4E,
+        PLCSeries.QL,
+        "melsec:qcpu",
+        "melsec:qcpu:qj71e71-100",
+    ),
     "melsec:lcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:lcpu", "melsec:lcpu"),
+    "melsec:lcpu:lj71e71-100": _PlcProfileDefaults(
+        FrameType.FRAME_4E,
+        PLCSeries.QL,
+        "melsec:lcpu",
+        "melsec:lcpu:lj71e71-100",
+    ),
     "melsec:qnu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qnu", "melsec:qnu"),
+    "melsec:qnu:qj71e71-100": _PlcProfileDefaults(
+        FrameType.FRAME_4E,
+        PLCSeries.QL,
+        "melsec:qnu",
+        "melsec:qnu:qj71e71-100",
+    ),
     "melsec:qnudv": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qnudv", "melsec:qnudv"),
+    "melsec:qnudv:qj71e71-100": _PlcProfileDefaults(
+        FrameType.FRAME_4E,
+        PLCSeries.QL,
+        "melsec:qnudv",
+        "melsec:qnudv:qj71e71-100",
+    ),
 }
 
 
@@ -177,6 +213,13 @@ def _resolve_plc_profile_defaults(plc_profile: object | None) -> _PlcProfileDefa
     return _PLC_PROFILE_DEFAULTS[normalized]
 
 
+def _profile_address_profile(plc_profile: object | None) -> str | None:
+    defaults = _resolve_plc_profile_defaults(plc_profile)
+    if defaults is None:
+        return None
+    return defaults.address_profile
+
+
 def _resolve_connection_profile(
     *,
     plc_profile: object | None,
@@ -192,6 +235,8 @@ def _resolve_connection_profile(
                 "Do not also pass plc_series, frame_type, or address_profile."
             )
         normalized_plc_profile = _normalize_plc_profile_hint(plc_profile)
+        if normalized_plc_profile == "melsec:qcpu":
+            raise ValueError(_QCPU_BASE_PROFILE_MESSAGE)
         return (
             normalized_plc_profile,
             defaults.plc_series,
@@ -209,14 +254,14 @@ def _resolve_connection_profile(
 
 
 def _resolve_device_radix(code: str, plc_profile: object | None = None) -> int:
-    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    normalized_profile = _profile_address_profile(plc_profile)
     if normalized_profile == "melsec:iq-f" and code in _IQF_OCTAL_DEVICE_CODES:
         return 8
     return DEVICE_CODES[code].radix
 
 
 def _ensure_device_supported_for_profile(code: str, plc_profile: object | None = None) -> None:
-    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    normalized_profile = _profile_address_profile(plc_profile)
     unsupported = _PROFILE_UNSUPPORTED_DEVICE_CODES.get(normalized_profile or "")
     if unsupported is not None and code in unsupported:
         raise SlmpUnsupportedDeviceError(

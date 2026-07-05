@@ -23,13 +23,17 @@ from slmp.errors import SlmpError
 PLC_PROFILES = (
     "melsec:iq-f",
     "melsec:iq-r",
+    "melsec:iq-r:rj71en71",
     "melsec:iq-l",
     "melsec:mx-f",
     "melsec:mx-r",
-    "melsec:qcpu",
+    "melsec:qcpu:qj71e71-100",
     "melsec:lcpu",
+    "melsec:lcpu:lj71e71-100",
     "melsec:qnu",
+    "melsec:qnu:qj71e71-100",
     "melsec:qnudv",
+    "melsec:qnudv:qj71e71-100",
 )
 
 RETRYABLE_ERRORS = (OSError, ConnectionError, TimeoutError, EOFError, asyncio.TimeoutError)
