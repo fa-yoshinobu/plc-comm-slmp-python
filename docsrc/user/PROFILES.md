@@ -1,26 +1,28 @@
 # PLC profiles
 
 Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
+Use `display_name(plc_profile)` for UI labels. Store the canonical profile
+string, not the display name.
 
 For cross-profile capability and device-range details, see the [SLMP Profile Reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/).
 
 ## Profiles
 
-| Canonical profile | Human label | Frame | Mode | Notes |
+| Canonical profile | Display name | Frame | Mode | Notes |
 | --- | --- | --- | --- | --- |
-| `melsec:iq-f` | MELSEC iQ-F | 3E | Legacy `ql` | `X`/`Y` text is octal. |
-| `melsec:iq-r` | MELSEC iQ-R | 4E | iQR `iqr` | `X`/`Y` text is hexadecimal. |
-| `melsec:iq-r:rj71en71` | MELSEC iQ-R via RJ71EN71 | 4E | iQR `iqr` | Ethernet-unit profile using iQ-R address rules. |
-| `melsec:iq-l` | MELSEC iQ-L | 4E | iQR `iqr` | Use for MELSEC iQ-L targets. |
-| `melsec:mx-f` | MELSEC MX-F | 4E | iQR `iqr` | Use for MELSEC MX-F targets. |
-| `melsec:mx-r` | MELSEC MX-R | 4E | iQR `iqr` | Use for MELSEC MX-R targets. |
-| `melsec:lcpu` | MELSEC LCPU | 3E | Legacy `ql` | Legacy L CPU profile. |
-| `melsec:lcpu:lj71e71-100` | MELSEC LCPU via LJ71E71-100 | 4E | Legacy `ql` | Ethernet-unit profile. |
-| `melsec:qnu` | MELSEC QnU | 3E | Legacy `ql` | QnU profile. Use direct or random device commands for normal access. |
-| `melsec:qnu:qj71e71-100` | MELSEC QnU via QJ71E71-100 | 4E | Legacy `ql` | Ethernet-unit profile. |
-| `melsec:qnudv` | MELSEC QnUDV | 3E | Legacy `ql` | QnUDV profile. Use direct or random device commands for normal access. |
-| `melsec:qnudv:qj71e71-100` | MELSEC QnUDV via QJ71E71-100 | 4E | Legacy `ql` | Ethernet-unit profile. |
-| `melsec:qcpu:qj71e71-100` | MELSEC QCPU via QJ71E71-100 | 4E | Legacy `ql` | Ethernet-unit profile. |
+| `melsec:iq-f` | MELSEC iQ-F (built-in) | 3E | Legacy `ql` | `X`/`Y` text is octal. |
+| `melsec:iq-r` | MELSEC iQ-R (built-in) | 4E | iQR `iqr` | `X`/`Y` text is hexadecimal. |
+| `melsec:iq-r:rj71en71` | MELSEC iQ-R (RJ71EN71) | 4E | iQR `iqr` | Ethernet-unit profile using iQ-R address rules. |
+| `melsec:iq-l` | MELSEC iQ-L (built-in) | 4E | iQR `iqr` | Use for MELSEC iQ-L targets. |
+| `melsec:mx-f` | MELSEC MX-F (built-in) | 4E | iQR `iqr` | Use for MELSEC MX-F targets. |
+| `melsec:mx-r` | MELSEC MX-R (built-in) | 4E | iQR `iqr` | Use for MELSEC MX-R targets. |
+| `melsec:lcpu` | MELSEC-L (built-in) | 3E | Legacy `ql` | Legacy L CPU profile. |
+| `melsec:lcpu:lj71e71-100` | MELSEC-L (LJ71E71-100) | 4E | Legacy `ql` | Ethernet-unit profile. |
+| `melsec:qnu` | MELSEC QnU (built-in) | 3E | Legacy `ql` | QnU profile. Use direct or random device commands for normal access. |
+| `melsec:qnu:qj71e71-100` | MELSEC QnU (QJ71E71-100) | 4E | Legacy `ql` | Ethernet-unit profile. |
+| `melsec:qnudv` | MELSEC QnUDV (built-in) | 3E | Legacy `ql` | QnUDV profile. Use direct or random device commands for normal access. |
+| `melsec:qnudv:qj71e71-100` | MELSEC QnUDV (QJ71E71-100) | 4E | Legacy `ql` | Ethernet-unit profile. |
+| `melsec:qcpu:qj71e71-100` | MELSEC-Q (QJ71E71-100) | 4E | Legacy `ql` | Ethernet-unit profile. |
 
 `melsec:qcpu` is base-only and remains as an internal profile for QCPU address and device-range behavior, but it is not a selectable connection profile. Use `melsec:qcpu:qj71e71-100` for QCPU Ethernet-unit communication.
 

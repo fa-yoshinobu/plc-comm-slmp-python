@@ -1,6 +1,6 @@
 """Built-in SLMP capability profiles.
 
-Source: plc-comm-slmp-profiles v1.2.0
+Source: plc-comm-slmp-profiles v1.2.1
 capability/slmp_builtin_ethernet_profiles.json
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.0 capability/slmp_builtin_ethernet_profiles.json"
+CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.1 capability/slmp_builtin_ethernet_profiles.json"
 
 
 @dataclass(frozen=True)
@@ -310,6 +310,23 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
     ),
 }
 
+_PROFILE_DISPLAY_NAMES = {
+    "melsec:iq-r": "MELSEC iQ-R (built-in)",
+    "melsec:iq-r:rj71en71": "MELSEC iQ-R (RJ71EN71)",
+    "melsec:iq-l": "MELSEC iQ-L (built-in)",
+    "melsec:mx-r": "MELSEC MX-R (built-in)",
+    "melsec:mx-f": "MELSEC MX-F (built-in)",
+    "melsec:iq-f": "MELSEC iQ-F (built-in)",
+    "melsec:qcpu": "MELSEC-Q (base profile)",
+    "melsec:qcpu:qj71e71-100": "MELSEC-Q (QJ71E71-100)",
+    "melsec:lcpu": "MELSEC-L (built-in)",
+    "melsec:lcpu:lj71e71-100": "MELSEC-L (LJ71E71-100)",
+    "melsec:qnu": "MELSEC QnU (built-in)",
+    "melsec:qnu:qj71e71-100": "MELSEC QnU (QJ71E71-100)",
+    "melsec:qnudv": "MELSEC QnUDV (built-in)",
+    "melsec:qnudv:qj71e71-100": "MELSEC QnUDV (QJ71E71-100)",
+}
+
 
 def normalize_profile_id(plc_profile: object | None) -> str | None:
     """Return a canonical profile id or None when no profile was selected."""
@@ -326,6 +343,17 @@ def capability_profile(plc_profile: object | None) -> CapabilityProfile | None:
     if profile_id is None:
         return None
     return BUILTIN_CAPABILITY_PROFILES.get(profile_id)
+
+
+def display_name(plc_profile: object | None) -> str:
+    """Return the canonical human-readable display name for a PLC profile."""
+    profile_id = normalize_profile_id(plc_profile)
+    if profile_id is None:
+        raise ValueError("plc_profile is required.")
+    try:
+        return _PROFILE_DISPLAY_NAMES[profile_id]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported plc_profile: {plc_profile!r}.") from exc
 
 
 def profile_limit(plc_profile: object | None, key: str) -> CapabilityLimit | None:

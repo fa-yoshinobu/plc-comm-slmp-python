@@ -40,6 +40,7 @@ from .core import (
     parse_device,
     parse_extended_device,
 )
+from .capability_profiles import display_name
 from .device_ranges import (
     SlmpDeviceRangeCatalog,
     SlmpDeviceRangeCategory,
@@ -151,6 +152,7 @@ __all__ = [
     "SlmpTraceFrame",
     "TypeNameInfo",
     "decode_cpu_operation_state",
+    "display_name",
     "format_address",
     "get_end_code_message",
     "get_end_code_name",
