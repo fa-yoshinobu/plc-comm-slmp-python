@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Library: Synced the embedded SLMP capability fixture to `plc-comm-slmp-profiles` `v1.2.1`, including `display_name` labels and Ethernet unit profiles for RJ71EN71, LJ71E71-100, and QJ71E71-100 variants.
+- Library: Added `display_name(plc_profile)` as the public UI-label helper while keeping stored PLC profile values canonical.
+- Docs: Documented the profile display-name helper and canonical-ID storage guidance.
+- Tests: Added canonical fixture parity coverage for profile `display_name` values.
 - Library: Added non-breaking SLMP specification-audit updates for manual-conformant request framing, point-limit guards, response correlation, UDP source filtering, and PLC error diagnostics.
 - Library: Exposed structured PLC error information on `SlmpResponse.error_info` and `SlmpError.error_info` when a non-zero end-code response carries the 9-byte error information block.
 - Library: Enforced documented point limits before transport: iQ-F direct bit access is limited to 3584 points, and 008x extended random/monitor routes use the 96-point / weighted-960 / 94-bit limits.
