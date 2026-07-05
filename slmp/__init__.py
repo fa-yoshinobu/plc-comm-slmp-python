@@ -13,6 +13,7 @@ The primary user-facing entry points are:
 __version__ = "1.1.1"
 
 from .async_client import AsyncSlmpClient
+from .capability_profiles import display_name
 from .client import SlmpClient
 from .constants import Command, FrameType, ModuleIONo, PLCSeries
 from .core import (
@@ -40,7 +41,6 @@ from .core import (
     parse_device,
     parse_extended_device,
 )
-from .capability_profiles import display_name
 from .device_ranges import (
     SlmpDeviceRangeCatalog,
     SlmpDeviceRangeCategory,
