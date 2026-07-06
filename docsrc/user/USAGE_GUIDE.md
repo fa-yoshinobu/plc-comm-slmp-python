@@ -40,8 +40,8 @@ async def main() -> None:
         monitoring_timer=0x0010,
         raise_on_error=True,
     )
-async with await open_and_connect(options) as client:
-    print(f"connected profile={client.plc_profile}")
+    async with await open_and_connect(options) as client:
+        print(f"connected profile={client.plc_profile}")
 
 
 asyncio.run(main())
