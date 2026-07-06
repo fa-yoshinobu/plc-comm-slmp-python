@@ -51,6 +51,21 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 | Address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word` |
 
+## Target Module I/O Constants
+
+`ModuleIONo` provides named request-header module I/O numbers for multi-CPU
+and routed CPU targets. Pass these values to `SlmpTarget(module_io=...)`;
+the default `SlmpTarget()` remains the connected/default CPU route `0x03FF`.
+
+| Constant | Value |
+| --- | --- |
+| `ModuleIONo.CONTROL_CPU` / `ModuleIONo.ACTIVE_CPU` | `0x03D0` |
+| `ModuleIONo.STANDBY_CPU` | `0x03D1` |
+| `ModuleIONo.TYPE_A_CPU` | `0x03D2` |
+| `ModuleIONo.TYPE_B_CPU` | `0x03D3` |
+| `ModuleIONo.CPU_1` .. `ModuleIONo.CPU_4` | `0x03E0` .. `0x03E3` |
+| `ModuleIONo.CONNECTED_CPU` / `ModuleIONo.DEFAULT` / `ModuleIONo.OWN_STATION` | `0x03FF` |
+
 ## Generated API Details
 
 The docs site also renders the installed package with mkdocstrings so class,

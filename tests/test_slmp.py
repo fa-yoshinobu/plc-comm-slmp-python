@@ -29,7 +29,7 @@ from slmp.client import (
     _recv_exact,
     _recv_tcp_frame,
 )
-from slmp.constants import Command, FrameType, PLCSeries
+from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries
 from slmp.core import (
     DeviceRef,
     ExtensionSpec,
@@ -350,7 +350,7 @@ class TestCodec(unittest.TestCase):
         """Test test_encode_4e_request."""
         frame = encode_4e_request(
             serial=0x1234,
-            target=SlmpTarget(network=1, station=2, module_io=0x03FF, multidrop=0),
+            target=SlmpTarget(network=1, station=2, module_io=ModuleIONo.CPU_2, multidrop=0),
             monitoring_timer=0x0010,
             command=0x0401,
             subcommand=0x0000,
@@ -360,7 +360,7 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(frame[2:4], b"\x34\x12")
         self.assertEqual(frame[6], 1)
         self.assertEqual(frame[7], 2)
-        self.assertEqual(frame[8:10], b"\xff\x03")
+        self.assertEqual(frame[8:10], b"\xe1\x03")
         self.assertEqual(frame[11:13], (8).to_bytes(2, "little"))  # timer + cmd + subcmd + 2-byte payload
         self.assertEqual(frame[13:15], b"\x10\x00")
         self.assertEqual(frame[15:17], b"\x01\x04")

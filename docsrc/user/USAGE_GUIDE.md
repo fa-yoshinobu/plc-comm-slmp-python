@@ -78,7 +78,7 @@ selector; routed devices such as `Un\Gn` and `Jn\...` still need their own
 address syntax.
 
 ```python
-from slmp import SlmpConnectionOptions, SlmpTarget
+from slmp import ModuleIONo, SlmpConnectionOptions, SlmpTarget
 
 options = SlmpConnectionOptions(
     host="192.168.250.100",
@@ -96,7 +96,7 @@ options = SlmpConnectionOptions(
 For a multi-CPU self target, you can also use the named module I/O helpers:
 
 ```python
-target = SlmpTarget(module_io="MULTIPLE_CPU_2")
+target = SlmpTarget(module_io=ModuleIONo.CPU_2)
 ```
 
 Use the default target unless the PLC routing setup gives you specific values.
