@@ -1,5 +1,6 @@
 import unittest
 
+from slmp.constants import ModuleIONo
 from slmp.core import (
     SlmpError,
     SlmpTarget,
@@ -20,8 +21,28 @@ class TestBugsAndEdges(unittest.TestCase):
 
     def test_slmp_target_module_io_keywords(self) -> None:
         """Test SlmpTarget module_io keywords."""
-        t = SlmpTarget(module_io="CONTROL_CPU")
-        self.assertEqual(t.module_io, 0x03FF)
+        expected = {
+            "CONTROL_SYSTEM_CPU": 0x03D0,
+            "STANDBY_SYSTEM_CPU": 0x03D1,
+            "SYSTEM_A_CPU": 0x03D2,
+            "SYSTEM_B_CPU": 0x03D3,
+            "MULTIPLE_CPU_1": 0x03E0,
+            "MULTIPLE_CPU_2": 0x03E1,
+            "MULTIPLE_CPU_3": 0x03E2,
+            "MULTIPLE_CPU_4": 0x03E3,
+            "REMOTE_HEAD_1": 0x03E0,
+            "REMOTE_HEAD_2": 0x03E1,
+            "CONTROL_SYSTEM_REMOTE_HEAD": 0x03D0,
+            "STANDBY_SYSTEM_REMOTE_HEAD": 0x03D1,
+            "OWN_STATION": 0x03FF,
+        }
+        for name, value in expected.items():
+            self.assertEqual(ModuleIONo.__members__[name].value, value)
+
+        t = SlmpTarget(module_io="CONTROL_SYSTEM_CPU")
+        self.assertEqual(t.module_io, 0x03D0)
+        t = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
+        self.assertEqual(t.module_io, 0x03E1)
         t = SlmpTarget(module_io="own_station")
         self.assertEqual(t.module_io, 0x03FF)
         with self.assertRaises(ValueError):

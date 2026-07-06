@@ -172,7 +172,7 @@ python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --
 Own-station multiple-CPU shorthand is also supported at the parser level:
 
 ```powershell
-python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --frame-type 4e --target SELF-CPU1
+python scripts/slmp_other_station_check.py --host 192.168.250.100 --port 1025 --transport tcp --series iqr --frame-type 4e --target SELF-MULTIPLE-CPU-1
 ```
 
 Local generated report:
@@ -289,7 +289,7 @@ python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --se
 You can also sweep multiple transports and named targets in one report:
 
 ```powershell
-python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --transport udp --target SELF --target SELF-CPU1 --device U3E0\G10 --points 1 --points 4
+python scripts/slmp_g_hg_extended_device_coverage.py --host 192.168.250.100 --series iqr --transport tcp --transport udp --target SELF --target SELF-MULTIPLE-CPU-1 --device U3E0\G10 --points 1 --points 4
 ```
 
 If `read_type_name()` is unsupported on the resolved path, the sweep continues and records the coverage rows anyway.

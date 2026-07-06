@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Library: Added named SLMP target module I/O constants for multi-CPU routing while keeping the default own-station target unchanged, and removed the erroneous `ModuleIONo.CONTROL_CPU` alias instead of silently changing its target.
+- Library: Removed short module I/O aliases as a breaking terminology cleanup; use `CONTROL_CPU` -> `OWN_STATION` for the previous connected-CPU behavior or `CONTROL_SYSTEM_CPU` for the redundant control-system route, `CONNECTED_CPU` / `DEFAULT` -> `OWN_STATION`, `ACTIVE_CPU` -> `CONTROL_SYSTEM_CPU`, `STANDBY_CPU` -> `STANDBY_SYSTEM_CPU`, `TYPE_A_CPU` -> `SYSTEM_A_CPU`, `TYPE_B_CPU` -> `SYSTEM_B_CPU`, and `CPU_1`-`CPU_4` -> `MULTIPLE_CPU_1`-`MULTIPLE_CPU_4`. The self target shortcut moved from `SELF-CPU1`-`SELF-CPU4` to `SELF-MULTIPLE-CPU-1`-`SELF-MULTIPLE-CPU-4`.
+- Docs: Documented `ModuleIONo` values in the API reference and routing guide.
+- Tests: Added request-header coverage showing named module I/O constants are encoded into the SLMP target field.
 - Library: Synced the embedded SLMP capability fixture to `plc-comm-slmp-profiles` `v1.2.2`, including inferred Q/L 008x extended random/monitor limit keys and iQ-F `not-adopted` monitor limit placeholders.
 - Docs: Added the 2026-07-06 five-implementation SLMP API parity snapshot to the maintainer API unification policy.
 - Tooling: Changed the canonical profile update script default ref to `v1.2.2`.

@@ -66,7 +66,7 @@ class SlmpTarget:
 
     Attributes:
         network: Network number (0x00 for local network).
-        station: Station number (0xFF for control CPU).
+        station: Station number (0xFF for the connected station).
         module_io: Module I/O number (0x03FF for own station).
         multidrop: Multidrop station number (0x00 for no multidrop).
     """

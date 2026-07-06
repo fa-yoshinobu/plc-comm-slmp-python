@@ -1205,7 +1205,7 @@ def _hex_bytes(data: bytes) -> str:
 
 _TARGET_NAME_PATTERN = re.compile(r"^NW(?P<network>\d+)-ST(?P<station>\d+)$", re.IGNORECASE)
 _SELF_TARGET_NAME = "SELF"
-_SELF_CPU_TARGET_PATTERN = re.compile(r"^SELF-CPU(?P<cpu>[1-4])$", re.IGNORECASE)
+_SELF_MULTIPLE_CPU_TARGET_PATTERN = re.compile(r"^SELF-MULTIPLE-CPU-(?P<cpu>[1-4])$", re.IGNORECASE)
 _DEFAULT_OTHER_STATION_MODULE_IO = 0x03FF
 _DEFAULT_OTHER_STATION_MULTIDROP = 0x00
 _DEFAULT_SELF_NETWORK = 0x00
@@ -1216,12 +1216,12 @@ def _resolve_self_target_name(name: str) -> tuple[str, int] | None:
     upper_name = name.upper()
     if upper_name == _SELF_TARGET_NAME:
         return _SELF_TARGET_NAME, _DEFAULT_OTHER_STATION_MODULE_IO
-    match = _SELF_CPU_TARGET_PATTERN.fullmatch(name)
+    match = _SELF_MULTIPLE_CPU_TARGET_PATTERN.fullmatch(name)
     if not match:
         return None
     cpu_index = int(match.group("cpu"), 10)
     module_io = ModuleIONo[f"MULTIPLE_CPU_{cpu_index}"].value
-    return f"SELF-CPU{cpu_index}", module_io
+    return f"SELF-MULTIPLE-CPU-{cpu_index}", module_io
 
 
 def _parse_named_target(text: str) -> NamedTarget:
@@ -1244,7 +1244,9 @@ def _parse_named_target(text: str) -> NamedTarget:
             )
         name_match = _TARGET_NAME_PATTERN.fullmatch(name)
         if not name_match:
-            raise ValueError("target must be SELF, SELF-CPU1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP")
+            raise ValueError(
+                "target must be SELF, SELF-MULTIPLE-CPU-1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP"
+            )
         network = int(name_match.group("network"), 10)
         station = int(name_match.group("station"), 10)
         name = f"NW{network}-ST{station}"
@@ -1259,8 +1261,8 @@ def _parse_named_target(text: str) -> NamedTarget:
         )
     if len(parts) != 5:
         raise ValueError(
-            "target must be SELF, SELF-CPU1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP "
-            "(example: SELF, SELF-CPU1, NW1-ST2, or remote1,0x00,0x01,0x03FF,0x00)"
+            "target must be SELF, SELF-MULTIPLE-CPU-1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP "
+            "(example: SELF, SELF-MULTIPLE-CPU-1, NW1-ST2, or remote1,0x00,0x01,0x03FF,0x00)"
         )
     name = parts[0]
     if not name:
@@ -1337,7 +1339,7 @@ def _default_named_target(target: SlmpTarget) -> NamedTarget:
             int(ModuleIONo[f"MULTIPLE_CPU_{cpu_index}"].value),
             _DEFAULT_OTHER_STATION_MULTIDROP,
         ):
-            return NamedTarget(name=f"SELF-CPU{cpu_index}", target=target)
+            return NamedTarget(name=f"SELF-MULTIPLE-CPU-{cpu_index}", target=target)
     return NamedTarget(
         name=(
             f"target_0x{target.network:02X}_0x{target.station:02X}_"
@@ -1915,12 +1917,12 @@ def _render_model_other_station_targets_example() -> str:
             "# Example target list for scripts/slmp_other_station_check.py",
             "# Format:",
             "#   SELF",
-            "#   SELF-CPU1 .. SELF-CPU4",
+            "#   SELF-MULTIPLE-CPU-1 .. SELF-MULTIPLE-CPU-4",
             "#   NWx-STy",
             "#   or name,network,station,module_io,multidrop",
             "",
             "SELF",
-            "SELF-CPU1",
+            "SELF-MULTIPLE-CPU-1",
             "remote_station_01,0x00,0x01,0x03FF,0x00",
             "remote_station_02,0x00,0x02,0x03FF,0x00",
             "",
@@ -3041,12 +3043,12 @@ def other_station_check_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--target",
         action="append",
-        help="SELF, SELF-CPU1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP (repeatable)",
+        help="SELF, SELF-MULTIPLE-CPU-1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP (repeatable)",
     )
     parser.add_argument(
         "--target-file",
         help=(
-            "optional UTF-8 file with one SELF, SELF-CPU1..4, NWx-STy, "
+            "optional UTF-8 file with one SELF, SELF-MULTIPLE-CPU-1..4, NWx-STy, "
             "or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP per line"
         ),
     )
@@ -3646,7 +3648,10 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
     parser.add_argument(
         "--target",
         action="append",
-        help="optional target override: SELF, SELF-CPU1..4, NWx-STy, or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP",
+        help=(
+            "optional target override: SELF, SELF-MULTIPLE-CPU-1..4, NWx-STy, "
+            "or NAME,NETWORK,STATION,MODULE_IO,MULTIDROP"
+        ),
     )
     parser.add_argument(
         "--target-file",
