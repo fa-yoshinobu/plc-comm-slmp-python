@@ -142,6 +142,44 @@ Examples:
 
 Python-specific helper names may remain more descriptive where the C++ layer uses overloads or buffer-oriented signatures.
 
+## Five-Implementation Parity Snapshot
+
+Snapshot date: 2026-07-06.
+
+Legend:
+
+- `yes`: implemented in the public low-level/client library surface.
+- `gap`: intentionally not implemented in that library today; the note explains the current boundary.
+- `n/a`: not a normal target for that implementation's scope.
+
+| Canonical operation family | Python | .NET | C++ minimal | Rust | Node-RED |
+| --- | --- | --- | --- | --- | --- |
+| direct word/bit read/write | yes: `read_devices` / `write_devices` | yes: `ReadWordsRawAsync` / `WriteWordsAsync` / bit variants | yes: `readWords` / `writeWords` / bit variants | yes: `read_words_raw` / `write_words` / bit variants | yes: `readDevices` / `writeDevices` |
+| dword / float32 helpers | yes | yes | yes | yes | gap: low-level Node API keeps word/dword random and typed high-level helpers instead |
+| extended direct word/bit read/write | yes: `read_devices_ext` / `write_devices_ext` | yes: `ReadWordsExtendedAsync` / `WriteWordsExtendedAsync` / bit variants | yes: `readWordsModuleBuf` / `writeWordsModuleBuf` and link-direct helpers | yes: `read_words_extended` / `write_words_extended` / bit variants | gap: Node-RED low-level surface currently exposes extended random only |
+| random read | yes: `read_random` | yes: `ReadRandomAsync` | yes: `readRandom` | yes: `read_random` | yes: `readRandom` |
+| extended random read | yes: `read_random_ext` | yes: `ReadRandomExtAsync` | yes: `readRandomExt` | yes: `read_random_ext` | yes: `readRandomExt` |
+| random word/dword write | yes: `write_random_words` | yes: `WriteRandomWordsAsync` | yes: `writeRandomWords` | yes: `write_random_words` | yes: `writeRandomWords` |
+| extended random word/dword write | yes: `write_random_words_ext` | yes: `WriteRandomWordsExtAsync` | yes: `writeRandomWordsExt` | yes: `write_random_words_ext` | yes: `writeRandomWordsExt` |
+| random bit write | yes: `write_random_bits` | yes: `WriteRandomBitsAsync` | yes: `writeRandomBits` | yes: `write_random_bits` | yes: `writeRandomBits` |
+| extended random bit write | yes: `write_random_bits_ext` | yes: `WriteRandomBitsExtAsync` | yes: `writeRandomBitsExt` | yes: `write_random_bits_ext` | yes: `writeRandomBitsExt` |
+| block read/write | yes: `read_block` / `write_block` | yes: `ReadBlockAsync` / `WriteBlockAsync` | yes: `readBlock` / `writeBlock` | yes: `read_block` / `write_block` | yes: `readBlock` / `writeBlock` |
+| type name | yes: `read_type_name` | yes: `ReadTypeNameAsync` | yes: `readTypeName` | yes: `read_type_name` | yes: `readTypeName` |
+| monitor register/cycle | yes: `register_monitor_devices`, `register_monitor_devices_ext`, `run_monitor_cycle` | yes: `RegisterMonitorDevicesAsync`, `RegisterMonitorDevicesExtAsync`, `RunMonitorCycleAsync` | yes: `registerMonitorDevices`, `registerMonitorDevicesExt`, `runMonitorCycle` | gap: typed monitor API is backlog; raw request validation exists | gap: Node-RED low-level surface has no monitor-register API yet |
+| memory read/write words | yes: `memory_read_words` / `memory_write_words` | yes: `MemoryReadWordsAsync` / `MemoryWriteWordsAsync` | gap: minimal client does not expose memory commands | yes: `memory_read_words` / `memory_write_words` | yes: `memoryReadWords` / `memoryWriteWords` |
+| extend-unit read/write words | yes: `extend_unit_read_words` / `extend_unit_write_words` | yes: `ExtendUnitReadWordsAsync` / `ExtendUnitWriteWordsAsync` | gap: minimal client uses extended-device module/link helpers instead of 0601/1601 helpers | yes: `extend_unit_read_words` / `extend_unit_write_words` | yes: `extendUnitReadWords` / `extendUnitWriteWords` |
+| CPU-buffer convenience helpers | yes: `cpu_buffer_read_words` / `cpu_buffer_write_words` | yes: `CpuBufferReadWordsAsync` / `CpuBufferWriteWordsAsync` | gap: use `readWordsModuleBuf(..., use_hg=true, ...)` / `writeWordsModuleBuf` | gap: use extended-device HG or extend-unit primitives directly | gap: use lower-level extend-unit/extended-device primitives when added |
+| label array read/write | yes: `read_array_labels` / `write_array_labels` | yes: `ReadArrayLabelsAsync` / `WriteArrayLabelsAsync` | yes: `readArrayLabels` / `writeArrayLabels` | yes: `read_array_labels` / `write_array_labels` | yes: `readArrayLabels` / `writeArrayLabels` |
+| label random read/write | yes: `read_random_labels` / `write_random_labels` | yes: `ReadRandomLabelsAsync` / `WriteRandomLabelsAsync` | yes: `readRandomLabels` / `writeRandomLabels` | yes: `read_random_labels` / `write_random_labels` | yes: `readRandomLabels` / `writeRandomLabels` |
+| remote CPU control | yes: `remote_run` / stop / pause / latch-clear / reset | yes: `RemoteRunAsync` / stop / pause / latch-clear / reset | yes: `remoteRun` / stop / pause / latch-clear / reset | yes: `remote_run` / stop / pause / latch-clear / reset | yes: `remoteRun`; other control commands can use `rawCommand` until surfaced |
+| remote password lock/unlock | yes: `remote_password_lock` / `remote_password_unlock` | yes: `RemotePasswordLockAsync` / `RemotePasswordUnlockAsync` | yes: `remotePasswordLock` / `remotePasswordUnlock` | yes: `remote_password_lock` / `remote_password_unlock` | yes: `remotePasswordLock` / `remotePasswordUnlock` |
+
+Current follow-up decisions:
+
+- Rust monitor registration/cycle APIs are a backlog item, not part of the 2026-07-06 ext-random parity fix.
+- Node-RED editor nodes do not need to expose every low-level API. For this snapshot, Node-RED parity means the JavaScript client library surface exists.
+- C++ minimal keeps its memory/extend-unit command surface intentionally smaller than Python/.NET; existing module-buffer and link-direct helpers cover the embedded-oriented extended word paths.
+
 ## Internal Naming Rules
 
 Public methods should be action-first and domain-clear.

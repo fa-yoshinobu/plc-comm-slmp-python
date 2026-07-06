@@ -1,6 +1,6 @@
 """Built-in SLMP capability profiles.
 
-Source: plc-comm-slmp-profiles v1.2.1
+Source: plc-comm-slmp-profiles v1.2.2
 capability/slmp_builtin_ethernet_profiles.json
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.1 capability/slmp_builtin_ethernet_profiles.json"
+CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.2 capability/slmp_builtin_ethernet_profiles.json"
 
 
 @dataclass(frozen=True)
@@ -146,13 +146,20 @@ def _iqf_limits() -> dict[str, CapabilityLimit]:
         ("random_read_word", 192, "C054", "live", None, None),
         ("random_write_word", 160, "C054", "live", 1920, None),
         ("random_write_bit", 188, "C053", "live", None, None),
+        ("monitor_register_word", 192, "C054", "not-adopted", None, None),
         ("random_read_word_ext", 96, "C054", "live", None, None),
         ("random_write_word_ext", 80, "C054", "live", 960, None),
         ("random_write_bit_ext", 94, "C053", "live", None, None),
+        ("monitor_register_word_ext", 96, "C054", "not-adopted", None, None),
     )
 
 
-def _ql_limits(source: str) -> dict[str, CapabilityLimit]:
+def _ql_limits(
+    source: str,
+    *,
+    ext_read_max: int = 192,
+    ext_read_over_end_code: str = "C054",
+) -> dict[str, CapabilityLimit]:
     return _limits(
         ("direct_word_read", 960, "C051", source, None, None),
         ("direct_word_write", 960, "C051", source, None, None),
@@ -162,10 +169,19 @@ def _ql_limits(source: str) -> dict[str, CapabilityLimit]:
         ("random_write_word", 160, "C054", source, 1920, None),
         ("random_write_bit", 188, "C053", source, None, None),
         ("monitor_register_word", 192, "C054", source, None, None),
+        ("random_read_word_ext", ext_read_max, ext_read_over_end_code, "inferred", None, None),
+        ("random_write_word_ext", 160, "4080", "inferred", 1920, None),
+        ("random_write_bit_ext", 188, "C053", "inferred", None, None),
+        ("monitor_register_word_ext", 192, "C054", "inferred", None, None),
     )
 
 
-def _ql_unit_limits(*, ext_read_max: int, include_bit_ext: bool) -> dict[str, CapabilityLimit]:
+def _ql_unit_limits(
+    *,
+    ext_read_max: int,
+    include_bit_ext: bool,
+    bit_ext_source: str = "live",
+) -> dict[str, CapabilityLimit]:
     entries: list[tuple[str, int, str | None, str, int | None, str | None]] = [
         ("direct_word_read", 960, "C051", "live", None, None),
         ("direct_word_write", 960, "C051", "live", None, None),
@@ -180,7 +196,7 @@ def _ql_unit_limits(*, ext_read_max: int, include_bit_ext: bool) -> dict[str, Ca
         ("monitor_register_word_ext", 192, "C054", "live", None, None),
     ]
     if include_bit_ext:
-        entries.append(("random_write_bit_ext", 188, "C053", "live", None, None))
+        entries.append(("random_write_bit_ext", 188, "C053", bit_ext_source, None, None))
     return _limits(*entries)
 
 
@@ -249,7 +265,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="3E",
         compat="Q/L",
         features=_ql_features("policy"),
-        limits=_ql_limits("inferred"),
+        limits=_ql_limits("inferred", ext_read_max=185, ext_read_over_end_code="4080"),
         write_policy=_write_policy("S"),
     ),
     "melsec:qcpu:qj71e71-100": CapabilityProfile(
@@ -273,7 +289,7 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         frame="4E",
         compat="Q/L",
         features=_ql_unit_features(),
-        limits=_ql_unit_limits(ext_read_max=192, include_bit_ext=False),
+        limits=_ql_unit_limits(ext_read_max=192, include_bit_ext=True, bit_ext_source="inferred"),
         write_policy=_policy(S="read-write"),
     ),
     "melsec:qnu": CapabilityProfile(

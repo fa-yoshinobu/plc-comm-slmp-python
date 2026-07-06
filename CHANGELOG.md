@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tooling`: Developer/operator command-line tools and helper utilities.
 - `CI`: Release checks, workflow scripts, or automation-only changes.
 
+## [Unreleased]
+
+### Changed
+- Library: Synced the embedded SLMP capability fixture to `plc-comm-slmp-profiles` `v1.2.2`, including inferred Q/L 008x extended random/monitor limit keys and iQ-F `not-adopted` monitor limit placeholders.
+- Docs: Added the 2026-07-06 five-implementation SLMP API parity snapshot to the maintainer API unification policy.
+- Tooling: Changed the canonical profile update script default ref to `v1.2.2`.
+
 ## [1.2.0] - 2026-07-05
 
 ### Changed

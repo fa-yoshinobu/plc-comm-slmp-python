@@ -1961,8 +1961,8 @@ class TestDeviceApi(unittest.TestCase):
             client.register_monitor_devices_ext(word_devices=read_devices, series=PLCSeries.QL)
         self.assertIsNone(client.last_request)
 
-    def test_extended_random_profile_limits_do_not_relax_008x_limits(self) -> None:
-        """Profile-specific 192/160/188 limits must not relax 008x extended limits."""
+    def test_extended_random_profile_limits_follow_canonical_profile_values(self) -> None:
+        """Extended routes use the selected profile's canonical 008x limits."""
         client = FakeClient(plc_profile="melsec:iq-f")
 
         read_devices = [(f"D{index}", ExtensionSpec()) for index in range(97)]
@@ -1979,8 +1979,9 @@ class TestDeviceApi(unittest.TestCase):
             client.write_random_bits_ext(bit_values=bit_values)
 
         monitor_client = FakeClient(plc_profile="melsec:lcpu")
-        with self.assertRaisesRegex(ValueError, r"1..96"):
-            monitor_client.register_monitor_devices_ext(word_devices=read_devices)
+        monitor_devices = [(f"D{index}", ExtensionSpec()) for index in range(193)]
+        with self.assertRaisesRegex(ValueError, r"1..192"):
+            monitor_client.register_monitor_devices_ext(word_devices=monitor_devices)
 
         self.assertIsNone(client.last_request)
         self.assertIsNone(monitor_client.last_request)
