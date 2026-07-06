@@ -22,7 +22,6 @@ class TestBugsAndEdges(unittest.TestCase):
     def test_slmp_target_module_io_keywords(self) -> None:
         """Test SlmpTarget module_io keywords."""
         expected = {
-            "CONTROL_CPU": 0x03D0,
             "CONTROL_SYSTEM_CPU": 0x03D0,
             "STANDBY_SYSTEM_CPU": 0x03D1,
             "SYSTEM_A_CPU": 0x03D2,
@@ -36,13 +35,11 @@ class TestBugsAndEdges(unittest.TestCase):
             "CONTROL_SYSTEM_REMOTE_HEAD": 0x03D0,
             "STANDBY_SYSTEM_REMOTE_HEAD": 0x03D1,
             "OWN_STATION": 0x03FF,
-            "DEFAULT": 0x03FF,
-            "CONNECTED_CPU": 0x03FF,
         }
         for name, value in expected.items():
             self.assertEqual(ModuleIONo.__members__[name].value, value)
 
-        t = SlmpTarget(module_io="CONTROL_CPU")
+        t = SlmpTarget(module_io="CONTROL_SYSTEM_CPU")
         self.assertEqual(t.module_io, 0x03D0)
         t = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
         self.assertEqual(t.module_io, 0x03E1)

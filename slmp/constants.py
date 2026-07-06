@@ -35,7 +35,6 @@ class DeviceUnit(IntEnum):
 class ModuleIONo(IntEnum):
     """Request destination module I/O No. from SLMP specification SH080956ENGN 4.2."""
 
-    CONTROL_CPU = 0x03D0
     CONTROL_SYSTEM_CPU = 0x03D0
     STANDBY_SYSTEM_CPU = 0x03D1
     SYSTEM_A_CPU = 0x03D2
@@ -45,8 +44,6 @@ class ModuleIONo(IntEnum):
     MULTIPLE_CPU_3 = 0x03E2
     MULTIPLE_CPU_4 = 0x03E3
     OWN_STATION = 0x03FF
-    DEFAULT = 0x03FF
-    CONNECTED_CPU = 0x03FF
 
     # Remote head aliases
     REMOTE_HEAD_1 = 0x03E0
