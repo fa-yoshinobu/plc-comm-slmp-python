@@ -3,8 +3,8 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "slmp-connect-python"
-version = "1.2.0"
+name = "plc-comm-slmp"
+version = "2.0.0"
 description = "SLMP Connect Python: client library for MELSEC SLMP binary communication"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ authors = [{ name = "fa-yoshinobu" }]
 license = "MIT"
 
 license-files = ["LICENSE"]
-keywords = ["slmp", "melsec", "plc", "3e", "4e", "binary"]
+keywords = ["plc-comm", "slmp", "melsec", "mitsubishi", "plc", "3e", "4e", "binary"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",

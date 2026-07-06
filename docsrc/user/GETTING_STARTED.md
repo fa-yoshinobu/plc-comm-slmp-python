@@ -17,7 +17,7 @@ Use this page to make your first safe SLMP read and write with the high-level AP
 ## Install
 
 ```bash
-pip install slmp-connect-python
+pip install plc-comm-slmp
 ```
 
 ## Choose your PLC profile
