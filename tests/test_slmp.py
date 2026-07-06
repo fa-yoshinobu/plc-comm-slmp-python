@@ -54,6 +54,10 @@ from slmp.errors import SlmpProfileFeatureError
 print(f"DEBUG: core file = {slmp.core.__file__}")
 
 
+def test_import_name_stays_slmp_after_package_rename() -> None:
+    assert slmp.core.__name__ == "slmp.core"
+
+
 class FakeClient(SlmpClient):
     """Fake SLMP client for testing."""
 

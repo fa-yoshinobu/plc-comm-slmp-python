@@ -17,14 +17,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-06
+
+### BREAKING
+- Release: Renamed the PyPI install package while keeping the Python import name unchanged.
+
+| Old install name | New install name | Import name |
+| --- | --- | --- |
+| `slmp-connect-python` | `plc-comm-slmp` | `slmp` |
+
+- Library: Removed short `ModuleIONo` aliases in favor of the canonical module I/O vocabulary.
+
+| Removed name | Use instead |
+| --- | --- |
+| `CONTROL_CPU`, `CONNECTED_CPU`, `DEFAULT` | `OWN_STATION` |
+| `ACTIVE_CPU` | `CONTROL_SYSTEM_CPU` |
+| `STANDBY_CPU` | `STANDBY_SYSTEM_CPU` |
+| `TYPE_A_CPU` | `SYSTEM_A_CPU` |
+| `TYPE_B_CPU` | `SYSTEM_B_CPU` |
+| `CPU_1` to `CPU_4` | `MULTIPLE_CPU_1` to `MULTIPLE_CPU_4` |
+| `SELF-CPU1` to `SELF-CPU4` | `SELF-MULTIPLE-CPU-1` to `SELF-MULTIPLE-CPU-4` |
+
 ### Changed
-- Library: Added named SLMP target module I/O constants for multi-CPU routing while keeping the default own-station target unchanged, and removed the erroneous `ModuleIONo.CONTROL_CPU` alias instead of silently changing its target.
-- Library: Removed short module I/O aliases as a breaking terminology cleanup; use `CONTROL_CPU` -> `OWN_STATION` for the previous connected-CPU behavior or `CONTROL_SYSTEM_CPU` for the redundant control-system route, `CONNECTED_CPU` / `DEFAULT` -> `OWN_STATION`, `ACTIVE_CPU` -> `CONTROL_SYSTEM_CPU`, `STANDBY_CPU` -> `STANDBY_SYSTEM_CPU`, `TYPE_A_CPU` -> `SYSTEM_A_CPU`, `TYPE_B_CPU` -> `SYSTEM_B_CPU`, and `CPU_1`-`CPU_4` -> `MULTIPLE_CPU_1`-`MULTIPLE_CPU_4`. The self target shortcut moved from `SELF-CPU1`-`SELF-CPU4` to `SELF-MULTIPLE-CPU-1`-`SELF-MULTIPLE-CPU-4`.
-- Docs: Documented `ModuleIONo` values in the API reference and routing guide.
-- Tests: Added request-header coverage showing named module I/O constants are encoded into the SLMP target field.
+- Release: Bumped package metadata to `2.0.0`.
+- Library: Added named SLMP target module I/O constants for multi-CPU routing while keeping the default own-station target unchanged.
 - Library: Synced the embedded SLMP capability fixture to `plc-comm-slmp-profiles` `v1.2.2`, including inferred Q/L 008x extended random/monitor limit keys and iQ-F `not-adopted` monitor limit placeholders.
-- Docs: Added the 2026-07-06 five-implementation SLMP API parity snapshot to the maintainer API unification policy.
-- Tooling: Changed the canonical profile update script default ref to `v1.2.2`.
+- Docs: Added the plc-comm family package matrix link to the README and documented `ModuleIONo` values in user-facing API/routing docs.
+- Tests: Added package-rename import-name coverage for `import slmp`.
+- Tooling: Updated release duplicate checks to query `plc-comm-slmp`.
 
 ## [1.2.0] - 2026-07-05
 

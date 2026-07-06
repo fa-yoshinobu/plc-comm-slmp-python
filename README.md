@@ -1,11 +1,15 @@
 [![CI](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/slmp-connect-python.svg)](https://pypi.org/project/slmp-connect-python/)
+[![PyPI](https://img.shields.io/pypi/v/plc-comm-slmp.svg)](https://pypi.org/project/plc-comm-slmp/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 # MELSEC SLMP for Python
 
 Python library for MELSEC SLMP (Binary 3E/4E) PLC communication.
+
+## PLC Comm Family
+
+This library is part of the plc-comm family. See the [package matrix](https://fa-yoshinobu.github.io/plc-comm-docs-site/package-matrix/) for protocol, language, registry, and install-command mapping.
 
 ## Supported PLC profiles
 
@@ -20,7 +24,7 @@ The maintained device and range tables are in the [SLMP Profile Reference](https
 ## Installation
 
 ```bash
-pip install slmp-connect-python
+pip install plc-comm-slmp
 ```
 
 ## Quick example
@@ -54,8 +58,8 @@ asyncio.run(main())
 | Item | Value |
 | --- | --- |
 | License | [MIT](LICENSE) |
-| Registry | [PyPI](https://pypi.org/project/slmp-connect-python/) |
-| Package | `slmp-connect-python` |
+| Registry | [PyPI](https://pypi.org/project/plc-comm-slmp/) |
+| Package | `plc-comm-slmp` |
 
 ## Commercial support
 
