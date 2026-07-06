@@ -350,7 +350,7 @@ class TestCodec(unittest.TestCase):
         """Test test_encode_4e_request."""
         frame = encode_4e_request(
             serial=0x1234,
-            target=SlmpTarget(network=1, station=2, module_io=ModuleIONo.CPU_2, multidrop=0),
+            target=SlmpTarget(network=1, station=2, module_io=ModuleIONo.MULTIPLE_CPU_2, multidrop=0),
             monitoring_timer=0x0010,
             command=0x0401,
             subcommand=0x0000,
@@ -551,8 +551,8 @@ class TestCodec(unittest.TestCase):
 
     def test_parse_named_target_self_cpu(self) -> None:
         """Test test_parse_named_target_self_cpu."""
-        parsed = cli._parse_named_target("self-cpu2")
-        self.assertEqual(parsed.name, "SELF-CPU2")
+        parsed = cli._parse_named_target("self-multiple-cpu-2")
+        self.assertEqual(parsed.name, "SELF-MULTIPLE-CPU-2")
         self.assertEqual(parsed.target.network, 0x00)
         self.assertEqual(parsed.target.station, 0xFF)
         self.assertEqual(parsed.target.module_io, 0x03E1)
@@ -571,18 +571,18 @@ class TestCodec(unittest.TestCase):
     def test_parse_named_target_rejects_self_cpu_module_io_mismatch(self) -> None:
         """Test test_parse_named_target_rejects_self_cpu_module_io_mismatch."""
         with self.assertRaises(ValueError):
-            cli._parse_named_target("SELF-CPU1,0x00,0xFF,0x03E1,0x00")
+            cli._parse_named_target("SELF-MULTIPLE-CPU-1,0x00,0xFF,0x03E1,0x00")
 
     def test_load_named_targets_from_file(self) -> None:
         """Test test_load_named_targets_from_file."""
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "targets.txt"
-            path.write_text("# comment\nSELF\nSELF-CPU1\nNW1-ST2\n", encoding="utf-8")
+            path.write_text("# comment\nSELF\nSELF-MULTIPLE-CPU-1\nNW1-ST2\n", encoding="utf-8")
             loaded = cli._load_named_targets(None, str(path))
         self.assertEqual(len(loaded), 3)
         self.assertEqual(loaded[0].name, "SELF")
         self.assertEqual(loaded[0].target.station, 0xFF)
-        self.assertEqual(loaded[1].name, "SELF-CPU1")
+        self.assertEqual(loaded[1].name, "SELF-MULTIPLE-CPU-1")
         self.assertEqual(loaded[1].target.module_io, 0x03E0)
         self.assertEqual(loaded[2].name, "NW1-ST2")
         self.assertEqual(loaded[2].target.network, 0x01)

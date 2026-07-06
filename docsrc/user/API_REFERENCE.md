@@ -59,11 +59,13 @@ the default `SlmpTarget()` remains the connected/default CPU route `0x03FF`.
 
 | Constant | Value |
 | --- | --- |
-| `ModuleIONo.CONTROL_CPU` / `ModuleIONo.ACTIVE_CPU` | `0x03D0` |
-| `ModuleIONo.STANDBY_CPU` | `0x03D1` |
-| `ModuleIONo.TYPE_A_CPU` | `0x03D2` |
-| `ModuleIONo.TYPE_B_CPU` | `0x03D3` |
-| `ModuleIONo.CPU_1` .. `ModuleIONo.CPU_4` | `0x03E0` .. `0x03E3` |
+| `ModuleIONo.CONTROL_CPU` / `ModuleIONo.CONTROL_SYSTEM_CPU` | `0x03D0` |
+| `ModuleIONo.STANDBY_SYSTEM_CPU` | `0x03D1` |
+| `ModuleIONo.SYSTEM_A_CPU` | `0x03D2` |
+| `ModuleIONo.SYSTEM_B_CPU` | `0x03D3` |
+| `ModuleIONo.MULTIPLE_CPU_1` .. `ModuleIONo.MULTIPLE_CPU_4` | `0x03E0` .. `0x03E3` |
+| `ModuleIONo.REMOTE_HEAD_1` / `ModuleIONo.REMOTE_HEAD_2` | `0x03E0` / `0x03E1` |
+| `ModuleIONo.CONTROL_SYSTEM_REMOTE_HEAD` / `ModuleIONo.STANDBY_SYSTEM_REMOTE_HEAD` | `0x03D0` / `0x03D1` |
 | `ModuleIONo.CONNECTED_CPU` / `ModuleIONo.DEFAULT` / `ModuleIONo.OWN_STATION` | `0x03FF` |
 
 ## Generated API Details

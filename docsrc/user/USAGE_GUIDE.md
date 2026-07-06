@@ -70,7 +70,7 @@ page.
 ## Routing / target station
 
 Most applications keep the default target, which means the directly connected
-own station/control CPU. Change the target only when your PLC network is
+own station. Change the target only when your PLC network is
 configured for another station, multi-CPU module I/O, or multidrop access.
 
 `SlmpTarget` controls the SLMP destination header. It is not a device family
@@ -96,7 +96,7 @@ options = SlmpConnectionOptions(
 For a multi-CPU self target, you can also use the named module I/O helpers:
 
 ```python
-target = SlmpTarget(module_io=ModuleIONo.CPU_2)
+target = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
 ```
 
 Use the default target unless the PLC routing setup gives you specific values.
