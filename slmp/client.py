@@ -1560,16 +1560,20 @@ class SlmpClient:
         expected_serial = _EXPECTED_RESPONSE_SERIAL.get()
 
         if self.transport == "tcp":
-            self._sock.sendall(frame)
-            while True:
-                raw = self._receive_frame()
-                if _response_matches_serial(raw, expected_serial):
-                    return raw
+            try:
+                self._sock.sendall(frame)
+                while True:
+                    raw = self._receive_frame()
+                    if _response_matches_serial(raw, expected_serial, self.frame_type):
+                        return raw
+            except (OSError, SlmpError):
+                self.close()
+                raise
 
         self._sock.send(frame)
         while True:
             raw = self._receive_frame()
-            if _response_matches_serial(raw, expected_serial):
+            if _response_matches_serial(raw, expected_serial, self.frame_type):
                 return raw
 
     def _receive_frame(self, *, timeout: float | None = None) -> bytes:
@@ -1578,13 +1582,18 @@ class SlmpClient:
         previous_timeout = self._sock.gettimeout()
         if timeout is not None:
             self._sock.settimeout(timeout)
+        sock = self._sock
         try:
             if self.transport == "tcp":
-                return _recv_tcp_frame(self._sock, frame_type=self.frame_type)
-            return self._sock.recv(65535)
+                return _recv_tcp_frame(sock, frame_type=self.frame_type)
+            return sock.recv(65535)
+        except (OSError, SlmpError):
+            if self.transport == "tcp":
+                self.close()
+            raise
         finally:
-            if timeout is not None:
-                self._sock.settimeout(previous_timeout)
+            if timeout is not None and self._sock is sock:
+                sock.settimeout(previous_timeout)
 
     def _emit_trace(self, trace: SlmpTraceFrame) -> None:
         if self.trace_hook is None:
@@ -1602,6 +1611,9 @@ def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
     head_size = 13 if frame_type == FrameType.FRAME_4E else 9
     head = bytearray(head_size)
     _recv_exact_into(sock, memoryview(head))
+    expected_subheader = b"\xd4\x00" if frame_type == FrameType.FRAME_4E else b"\xd0\x00"
+    if head[:2] != expected_subheader:
+        raise SlmpError("unexpected response frame type")
     response_data_length = int.from_bytes(head[-2:], "little")
     frame = bytearray(head_size + response_data_length)
     frame[:head_size] = head
@@ -1609,11 +1621,11 @@ def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
     return bytes(frame)
 
 
-def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
+def _response_matches_serial(raw: bytes, expected_serial: int | None, frame_type: FrameType) -> bool:
     if expected_serial is None:
         return True
-    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
-        return True
+    if len(raw) < 4 or raw[:2] != b"\xd4\x00" or frame_type != FrameType.FRAME_4E:
+        raise SlmpError("unexpected response frame type")
     return int.from_bytes(raw[2:4], "little") == expected_serial
 
 

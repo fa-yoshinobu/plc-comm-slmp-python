@@ -138,6 +138,12 @@ class SlmpPlcProfile(str, Enum):
     QnUDVQj71E71100 = "melsec:qnudv:qj71e71-100"
 
 
+def available_plc_profiles() -> tuple[SlmpPlcProfile, ...]:
+    """Return profiles accepted by the standard connection helpers."""
+
+    return tuple(profile for profile in SlmpPlcProfile if profile is not SlmpPlcProfile.QCpu)
+
+
 _PLC_PROFILES = frozenset(profile.value for profile in SlmpPlcProfile)
 _QCPU_BASE_PROFILE_MESSAGE = "melsec:qcpu is a base profile; use melsec:qcpu:qj71e71-100."
 
