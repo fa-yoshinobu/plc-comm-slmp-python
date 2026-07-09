@@ -50,6 +50,7 @@ from .device_ranges import (
     build_device_range_catalog_for_plc_profile,
     device_range_model_label,
     normalize_plc_profile,
+    plc_profile_canonical_name,
     plc_profile_label,
     read_device_range_catalog_for_plc_profile,
     read_device_range_catalog_for_plc_profile_sync,
@@ -211,6 +212,7 @@ __all__ = [
     "write_words_single_request_sync",
     "try_parse_address",
     "build_device_range_catalog_for_plc_profile",
+    "plc_profile_canonical_name",
     "plc_profile_label",
     "device_range_model_label",
 ]

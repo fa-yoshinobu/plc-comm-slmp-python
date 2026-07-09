@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Library: Added `available_plc_profiles()` for connection-selectable profile enumeration.
+- Library: Added `plc_profile_canonical_name()` and kept `plc_profile_label()` as a compatibility alias.
 
 ### Docs
 - Docs: Documented the distinct canonical, display-name, and device-range model-label APIs.

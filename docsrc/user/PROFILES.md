@@ -2,7 +2,9 @@
 
 Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
 Use `display_name(plc_profile)` for UI labels. Store the canonical profile
-string from `plc_profile_label(plc_profile)`, not the display name. Use
+string from `plc_profile_canonical_name(plc_profile)`, not the display name.
+The older `plc_profile_label(plc_profile)` name remains as a compatibility
+alias. Use
 `device_range_model_label(plc_profile)` only for the short model value in a
 device-range catalog. `available_plc_profiles()` returns profiles accepted by
 the standard connection helpers and excludes the base-only `melsec:qcpu`.
