@@ -1,7 +1,7 @@
 """Built-in SLMP capability profiles.
 
-Source: plc-comm-slmp-profiles v1.2.2
-capability/slmp_builtin_ethernet_profiles.json
+Source: plc-comm-slmp-profiles main
+capability/slmp_ethernet_profiles.json
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_SOURCE = "plc-comm-slmp-profiles v1.2.2 capability/slmp_builtin_ethernet_profiles.json"
+CANONICAL_SOURCE = "plc-comm-slmp-profiles main capability/slmp_ethernet_profiles.json"
 
 
 @dataclass(frozen=True)
