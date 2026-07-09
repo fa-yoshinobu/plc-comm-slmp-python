@@ -9,7 +9,7 @@ from slmp.capability_profiles import BUILTIN_CAPABILITY_PROFILES, display_name
 
 
 def test_builtin_capability_profiles_match_canonical_fixture() -> None:
-    fixture = Path(__file__).parent / "fixtures" / "slmp_builtin_ethernet_profiles.json"
+    fixture = Path(__file__).parent / "fixtures" / "slmp_ethernet_profiles.json"
     expected = json.loads(fixture.read_text(encoding="utf-8"))["profiles"]
 
     assert sorted(expected) == sorted(BUILTIN_CAPABILITY_PROFILES)

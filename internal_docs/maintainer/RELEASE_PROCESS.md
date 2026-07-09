@@ -11,9 +11,7 @@ Check these before tagging:
 - `docsrc/user/USAGE_GUIDE.md`
 - `internal_docs/maintainer/TESTING_GUIDE.md`
 - `CHANGELOG.md`
-- `internal_docs/maintainer/PROTOCOL_SPEC.md`
 - `TODO.md`
-- `internal_docs/maintainer/communication_test_record.md`
 
 ## 2. Run Local Verification
 
@@ -51,9 +49,9 @@ python -m venv $smokeVenv
 ## 3. Run the Minimum Live Check
 
 ```powershell
-$plcHost = "192.168.3.10"
+$plcHost = "<plc-host>"
 $plcPort = 1025
-$series = "iqr"
+$series = "<profile-series>"
 python scripts/slmp_connection_check.py --host $plcHost --port $plcPort --transport tcp --series $series
 ```
 
@@ -67,21 +65,19 @@ Typical examples:
 - `scripts/slmp_register_boundary_probe.py`
 - `scripts/slmp_special_device_probe.py`
 
-## 4. Review Report Updates
+## 4. Result Updates
 
 If you ran live verification:
 
-- reflect conclusion changes in:
-  - repository-root `TODO.md`
-  - `communication_test_record.md`
-  - `manual_implementation_differences.md`
-- keep generated probe reports local unless they are needed as durable evidence
-  for a current implementation decision
+- close or add concrete active items in repository-root `TODO.md`
+- update tests or the current specification only when behavior changes
+- keep generated probe reports local
 
 ## 5. Artifact Policy
 
 - do not commit build artifacts from `dist/`
 - do not commit packet captures or raw communication logs
+- do not commit one-off verification reports or templates
 
 ## 6. Tagging Flow
 
@@ -103,10 +99,4 @@ Then:
 
 - push the release commit and tag to `https://github.com/fa-yoshinobu/plc-comm-slmp-python`
 - create the GitHub release entry using `.github/RELEASE_TEMPLATE.md`
-- for `v0.1.0`, you can start from `.github/RELEASE_v0.1.0.md`
 - upload `dist/` artifacts if you are distributing release packages outside the repository
-
-## 8. Current Baseline
-
-- package version: `0.1.6`
-- validated target: MELSEC iQ-R `R08CPU`
