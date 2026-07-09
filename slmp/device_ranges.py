@@ -532,8 +532,8 @@ def normalize_plc_profile(value: SlmpPlcProfile | str) -> SlmpPlcProfile:
     raise ValueError(f"Unsupported PLC profile {value!r}. Supported profiles: {supported}")
 
 
-def plc_profile_label(plc_profile: SlmpPlcProfile | str) -> str:
-    """Return the synthetic model label used for explicit PLC-profile reads."""
+def device_range_model_label(plc_profile: SlmpPlcProfile | str) -> str:
+    """Return the short model label used in device-range catalog metadata."""
 
     normalized = normalize_plc_profile(plc_profile)
     return {
@@ -552,6 +552,12 @@ def plc_profile_label(plc_profile: SlmpPlcProfile | str) -> str:
         SlmpPlcProfile.QnUDV: "QnUDV",
         SlmpPlcProfile.QnUDVQj71E71100: "QnUDV via QJ71E71-100",
     }[normalized]
+
+
+def plc_profile_label(plc_profile: SlmpPlcProfile | str) -> str:
+    """Return the canonical PLC profile identifier."""
+
+    return normalize_plc_profile(plc_profile).value
 
 
 def build_device_range_catalog_for_plc_profile(
@@ -587,7 +593,7 @@ def build_device_range_catalog_for_plc_profile(
                 )
             )
     return SlmpDeviceRangeCatalog(
-        model=plc_profile_label(normalized_profile),
+        model=device_range_model_label(normalized_profile),
         model_code=0,
         has_model_code=False,
         plc_profile=normalized_profile,

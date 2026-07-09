@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-07-10
+
+### Changed
+- Release: Bumped package metadata and `slmp.__version__` to `2.0.1`.
+
+### BREAKING
+- Library: `plc_profile_label()` now returns the canonical profile identifier. Use `device_range_model_label()` for the short device-range catalog model label.
+
+### Added
+- Library: Added `available_plc_profiles()` for connection-selectable profile enumeration.
+
+### Docs
+- Docs: Documented the distinct canonical, display-name, and device-range model-label APIs.
+
 ## [2.0.0] - 2026-07-06
 
 ### BREAKING
