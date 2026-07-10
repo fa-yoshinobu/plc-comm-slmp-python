@@ -39,7 +39,7 @@ Optional packaging smoke check:
 
 ```powershell
 $smokeVenv = Join-Path $env:TEMP "slmp_release_smoke"
-$wheel = Get-ChildItem .\dist\slmp_connect_python-*.whl | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$wheel = Get-ChildItem .\dist\plc_comm_slmp-*.whl | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 python -m venv $smokeVenv
 & (Join-Path $smokeVenv "Scripts\python.exe") -m pip install $wheel.FullName
 & (Join-Path $smokeVenv "Scripts\python.exe") -c "import slmp; print(slmp.__version__)"
@@ -98,5 +98,5 @@ python -m twine check dist/*
 Then:
 
 - push the release commit and tag to `https://github.com/fa-yoshinobu/plc-comm-slmp-python`
-- create the GitHub release entry using `.github/RELEASE_TEMPLATE.md`
-- upload `dist/` artifacts if you are distributing release packages outside the repository
+- run the GitHub release workflow for that existing tag; it checks out the tag, verifies source/package versions, and uploads the `dist/` artifacts
+- publish to a package registry separately after the GitHub release artifacts have been checked; this workflow does not publish to PyPI

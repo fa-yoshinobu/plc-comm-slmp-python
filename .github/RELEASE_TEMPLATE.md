@@ -25,8 +25,8 @@ Example:
 python -m pip install "git+https://github.com/fa-yoshinobu/plc-comm-slmp-python.git@vX.Y.Z"
 ```
 
-- Source archive: `slmp_connect_python-X.Y.Z.tar.gz`
-- Wheel: `slmp_connect_python-X.Y.Z-py3-none-any.whl`
+- Source archive: `plc_comm_slmp-X.Y.Z.tar.gz`
+- Wheel: `plc_comm_slmp-X.Y.Z-py3-none-any.whl`
 - License: `MIT`
 
 ## Verification
