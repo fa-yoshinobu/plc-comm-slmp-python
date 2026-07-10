@@ -1,28 +1,73 @@
-name: Release
+name: Build GitHub release artifacts
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag version without the leading v"
+        required: true
+        type: string
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve existing release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+            tag="v${version}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+          fi
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release tag: ${tag}"
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
       - uses: actions/checkout@v7
-      - name: Check canonical SLMP profile JSONs
-        shell: pwsh
-        run: ./scripts/update_slmp_profile_jsons.ps1 -FailIfChanged
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with: { python-version: "3.11" }
+
+      - name: Verify exact tag checkout and source versions
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${tag}")"
+          python scripts/check_release_version.py --tag "${tag}"
+          python -m unittest tests.test_release_version -v
+
+      - name: Check canonical SLMP profile JSONs
+        shell: pwsh
+        run: ./scripts/update_slmp_profile_jsons.ps1 -FailIfChanged
       - name: Build
         run: |
-          pip install build
+          python -m pip install build twine
           python -m build
+          python -m twine check dist/*
+          python scripts/check_release_version.py --tag "${{ steps.release.outputs.tag }}" --dist dist
       - name: Upload
         env:
           GH_TOKEN: "${{ github.token }}"
+        shell: bash
         run: |
-          tag="${{ github.ref_name }}"; if [[ -z "$tag" || "$tag" == "main" ]]; then tag="v0.1.2"; fi
-          gh release upload "$tag" dist/* --clobber || gh release create "$tag" dist/* --title "Release $tag" --generate-notes
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            gh release upload "${tag}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "${tag}" dist/* --repo "${GITHUB_REPOSITORY}" --verify-tag --title "Release ${tag}" --generate-notes
+          fi

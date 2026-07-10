@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-07-10
+
+### Changed
+- Release: Bumped package metadata and `slmp.__version__` to `3.0.1`.
+- Tooling: Pinned canonical SLMP profile imports to immutable profile commit `e7e8f071ff1819a6b088b6a793e6f08029c54e38`.
+- Docs: Corrected the current wheel and source-distribution names in release guidance and removed hand-maintained page navigation from `GETTING_STARTED.md`.
+
+### Fixed
+- CI: Required an existing exact release tag checkout and matching tag, `pyproject.toml`, runtime, filename, and package metadata before GitHub Release upload.
+- CI: Removed the broken generic PyInstaller executable gate; supported CLI tools remain wheel console entry points and built distributions are now inspected before upload.
+
 ## [3.0.0] - 2026-07-10
 
 ### Changed
