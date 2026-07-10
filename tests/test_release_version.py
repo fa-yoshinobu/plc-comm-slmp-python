@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import io
 import tarfile
 import tempfile
@@ -7,13 +8,23 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from scripts.check_release_version import (
-    ROOT,
-    source_versions,
-    validate_dist,
-    validate_source_versions,
-    version_from_tag,
-)
+
+def load_release_version_checker():
+    checker_path = Path(__file__).resolve().parents[1] / "scripts" / "check_release_version.py"
+    spec = importlib.util.spec_from_file_location("check_release_version", checker_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load release version checker from {checker_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+release_version_checker = load_release_version_checker()
+ROOT = release_version_checker.ROOT
+source_versions = release_version_checker.source_versions
+validate_dist = release_version_checker.validate_dist
+validate_source_versions = release_version_checker.validate_source_versions
+version_from_tag = release_version_checker.version_from_tag
 
 TEST_VERSION = source_versions()[0]
 METADATA = f"Metadata-Version: 2.1\nName: plc-comm-slmp\nVersion: {TEST_VERSION}\n\n".encode()
