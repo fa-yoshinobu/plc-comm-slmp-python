@@ -560,16 +560,6 @@ def plc_profile_canonical_name(plc_profile: SlmpPlcProfile | str) -> str:
     return normalize_plc_profile(plc_profile).value
 
 
-def plc_profile_label(plc_profile: SlmpPlcProfile | str) -> str:
-    """Return the canonical profile identifier through the legacy alias.
-
-    Use :func:`plc_profile_canonical_name` in new code. This alias remains
-    available for compatibility with earlier releases.
-    """
-
-    return plc_profile_canonical_name(plc_profile)
-
-
 def build_device_range_catalog_for_plc_profile(
     plc_profile: SlmpPlcProfile | str,
     registers: Mapping[int, int],

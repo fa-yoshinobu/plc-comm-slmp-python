@@ -1,7 +1,7 @@
 [![CI](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/plc-comm-slmp.svg)](https://pypi.org/project/plc-comm-slmp/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/LICENSE)
 
 # MELSEC SLMP for Python
 
@@ -13,7 +13,7 @@ This library is part of the plc-comm family. See the [package matrix](https://fa
 
 ## Supported PLC profiles
 
-The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md). Choose one exact canonical PLC profile from that table.
+The maintained profile table is in [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/PROFILES/). Choose one exact canonical PLC profile from that table.
 
 Sync and async clients use `strict_profile=True` by default. With a selected profile, operations known to be unavailable for that PLC are rejected before sending. Set `strict_profile=False` only for deliberate verification where you want the PLC to answer directly. Point limits and read-only write policies are always enforced.
 
@@ -47,17 +47,17 @@ asyncio.run(main())
 | Page | Use it for |
 | --- | --- |
 | [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
-| [Getting started](docsrc/user/GETTING_STARTED.md) | Install the package, connect to your PLC, and run your first SLMP read/write. |
-| [Usage guide](docsrc/user/USAGE_GUIDE.md) | Use the high-level API and common SLMP workflows. |
+| [Getting started](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/GETTING_STARTED/) | Install the package, connect to your PLC, and run your first SLMP read/write. |
+| [Usage guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/USAGE_GUIDE/) | Use the high-level API and common SLMP workflows. |
 | [SLMP profile reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/) | Check profile parameters, device families, address syntax, and numbering rules. |
-| [PLC profiles](docsrc/user/PROFILES.md) | Choose the canonical MELSEC profile and frame behavior. |
-| [Examples](samples/README.md) | Run maintained Python samples. |
+| [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/PROFILES/) | Choose the canonical MELSEC profile and frame behavior. |
+| [Examples](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/samples/README.md) | Run maintained Python samples. |
 
 ## License and registry
 
 | Item | Value |
 | --- | --- |
-| License | [MIT](LICENSE) |
+| License | [MIT](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/LICENSE) |
 | Registry | [PyPI](https://pypi.org/project/plc-comm-slmp/) |
 | Package | `plc-comm-slmp` |
 

@@ -1564,7 +1564,7 @@ class SlmpClient:
                 self._sock.sendall(frame)
                 while True:
                     raw = self._receive_frame()
-                    if _response_matches_serial(raw, expected_serial, self.frame_type):
+                    if _response_matches_serial(raw, expected_serial):
                         return raw
             except (OSError, SlmpError):
                 self.close()
@@ -1573,7 +1573,7 @@ class SlmpClient:
         self._sock.send(frame)
         while True:
             raw = self._receive_frame()
-            if _response_matches_serial(raw, expected_serial, self.frame_type):
+            if _response_matches_serial(raw, expected_serial):
                 return raw
 
     def _receive_frame(self, *, timeout: float | None = None) -> bytes:
@@ -1621,10 +1621,10 @@ def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
     return bytes(frame)
 
 
-def _response_matches_serial(raw: bytes, expected_serial: int | None, frame_type: FrameType) -> bool:
+def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
     if expected_serial is None:
         return True
-    if len(raw) < 4 or raw[:2] != b"\xd4\x00" or frame_type != FrameType.FRAME_4E:
+    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
         raise SlmpError("unexpected response frame type")
     return int.from_bytes(raw[2:4], "little") == expected_serial
 

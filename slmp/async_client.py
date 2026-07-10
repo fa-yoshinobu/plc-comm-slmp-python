@@ -1243,7 +1243,7 @@ class AsyncSlmpClient:
                     await self._writer.drain()
                     while True:
                         raw = await self._receive_frame()
-                        if _response_matches_serial(raw, expected_serial, self.frame_type):
+                        if _response_matches_serial(raw, expected_serial):
                             return raw
                 else:
                     assert self._udp_transport is not None
@@ -1256,7 +1256,7 @@ class AsyncSlmpClient:
                             raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=self.timeout)
                         except asyncio.TimeoutError as err:
                             raise SlmpError("UDP communication timeout") from err
-                        if _response_matches_serial(raw, expected_serial, self.frame_type):
+                        if _response_matches_serial(raw, expected_serial):
                             return raw
             except BaseException:
                 if self.transport_type == "tcp":
@@ -1287,9 +1287,9 @@ class AsyncSlmpClient:
                 pass
 
 
-def _response_matches_serial(raw: bytes, expected_serial: int | None, frame_type: FrameType) -> bool:
+def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
     if expected_serial is None:
         return True
-    if len(raw) < 4 or raw[:2] != b"\xd4\x00" or frame_type != FrameType.FRAME_4E:
+    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
         raise SlmpError("unexpected response frame type")
     return int.from_bytes(raw[2:4], "little") == expected_serial
