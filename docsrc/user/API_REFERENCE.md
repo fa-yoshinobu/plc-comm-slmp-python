@@ -45,6 +45,7 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 | Operation | Public API |
 | --- | --- |
 | Connection helper | `open_and_connect`, `open_and_connect_sync`, `QueuedAsyncSlmpClient` |
+| Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
 | Typed values | `read_typed`, `write_typed` |
 | Named mixed snapshots | `read_named`, `write_named`, `poll` |
 | Chunked word/dword reads | `read_words_single_request`, `read_words_chunked`, `read_dwords_single_request`, `read_dwords_chunked` |

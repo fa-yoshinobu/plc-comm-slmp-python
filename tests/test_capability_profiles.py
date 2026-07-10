@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from slmp.capability_profiles import BUILTIN_CAPABILITY_PROFILES, display_name
+from slmp.core import SlmpPlcProfile, plc_profile_descriptors
 
 
 def test_builtin_capability_profiles_match_canonical_fixture() -> None:
@@ -27,3 +28,17 @@ def test_builtin_capability_profiles_match_canonical_fixture() -> None:
             assert actual_limit.max == expected_limit["max"]
             assert actual_limit.weighted_max == expected_limit.get("weighted_max")
         assert actual.write_policy == expected_profile["write_policy"]
+
+
+def test_profile_descriptors_match_canonical_profile_metadata() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "slmp_ethernet_profiles.json"
+    expected = json.loads(fixture.read_text(encoding="utf-8"))["profiles"]
+    descriptors = plc_profile_descriptors()
+
+    assert [descriptor.canonical_name for descriptor in descriptors] == [profile.value for profile in SlmpPlcProfile]
+    assert {descriptor.canonical_name for descriptor in descriptors} == set(expected)
+    for descriptor in descriptors:
+        profile = expected[descriptor.canonical_name]
+        assert descriptor.display_name == profile["display_name"]
+        assert descriptor.connectable is (profile.get("role") != "base")
+        assert descriptor.base_profile == profile.get("base_profile")
