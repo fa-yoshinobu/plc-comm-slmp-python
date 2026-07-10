@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -17,13 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.1] - 2026-07-10
+## [3.0.0] - 2026-07-10
 
 ### Changed
-- Release: Bumped package metadata and `slmp.__version__` to `2.0.1`.
+- Release: Bumped package metadata and `slmp.__version__` to `3.0.0`.
 
 ### BREAKING
-- Library: `plc_profile_label()` now returns the canonical profile identifier. Use `device_range_model_label()` for the short device-range catalog model label.
+- Library: Breaking: `plc_profile_label()` now returns the canonical profile identifier instead of the v2.0.0 short model label. The return type remains `str`, and it does not raise a new exception for valid profiles.
+- Migration: Use `plc_profile_canonical_name()` when storing a canonical ID. Use `device_range_model_label()` when the v2.0.0 short model display is required. The legacy `plc_profile_label()` name remains as a compatibility alias for canonical IDs.
 
 ### Added
 - Library: Added `available_plc_profiles()` for connection-selectable profile enumeration.

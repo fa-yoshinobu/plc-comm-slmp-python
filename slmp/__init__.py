@@ -10,7 +10,7 @@ The primary user-facing entry points are:
 - ``poll``
 """
 
-__version__ = "2.0.1"
+__version__ = "3.0.0"
 
 from .async_client import AsyncSlmpClient
 from .capability_profiles import display_name
