@@ -1,11 +1,12 @@
 # PLC profiles
 
 Use one canonical profile in `plc_profile` for each connection. The profile selects the SLMP frame type, access mode, and device-range catalog.
-Use `display_name(plc_profile)` for UI labels. Store the canonical profile
-string from `plc_profile_canonical_name(plc_profile)`, not the display name.
-Use `device_range_model_label(plc_profile)` only for the short model value in a
-device-range catalog. `available_plc_profiles()` returns profiles accepted by
-the standard connection helpers and excludes the base-only `melsec:qcpu`.
+Use `plc_profile_descriptors()` when a UI or configuration schema needs the
+canonical name, display name, connection availability, and base-profile
+relationship in one list. The abstract `melsec:qcpu` entry is included with
+`connectable=False`. Store the descriptor's `canonical_name`, not its display
+name. Use `device_range_model_label(plc_profile)` only for the short model
+value in a device-range catalog.
 
 For cross-profile capability and device-range details, see the [SLMP Profile Reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/).
 

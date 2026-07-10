@@ -10,7 +10,7 @@ The primary user-facing entry points are:
 - ``poll``
 """
 
-__version__ = "3.0.1"
+__version__ = "3.1.0"
 
 from .async_client import AsyncSlmpClient
 from .capability_profiles import display_name
@@ -33,6 +33,7 @@ from .core import (
     MonitorResult,
     RandomReadResult,
     SlmpPlcProfile,
+    SlmpPlcProfileDescriptor,
     SlmpResponse,
     SlmpTarget,
     SlmpTraceFrame,
@@ -41,6 +42,7 @@ from .core import (
     decode_cpu_operation_state,
     parse_device,
     parse_extended_device,
+    plc_profile_descriptors,
 )
 from .device_ranges import (
     SlmpDeviceRangeCatalog,
@@ -146,6 +148,7 @@ __all__ = [
     "SlmpError",
     "SlmpErrorInfo",
     "SlmpPlcProfile",
+    "SlmpPlcProfileDescriptor",
     "available_plc_profiles",
     "SlmpProfileFeatureError",
     "SlmpPracticalPathWarning",
@@ -170,6 +173,7 @@ __all__ = [
     "open_and_connect_sync",
     "parse_address",
     "parse_extended_device",
+    "plc_profile_descriptors",
     "parse_device",
     "poll",
     "poll_sync",

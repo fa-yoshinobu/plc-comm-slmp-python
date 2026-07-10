@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any
 
-from .capability_profiles import is_profile_read_only_device, profile_limit
+from .capability_profiles import display_name, is_profile_read_only_device, profile_limit
 from .constants import (
     DEVICE_CODES,
     DIRECT_MEMORY_CPU_BUFFER,
@@ -138,6 +138,16 @@ class SlmpPlcProfile(str, Enum):
     QnUDVQj71E71100 = "melsec:qnudv:qj71e71-100"
 
 
+@dataclass(frozen=True)
+class SlmpPlcProfileDescriptor:
+    """One canonical PLC profile and its connection-selection metadata."""
+
+    canonical_name: str
+    display_name: str
+    connectable: bool
+    base_profile: str | None
+
+
 def available_plc_profiles() -> tuple[SlmpPlcProfile, ...]:
     """Return profiles accepted by the standard connection helpers."""
 
@@ -197,6 +207,41 @@ _PLC_PROFILE_DEFAULTS: dict[str, _PlcProfileDefaults] = {
         "melsec:qnudv:qj71e71-100",
     ),
 }
+
+_PLC_PROFILE_BASES: dict[str, str | None] = {
+    "melsec:iq-f": None,
+    "melsec:iq-r": None,
+    "melsec:iq-r:rj71en71": "melsec:iq-r",
+    "melsec:iq-l": None,
+    "melsec:mx-f": "melsec:iq-r",
+    "melsec:mx-r": "melsec:iq-r",
+    "melsec:qcpu": "melsec:qnu",
+    "melsec:qcpu:qj71e71-100": "melsec:qcpu",
+    "melsec:lcpu": None,
+    "melsec:lcpu:lj71e71-100": "melsec:lcpu",
+    "melsec:qnu": None,
+    "melsec:qnu:qj71e71-100": "melsec:qnu",
+    "melsec:qnudv": None,
+    "melsec:qnudv:qj71e71-100": "melsec:qnudv",
+}
+
+
+def plc_profile_descriptors() -> tuple[SlmpPlcProfileDescriptor, ...]:
+    """Return all canonical profiles with display, connection, and base metadata.
+
+    The abstract ``melsec:qcpu`` entry is included with ``connectable=False``
+    so selectors can explain why it cannot be opened directly.
+    """
+
+    return tuple(
+        SlmpPlcProfileDescriptor(
+            canonical_name=profile.value,
+            display_name=display_name(profile),
+            connectable=profile is not SlmpPlcProfile.QCpu,
+            base_profile=_PLC_PROFILE_BASES[profile.value],
+        )
+        for profile in SlmpPlcProfile
+    )
 
 
 def _normalize_plc_profile_hint(plc_profile: object | None) -> str | None:
