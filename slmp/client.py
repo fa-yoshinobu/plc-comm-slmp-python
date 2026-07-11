@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+import math
 import socket
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from . import _operations
+from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
-from .constants import Command, FrameType, PLCSeries
+from .constants import Command, FrameType, PLCSeries, RemoteClearMode
 from .core import (
     BlockReadResult,
     CpuOperationState,
     DeviceRef,
-    ExtensionSpec,
     LabelArrayReadPoint,
     LabelArrayReadResult,
     LabelArrayWritePoint,
@@ -23,21 +25,25 @@ from .core import (
     LongTimerResult,
     MonitorResult,
     RandomReadResult,
+    SlmpExtendedDevice,
     SlmpResponse,
     SlmpTarget,
-    SlmpTraceFrame,
     TypeNameInfo,
+    _apply_semantic_device_modification,
+    _build_device_modification_flags,
     _check_points_u16,
+    _ExtensionSpec,
+    _parse_extended_device,
     _raise_response_error,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
+    _resolve_extended_device_and_extension,
     _resolve_port,
-    build_device_modification_flags,
+    _SlmpTraceFrame,
     decode_cpu_operation_state,
     decode_response,
     encode_request,
     parse_device,
-    resolve_extended_device_and_extension,
 )
 from .errors import SlmpError
 
@@ -57,7 +63,7 @@ class SlmpClient:
     Examples:
         >>> from slmp.client import SlmpClient
         >>> with SlmpClient("192.168.250.100", 1025, plc_profile="melsec:iq-r") as client:
-        ...     values = client.read_devices("D100", 5)
+        ...     values = client.read_devices("D100", 5, bit_unit=False)
         ...     print(values)
         [0, 0, 0, 0, 0]
     """
@@ -65,27 +71,23 @@ class SlmpClient:
     def __init__(
         self,
         host: str,
-        port: int | None = None,
+        port: int,
         *,
-        transport: str = "tcp",
+        transport: str,
+        default_target: SlmpTarget,
+        plc_profile: object,
         timeout: float = 3.0,
-        plc_profile: object | None = None,
-        plc_series: PLCSeries | str | None = None,
-        frame_type: FrameType | str | None = None,
-        default_target: SlmpTarget | None = None,
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
-        trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
-        address_profile: object | None = None,
-        strict_profile: bool = True,
-        _allow_manual_profile: bool = False,
+        _maintainer_trace_hook: Callable[[_SlmpTraceFrame], None] | None = None,
+        _maintainer_strict_profile: bool = True,
     ) -> None:
         """Initialize the SLMP client.
 
         Args:
             host: PLC IP address.
-            port: PLC port number. Defaults to 1025 for TCP and 1035 for UDP.
-            transport: Transport protocol ('tcp' or 'udp'). Defaults to 'tcp'.
+            port: Required PLC port number in range 1..65535.
+            transport: Required transport protocol (``"tcp"`` or ``"udp"``).
             timeout: Socket timeout in seconds. Defaults to 3.0.
             plc_profile: Canonical high-level PLC profile. The standard client
                 route requires this and derives frame type, access profile,
@@ -93,24 +95,24 @@ class SlmpClient:
             default_target: Default target station routing information.
             monitoring_timer: Default monitoring timer value (multiples of 250ms). Defaults to 0x0010 (4s).
             raise_on_error: Whether to raise SlmpError on non-zero end codes. Defaults to True.
-            trace_hook: Optional callback for tracing requests and responses.
         """
         self.host = host
-        self.transport = transport.lower()
+        if not isinstance(transport, str):
+            raise ValueError("transport must be 'tcp' or 'udp'")
+        self.transport = transport.strip().lower()
         if self.transport not in {"tcp", "udp"}:
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.port = _resolve_port(port, self.transport)
-        self.timeout = timeout
-        if not _allow_manual_profile:
-            if plc_profile is None:
-                raise ValueError(
-                    "plc_profile is required for the standard SlmpClient route "
-                    "unless you explicitly opt into a low-level frame/profile path."
-                )
-            if plc_profile is not None and any(
-                value is not None for value in (plc_series, frame_type, address_profile)
-            ):
-                raise ValueError("plc_profile is the only supported PLC selector for the standard SlmpClient route.")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("timeout must be a finite number greater than zero")
+        self.timeout = float(timeout)
+        if plc_profile is None:
+            raise ValueError("plc_profile is required for SlmpClient")
         (
             self.plc_profile,
             self.plc_series,
@@ -119,46 +121,64 @@ class SlmpClient:
             self.range_profile,
         ) = _resolve_connection_profile(
             plc_profile=plc_profile,
-            plc_series=plc_series,
-            frame_type=frame_type,
-            address_profile=address_profile,
+            plc_series=None,
+            frame_type=None,
+            address_profile=None,
         )
-        self.default_target = default_target or SlmpTarget()
+        if not isinstance(default_target, SlmpTarget):
+            raise ValueError("default_target is required and must be a complete SlmpTarget")
+        self.default_target = default_target
+        if (
+            isinstance(monitoring_timer, bool)
+            or not isinstance(monitoring_timer, int)
+            or not 0 <= monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535")
         self.monitoring_timer = monitoring_timer
         self.raise_on_error = raise_on_error
-        self.trace_hook = trace_hook
-        self.strict_profile = strict_profile
+        if type(_maintainer_strict_profile) is not bool:
+            raise ValueError("_maintainer_strict_profile must be a boolean")
+        self._trace_hook = _maintainer_trace_hook
+        self._strict_profile = _maintainer_strict_profile
 
         self._serial = 0
+        self._request_lock = threading.RLock()
         self._sock: socket.socket | None = None
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
-        ref = parse_device(device, plc_profile=self.address_profile)
-        return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref)
+        ref = parse_device(device, plc_profile=self.plc_profile)
+        return _require_explicit_plc_profile_for_xy(device, self.plc_profile, ref)
 
-    def _resolve_extended_device_and_extension(
+    def _resolve_semantic_extended_device(
         self,
-        device: str | DeviceRef,
-        extension: ExtensionSpec,
-    ) -> tuple[DeviceRef, ExtensionSpec]:
-        ref, effective_extension = resolve_extended_device_and_extension(
-            device,
-            extension,
-            plc_profile=self.address_profile,
+        device: str | SlmpExtendedDevice,
+    ) -> tuple[str, DeviceRef, _ExtensionSpec]:
+        address = device.address if isinstance(device, SlmpExtendedDevice) else device
+        modification = device.modification if isinstance(device, SlmpExtendedDevice) else None
+        parsed = _parse_extended_device(address, plc_profile=self.plc_profile)
+        if parsed.qualifier not in {"J", "U"}:
+            raise ValueError("Extended Device semantic APIs require a qualified address such as U1\\G0 or J2\\SW10")
+        ref, effective_extension = _resolve_extended_device_and_extension(
+            address,
+            _ExtensionSpec(),
+            plc_profile=self.plc_profile,
         )
-        return _require_explicit_plc_profile_for_xy(device, self.address_profile, ref), effective_extension
-
-    def _ensure_profile_feature_allowed(self, feature_key: str) -> None:
-        ensure_profile_feature_allowed(self.plc_profile, feature_key, strict_profile=self.strict_profile)
-
-    def _ensure_extended_profile_feature_allowed(self, device: str | DeviceRef, extension: ExtensionSpec) -> None:
-        ref, effective_extension = self._resolve_extended_device_and_extension(device, extension)
+        ref = _require_explicit_plc_profile_for_xy(address, self.plc_profile, ref)
+        effective_extension = _apply_semantic_device_modification(
+            effective_extension,
+            modification,
+            series=self.plc_series,
+        )
         ensure_extended_profile_feature_allowed(
             self.plc_profile,
             ref,
             effective_extension,
-            strict_profile=self.strict_profile,
+            strict_profile=self._strict_profile,
         )
+        return address, ref, effective_extension
+
+    def _ensure_profile_feature_allowed(self, feature_key: str) -> None:
+        ensure_profile_feature_allowed(self.plc_profile, feature_key, strict_profile=self._strict_profile)
 
     def connect(self) -> None:
         """Open the connection to the PLC.
@@ -173,6 +193,7 @@ class SlmpClient:
         sock.settimeout(self.timeout)
         if self.transport == "tcp":
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            configure_tcp_keepalive(sock, idle_seconds=30)
             sock.connect((self.host, self.port))
         else:
             sock.connect((self.host, self.port))
@@ -194,18 +215,41 @@ class SlmpClient:
         """Exit the context manager and close the connection."""
         self.close()
 
-    def request(
+    def _request(
         self,
         command: int | Command,
-        subcommand: int = 0x0000,
-        data: bytes = b"",
+        subcommand: int,
+        data: bytes,
         *,
         serial: int | None = None,
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
     ) -> SlmpResponse:
-        """Send an SLMP request and return the response.
+        """Serialize one request on this client connection."""
+        with self._request_lock:
+            return self._request_unlocked(
+                command,
+                subcommand,
+                data,
+                serial=serial,
+                target=target,
+                monitoring_timer=monitoring_timer,
+                raise_on_error=raise_on_error,
+            )
+
+    def _request_unlocked(
+        self,
+        command: int | Command,
+        subcommand: int,
+        data: bytes,
+        *,
+        serial: int | None = None,
+        target: SlmpTarget | None = None,
+        monitoring_timer: int | None = None,
+        raise_on_error: bool | None = None,
+    ) -> SlmpResponse:
+        """Send an internal SLMP request and return the response.
 
         Args:
             command: SLMP command code (e.g. 0x0401).
@@ -245,7 +289,7 @@ class SlmpClient:
             _EXPECTED_RESPONSE_SERIAL.reset(token)
         resp = decode_response(raw, frame_type=self.frame_type)
         self._emit_trace(
-            SlmpTraceFrame(
+            _SlmpTraceFrame(
                 serial=serial_no,
                 command=cmd,
                 subcommand=subcommand,
@@ -272,58 +316,48 @@ class SlmpClient:
         self,
         command: int | Command,
         *,
-        subcommand: int = 0x0000,
-        payload: bytes = b"",
-        serial: int | None = None,
+        subcommand: int,
+        payload: bytes,
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
     ) -> SlmpResponse:
-        """Send a raw SLMP command."""
-        return self.request(
+        """Send one maintainer-level raw SLMP command.
+
+        The frame serial is always allocated by the client so response
+        correlation cannot be bypassed by public callers.
+        """
+        return self._request(
             command=command,
             subcommand=subcommand,
             data=payload,
-            serial=serial,
             target=target,
             monitoring_timer=monitoring_timer,
             raise_on_error=raise_on_error,
         )
 
     @staticmethod
-    def make_extension_spec(
+    def _make_extension_spec(
         *,
-        extension_specification: int = 0x0000,
-        extension_specification_modification: int = 0x00,
-        device_modification_index: int = 0x00,
-        use_indirect_specification: bool = False,
-        register_mode: str = "none",
-        direct_memory_specification: int = 0x00,
-        series: PLCSeries | str = PLCSeries.QL,
-    ) -> ExtensionSpec:
-        """Create an ExtensionSpec for Extended Device commands.
-
-        Args:
-            extension_specification: Extension specification (16-bit).
-            extension_specification_modification: Extension specification modification (8-bit).
-            device_modification_index: Device modification index (8-bit).
-            use_indirect_specification: Whether to use indirect specification.
-            register_mode: Register mode ('none', 'index', 'long_index').
-            direct_memory_specification: Direct memory specification (8-bit).
-            series: PLC series for flag calculation.
-
-        """
-        s = PLCSeries(series)
-        flags = build_device_modification_flags(
-            series=s,
-            use_indirect_specification=use_indirect_specification,
-            register_mode=register_mode,
-        )
-        return ExtensionSpec(
+        extension_specification: int,
+        extension_specification_modification: int,
+        device_modification_index: int,
+        use_indirect_specification: bool,
+        register_mode: str,
+        direct_memory_specification: int,
+        series: PLCSeries | str,
+    ) -> _ExtensionSpec:
+        """Build a raw extension specification for maintainer probe commands."""
+        resolved_series = PLCSeries(series)
+        return _ExtensionSpec(
             extension_specification=extension_specification,
             extension_specification_modification=extension_specification_modification,
             device_modification_index=device_modification_index,
-            device_modification_flags=flags,
+            device_modification_flags=_build_device_modification_flags(
+                series=resolved_series,
+                use_indirect_specification=use_indirect_specification,
+                register_mode=register_mode,
+            ),
             direct_memory_specification=direct_memory_specification,
         )
 
@@ -336,8 +370,7 @@ class SlmpClient:
         device: str | DeviceRef,
         points: int,
         *,
-        bit_unit: bool = False,
-        series: PLCSeries | str | None = None,
+        bit_unit: bool,
     ) -> list[int] | list[bool]:
         """Read device values from the PLC.
 
@@ -360,11 +393,11 @@ class SlmpClient:
             device,
             points,
             bit_unit=bit_unit,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
 
     def write_devices(
@@ -372,8 +405,7 @@ class SlmpClient:
         device: str | DeviceRef,
         values: Sequence[int | bool],
         *,
-        bit_unit: bool = False,
-        series: PLCSeries | str | None = None,
+        bit_unit: bool,
     ) -> None:
         """Write values to PLC devices.
 
@@ -393,132 +425,148 @@ class SlmpClient:
             device,
             values,
             bit_unit=bit_unit,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_dword(
         self,
         device: str | DeviceRef,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> int:
         """Read one 32-bit value from two consecutive word devices."""
-        return self.read_dwords(device, 1, series=series)[0]
+        return self.read_dwords(device, 1)[0]
 
     def write_dword(
         self,
         device: str | DeviceRef,
         value: int,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write one 32-bit value to two consecutive word devices."""
-        self.write_dwords(device, [value], series=series)
+        self.write_dwords(device, [value])
 
     def read_dwords(
         self,
         device: str | DeviceRef,
         count: int,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> list[int]:
         """Read one or more 32-bit values from consecutive word devices."""
         request = _operations.build_read_dwords_request(
             device,
             count,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_dwords_response(resp, count=count)
 
     def write_dwords(
         self,
         device: str | DeviceRef,
         values: Sequence[int],
-        *,
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write one or more 32-bit values to two consecutive word devices."""
         request = _operations.build_write_dwords_request(
             device,
             values,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_float32(
         self,
         device: str | DeviceRef,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> float:
         """Read one IEEE-754 float32 from two consecutive word devices."""
-        return self.read_float32s(device, 1, series=series)[0]
+        return self.read_float32s(device, 1)[0]
 
     def write_float32(
         self,
         device: str | DeviceRef,
         value: float,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write one IEEE-754 float32 to two consecutive word devices."""
-        self.write_float32s(device, [value], series=series)
+        self.write_float32s(device, [value])
 
     def read_float32s(
         self,
         device: str | DeviceRef,
         count: int,
-        *,
-        series: PLCSeries | str | None = None,
     ) -> list[float]:
         """Read one or more IEEE-754 float32 values from consecutive word devices."""
         request = _operations.build_read_dwords_request(
             device,
             count,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_float32s_response(resp, count=count)
 
     def write_float32s(
         self,
         device: str | DeviceRef,
         values: Sequence[float],
-        *,
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write one or more IEEE-754 float32 values to two consecutive word devices."""
         request = _operations.build_write_float32s_request(
             device,
             values,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_devices_ext(
+        self,
+        device: str | SlmpExtendedDevice,
+        points: int,
+        *,
+        bit_unit: bool,
+    ) -> list[int] | list[bool]:
+        """Read a qualified Extended Device address with fields derived from the address."""
+        self._ensure_profile_feature_allowed("direct")
+        address, _, extension = self._resolve_semantic_extended_device(device)
+        request = _operations.build_read_devices_ext_request(
+            address,
+            points,
+            extension=extension,
+            bit_unit=bit_unit,
+            series=None,
+            default_series=self.plc_series,
+            address_profile=self.plc_profile,
+        )
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
+        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+
+    def _read_devices_ext_raw(
         self,
         device: str | DeviceRef,
         points: int,
         *,
-        extension: ExtensionSpec,
-        bit_unit: bool = False,
+        extension: _ExtensionSpec,
+        bit_unit: bool,
         series: PLCSeries | str | None = None,
     ) -> list[int] | list[bool]:
-        """Extended Device extension read (subcommand 0081/0080 or 0083/0082)."""
+        """Execute a raw Extended Device read for maintainer probes."""
         self._ensure_profile_feature_allowed("direct")
-        self._ensure_extended_profile_feature_allowed(device, extension)
+        ref, effective_extension = _resolve_extended_device_and_extension(
+            device,
+            extension,
+            plc_profile=self.plc_profile,
+        )
+        ensure_extended_profile_feature_allowed(
+            self.plc_profile,
+            ref,
+            effective_extension,
+            strict_profile=self._strict_profile,
+        )
         request = _operations.build_read_devices_ext_request(
             device,
             points,
@@ -526,23 +574,54 @@ class SlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
 
     def write_devices_ext(
         self,
+        device: str | SlmpExtendedDevice,
+        values: Sequence[int | bool],
+        *,
+        bit_unit: bool,
+    ) -> None:
+        """Write a qualified Extended Device address with fields derived from the address."""
+        self._ensure_profile_feature_allowed("direct")
+        address, _, extension = self._resolve_semantic_extended_device(device)
+        request = _operations.build_write_devices_ext_request(
+            address,
+            values,
+            extension=extension,
+            bit_unit=bit_unit,
+            series=None,
+            default_series=self.plc_series,
+            address_profile=self.plc_profile,
+        )
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    def _write_devices_ext_raw(
+        self,
         device: str | DeviceRef,
         values: Sequence[int | bool],
         *,
-        extension: ExtensionSpec,
-        bit_unit: bool = False,
+        extension: _ExtensionSpec,
+        bit_unit: bool,
         series: PLCSeries | str | None = None,
     ) -> None:
-        """Extended Device extension write (subcommand 0081/0080 or 0083/0082)."""
+        """Execute a raw Extended Device write for maintainer probes."""
         self._ensure_profile_feature_allowed("direct")
-        self._ensure_extended_profile_feature_allowed(device, extension)
+        ref, effective_extension = _resolve_extended_device_and_extension(
+            device,
+            extension,
+            plc_profile=self.plc_profile,
+        )
+        ensure_extended_profile_feature_allowed(
+            self.plc_profile,
+            ref,
+            effective_extension,
+            strict_profile=self._strict_profile,
+        )
         request = _operations.build_write_devices_ext_request(
             device,
             values,
@@ -550,16 +629,15 @@ class SlmpClient:
             bit_unit=bit_unit,
             series=series,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def read_random(
         self,
         *,
         word_devices: Sequence[str | DeviceRef] = (),
         dword_devices: Sequence[str | DeviceRef] = (),
-        series: PLCSeries | str | None = None,
     ) -> RandomReadResult:
         """Read multiple word and double-word devices at random.
 
@@ -573,11 +651,11 @@ class SlmpClient:
         operation = _operations.build_read_random_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(
+        resp = self._request(
             operation.request.command,
             subcommand=operation.request.subcommand,
             data=operation.request.payload,
@@ -587,29 +665,36 @@ class SlmpClient:
     def read_random_ext(
         self,
         *,
-        word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]] = (),
-        dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]] = (),
-        series: PLCSeries | str | None = None,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
     ) -> RandomReadResult:
         """Read multiple word and double-word devices at random using Extended Device extensions.
 
         Args:
-            word_devices: List of (device, extension) tuples for word devices.
-            dword_devices: List of (device, extension) tuples for double-word devices.
+            word_devices: Qualified word-device addresses.
+            dword_devices: Qualified double-word-device addresses.
             series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
-        for device, extension in (*word_devices, *dword_devices):
-            self._ensure_extended_profile_feature_allowed(device, extension)
+        resolved_words = [
+            (address, extension)
+            for device in word_devices
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
+        resolved_dwords = [
+            (address, extension)
+            for device in dword_devices
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
         operation = _operations.build_read_random_ext_request(
-            word_devices=word_devices,
-            dword_devices=dword_devices,
-            series=series,
+            word_devices=resolved_words,
+            dword_devices=resolved_dwords,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(
+        resp = self._request(
             operation.request.command,
             subcommand=operation.request.subcommand,
             data=operation.request.payload,
@@ -621,7 +706,6 @@ class SlmpClient:
         *,
         word_values: Mapping[str | DeviceRef, int] | Sequence[tuple[str | DeviceRef, int]] = (),
         dword_values: Mapping[str | DeviceRef, int] | Sequence[tuple[str | DeviceRef, int]] = (),
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple word and double-word values at random.
 
@@ -635,44 +719,49 @@ class SlmpClient:
         request = _operations.build_write_random_words_request(
             word_values=word_values,
             dword_values=dword_values,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_words_ext(
         self,
         *,
-        word_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]] = (),
-        dword_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]] = (),
-        series: PLCSeries | str | None = None,
+        word_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
+        dword_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
     ) -> None:
         """Write multiple word and double-word values at random using Extended Device extensions.
 
         Args:
-            word_values: List of (device, value, extension) for word devices.
-            dword_values: List of (device, value, extension) for double-word devices.
+            word_values: Qualified (device, value) pairs for word devices.
+            dword_values: Qualified (device, value) pairs for double-word devices.
             series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
-        for device, _, extension in (*word_values, *dword_values):
-            self._ensure_extended_profile_feature_allowed(device, extension)
+        resolved_words = [
+            (address, value, extension)
+            for device, value in word_values
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
+        resolved_dwords = [
+            (address, value, extension)
+            for device, value in dword_values
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
         request = _operations.build_write_random_words_ext_request(
-            word_values=word_values,
-            dword_values=dword_values,
-            series=series,
+            word_values=resolved_words,
+            dword_values=resolved_dwords,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_bits(
         self,
         bit_values: Mapping[str | DeviceRef, bool | int] | Sequence[tuple[str | DeviceRef, bool | int]],
-        *,
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Write multiple bit values at random.
 
@@ -684,42 +773,42 @@ class SlmpClient:
         self._ensure_profile_feature_allowed("random")
         request = _operations.build_write_random_bits_request(
             bit_values,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def write_random_bits_ext(
         self,
-        bit_values: Sequence[tuple[str | DeviceRef, bool | int, ExtensionSpec]],
-        *,
-        series: PLCSeries | str | None = None,
+        bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool | int]],
     ) -> None:
         """Write multiple bit values at random using Extended Device extensions.
 
         Args:
-            bit_values: List of (device, value, extension) for bit devices.
+            bit_values: Qualified (device, value) pairs for bit devices.
             series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
-        for device, _, extension in bit_values:
-            self._ensure_extended_profile_feature_allowed(device, extension)
+        resolved_values = [
+            (address, value, extension)
+            for device, value in bit_values
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
         request = _operations.build_write_random_bits_ext_request(
-            bit_values,
-            series=series,
+            resolved_values,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def register_monitor_devices(
         self,
         *,
         word_devices: Sequence[str | DeviceRef] = (),
         dword_devices: Sequence[str | DeviceRef] = (),
-        series: PLCSeries | str | None = None,
     ) -> None:
         """Register word and double-word devices for monitoring.
 
@@ -733,38 +822,45 @@ class SlmpClient:
         request = _operations.build_register_monitor_devices_request(
             word_devices=word_devices,
             dword_devices=dword_devices,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def register_monitor_devices_ext(
         self,
         *,
-        word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]] = (),
-        dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]] = (),
-        series: PLCSeries | str | None = None,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
     ) -> None:
         """Register devices for monitoring using Extended Device extensions.
 
         Args:
-            word_devices: List of (device, extension) for word devices.
-            dword_devices: List of (device, extension) for double-word devices.
+            word_devices: Qualified word-device addresses.
+            dword_devices: Qualified double-word-device addresses.
             series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("monitor")
-        for device, extension in (*word_devices, *dword_devices):
-            self._ensure_extended_profile_feature_allowed(device, extension)
+        resolved_words = [
+            (address, extension)
+            for device in word_devices
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
+        resolved_dwords = [
+            (address, extension)
+            for device in dword_devices
+            for address, _, extension in (self._resolve_semantic_extended_device(device),)
+        ]
         request = _operations.build_register_monitor_devices_ext_request(
-            word_devices=word_devices,
-            dword_devices=dword_devices,
-            series=series,
+            word_devices=resolved_words,
+            dword_devices=resolved_dwords,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
         """Execute a monitoring cycle for previously registered devices.
@@ -779,7 +875,7 @@ class SlmpClient:
         """
         self._ensure_profile_feature_allowed("monitor")
         request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
-        resp = self.request(request.command, subcommand=request.subcommand, data=request.payload)
+        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
 
     def read_block(
@@ -787,8 +883,6 @@ class SlmpClient:
         *,
         word_blocks: Sequence[tuple[str | DeviceRef, int]] = (),
         bit_blocks: Sequence[tuple[str | DeviceRef, int]] = (),
-        series: PLCSeries | str | None = None,
-        split_mixed_blocks: bool = False,
     ) -> BlockReadResult:
         """Read word blocks and bit-device word blocks."""
         self._ensure_profile_feature_allowed("block")
@@ -796,28 +890,14 @@ class SlmpClient:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
             raise ValueError("word_blocks and bit_blocks must be <= 255 each")
-        if split_mixed_blocks and word_blocks and bit_blocks:
-            w = self.read_block(
-                word_blocks=word_blocks,
-                bit_blocks=(),
-                series=series,
-                split_mixed_blocks=False,
-            )
-            b = self.read_block(
-                word_blocks=(),
-                bit_blocks=bit_blocks,
-                series=series,
-                split_mixed_blocks=False,
-            )
-            return BlockReadResult(word_blocks=w.word_blocks, bit_blocks=b.bit_blocks)
         operation = _operations.build_read_block_request(
             word_blocks=word_blocks,
             bit_blocks=bit_blocks,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(
+        resp = self._request(
             operation.request.command,
             subcommand=operation.request.subcommand,
             data=operation.request.payload,
@@ -829,8 +909,6 @@ class SlmpClient:
         *,
         word_blocks: Sequence[tuple[str | DeviceRef, Sequence[int]]] = (),
         bit_blocks: Sequence[tuple[str | DeviceRef, Sequence[int]]] = (),
-        series: PLCSeries | str | None = None,
-        split_mixed_blocks: bool = False,
     ) -> None:
         """Write word blocks and bit-device word blocks."""
         self._ensure_profile_feature_allowed("block")
@@ -838,28 +916,14 @@ class SlmpClient:
             raise ValueError("word_blocks and bit_blocks must not both be empty")
         if len(word_blocks) > 0xFF or len(bit_blocks) > 0xFF:
             raise ValueError("word_blocks and bit_blocks must be <= 255 each")
-        if split_mixed_blocks and word_blocks and bit_blocks:
-            self.write_block(
-                word_blocks=word_blocks,
-                bit_blocks=(),
-                series=series,
-                split_mixed_blocks=False,
-            )
-            self.write_block(
-                word_blocks=(),
-                bit_blocks=bit_blocks,
-                series=series,
-                split_mixed_blocks=False,
-            )
-            return
         request = _operations.build_write_block_request(
             word_blocks=word_blocks,
             bit_blocks=bit_blocks,
-            series=series,
+            series=None,
             default_series=self.plc_series,
-            address_profile=self.address_profile,
+            address_profile=self.plc_profile,
         )
-        resp = self.request(
+        resp = self._request(
             request.command,
             subcommand=request.subcommand,
             data=request.payload,
@@ -873,62 +937,56 @@ class SlmpClient:
     def read_long_timer(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[LongTimerResult]:
         """Read long timer (LT) by LTN in 4-word units and decode status bits."""
-        return self._read_long_timer_like(device_prefix="LTN", head_no=head_no, points=points, series=series)
+        return self._read_long_timer_like(device_prefix="LTN", head_no=head_no, points=points, series=None)
 
     def read_long_retentive_timer(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[LongTimerResult]:
         """Read long retentive timer (LST) by LSTN in 4-word units and decode status bits."""
-        return self._read_long_timer_like(device_prefix="LSTN", head_no=head_no, points=points, series=series)
+        return self._read_long_timer_like(device_prefix="LSTN", head_no=head_no, points=points, series=None)
 
     def read_ltc_states(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[bool]:
         """Read LT coil states by decoding LTN 4-word units."""
-        return [item.coil for item in self.read_long_timer(head_no=head_no, points=points, series=series)]
+        return [item.coil for item in self.read_long_timer(head_no=head_no, points=points)]
 
     def read_lts_states(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[bool]:
         """Read LT contact states by decoding LTN 4-word units."""
-        return [item.contact for item in self.read_long_timer(head_no=head_no, points=points, series=series)]
+        return [item.contact for item in self.read_long_timer(head_no=head_no, points=points)]
 
     def read_lstc_states(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[bool]:
         """Read LST coil states by decoding LSTN 4-word units."""
-        return [item.coil for item in self.read_long_retentive_timer(head_no=head_no, points=points, series=series)]
+        return [item.coil for item in self.read_long_retentive_timer(head_no=head_no, points=points)]
 
     def read_lsts_states(
         self,
         *,
-        head_no: int = 0,
-        points: int = 1,
-        series: PLCSeries | str | None = None,
+        head_no: int,
+        points: int,
     ) -> list[bool]:
         """Read LST contact states by decoding LSTN 4-word units."""
-        return [item.contact for item in self.read_long_retentive_timer(head_no=head_no, points=points, series=series)]
+        return [item.contact for item in self.read_long_retentive_timer(head_no=head_no, points=points)]
 
     def _read_long_timer_like(
         self,
@@ -949,7 +1007,6 @@ class SlmpClient:
             f"{device_prefix}{head_no}",
             word_points,
             bit_unit=False,
-            series=series,
         )
         words = [int(v) for v in words_raw]
         if len(words) != word_points:
@@ -989,7 +1046,7 @@ class SlmpClient:
 
         """
         request = _operations.build_memory_read_words_request(head_address, word_length)
-        resp = self.request(request.command, request.subcommand, request.payload)
+        resp = self._request(request.command, request.subcommand, request.payload)
         return _operations.decode_memory_read_words_response(resp, word_length=word_length)
 
     def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
@@ -1001,7 +1058,7 @@ class SlmpClient:
 
         """
         request = _operations.build_memory_write_words_request(head_address, values)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def extend_unit_read_bytes(self, head_address: int, byte_length: int, module_no: int) -> bytes:
         """Read bytes from multiple-CPU shared memory or other extended units.
@@ -1016,7 +1073,7 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
-        resp = self.request(request.command, request.subcommand, request.payload)
+        resp = self._request(request.command, request.subcommand, request.payload)
         return _operations.decode_extend_unit_read_bytes_response(resp, byte_length=byte_length)
 
     def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
@@ -1032,7 +1089,7 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
-        resp = self.request(request.command, request.subcommand, request.payload)
+        resp = self._request(request.command, request.subcommand, request.payload)
         return _operations.decode_extend_unit_read_words_response(resp, word_length=word_length)
 
     def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
@@ -1053,7 +1110,7 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_write_bytes_request(head_address, module_no, data)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_words(self, head_address: int, module_no: int, values: Sequence[int]) -> None:
         """Write 16-bit words to multiple-CPU shared memory or other extended units.
@@ -1065,59 +1122,59 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_word(self, head_address: int, module_no: int, value: int) -> None:
         """Write one 16-bit word to an extend-unit buffer."""
         request = _operations.build_extend_unit_write_word_request(head_address, module_no, value)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def extend_unit_write_dword(self, head_address: int, module_no: int, value: int) -> None:
         """Write one 32-bit value to an extend-unit buffer."""
         request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
-    def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int = 0x03E0) -> bytes:
+    def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int) -> bytes:
         """Read CPU buffer memory by extend-unit command using the CPU start I/O number."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_bytes(head_address, byte_length, module_no)
 
-    def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int = 0x03E0) -> list[int]:
+    def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int) -> list[int]:
         """Read CPU buffer memory words by extend-unit command using the CPU start I/O number."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_words(head_address, word_length, module_no)
 
-    def cpu_buffer_read_word(self, head_address: int, *, module_no: int = 0x03E0) -> int:
+    def cpu_buffer_read_word(self, head_address: int, *, module_no: int) -> int:
         """Read one 16-bit CPU buffer word via the verified extend-unit path."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_word(head_address, module_no)
 
-    def cpu_buffer_read_dword(self, head_address: int, *, module_no: int = 0x03E0) -> int:
+    def cpu_buffer_read_dword(self, head_address: int, *, module_no: int) -> int:
         """Read one 32-bit CPU buffer value via the verified extend-unit path."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_dword(head_address, module_no)
 
-    def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int = 0x03E0) -> None:
+    def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int) -> None:
         """Write CPU buffer memory by extend-unit command using the CPU start I/O number."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_bytes(head_address, module_no, data)
 
-    def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module_no: int = 0x03E0) -> None:
+    def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module_no: int) -> None:
         """Write CPU buffer memory words by extend-unit command using the CPU start I/O number."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_words(head_address, module_no, values)
 
-    def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
+    def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int) -> None:
         """Write one 16-bit CPU buffer word via the verified extend-unit path."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_word(head_address, module_no, value)
 
-    def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int = 0x03E0) -> None:
+    def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int) -> None:
         """Write one 32-bit CPU buffer value via the verified extend-unit path."""
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_dword(head_address, module_no, value)
 
-    def remote_run(self, *, force: bool = False, clear_mode: int = 0) -> None:
+    def remote_run(self, *, force: bool, clear_mode: RemoteClearMode) -> None:
         """Remote RUN.
 
         Args:
@@ -1125,73 +1182,67 @@ class SlmpClient:
             clear_mode: Clear mode (0: No clear, 1: Clear except latch, 2: Clear all).
 
         """
-        request = _operations.build_remote_run_request(force=force, clear_mode=clear_mode)
-        self.request(request.command, request.subcommand, request.payload)
+        if type(force) is not bool:
+            raise ValueError("force must be a boolean")
+        if not isinstance(clear_mode, RemoteClearMode):
+            raise ValueError("clear_mode must be a RemoteClearMode")
+        request = _operations.build_remote_run_request(force=force, clear_mode=int(clear_mode))
+        self._request(request.command, request.subcommand, request.payload)
 
     def remote_stop(self) -> None:
         """Remote STOP."""
         request = _operations.build_remote_stop_request()
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
-    def remote_pause(self, *, force: bool = False) -> None:
+    def remote_pause(self, *, force: bool) -> None:
         """Remote PAUSE.
 
         Args:
             force: Force PAUSE.
 
         """
+        if type(force) is not bool:
+            raise ValueError("force must be a boolean")
         request = _operations.build_remote_pause_request(force=force)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def remote_latch_clear(self) -> None:
         """Remote latch clear."""
         request = _operations.build_remote_latch_clear_request()
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
-    def remote_reset(self, *, subcommand: int = 0x0000, expect_response: bool | None = None) -> None:
-        """Remote RESET.
-
-        Args:
-            subcommand: Subcommand (0x0000: RESET).
-            expect_response: Whether to wait for a response.
-
-        """
-        request = _operations.build_remote_reset_request(subcommand=subcommand)
-        should_wait = False if expect_response is None else expect_response
-        if should_wait:
-            self.request(request.command, request.subcommand, request.payload)
-            return
+    def remote_reset(self) -> None:
+        """Remote RESET without waiting for a response, as required by the protocol contract."""
+        request = _operations.build_remote_reset_request(subcommand=0x0000)
         self._send_no_response(request.command, request.subcommand, request.payload)
 
-    def remote_password_lock(self, password: str, *, series: PLCSeries | str | None = None) -> None:
+    def remote_password_lock(self, password: str) -> None:
         """Remote password lock.
 
         Args:
             password: Password string.
-            series: Optional PLC series override.
 
         """
         request = _operations.build_remote_password_lock_request(
             password,
-            series=series,
+            series=None,
             default_series=self.plc_series,
         )
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
-    def remote_password_unlock(self, password: str, *, series: PLCSeries | str | None = None) -> None:
+    def remote_password_unlock(self, password: str) -> None:
         """Remote password unlock.
 
         Args:
             password: Password string.
-            series: Optional PLC series override.
 
         """
         request = _operations.build_remote_password_unlock_request(
             password,
-            series=series,
+            series=None,
             default_series=self.plc_series,
         )
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def self_test_loopback(self, data: bytes | str) -> bytes:
         """Self-test (loopback).
@@ -1204,7 +1255,7 @@ class SlmpClient:
 
         """
         request = _operations.build_self_test_loopback_request(data)
-        resp = self.request(request.command, request.subcommand, request.payload)
+        resp = self._request(request.command, request.subcommand, request.payload)
         return _operations.decode_self_test_loopback_response(resp)
 
     # --------------------
@@ -1228,7 +1279,7 @@ class SlmpClient:
 
         """
         request = _operations.build_read_array_labels_request(points, abbreviation_labels=abbreviation_labels)
-        data = self.request(request.command, request.subcommand, request.payload).data
+        data = self._request(request.command, request.subcommand, request.payload).data
         return _operations.parse_array_label_read_response(data, expected_points=len(points))
 
     def write_array_labels(
@@ -1245,7 +1296,7 @@ class SlmpClient:
 
         """
         request = _operations.build_write_array_labels_request(points, abbreviation_labels=abbreviation_labels)
-        self.request(request.command, request.subcommand, request.payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def read_random_labels(
         self,
@@ -1264,7 +1315,7 @@ class SlmpClient:
 
         """
         request = _operations.build_read_random_labels_request(labels, abbreviation_labels=abbreviation_labels)
-        data = self.request(request.command, request.subcommand, request.payload).data
+        data = self._request(request.command, request.subcommand, request.payload).data
         return _operations.parse_label_read_random_response(data, expected_points=len(labels))
 
     def write_random_labels(
@@ -1281,177 +1332,13 @@ class SlmpClient:
 
         """
         request = _operations.build_write_random_labels_request(points, abbreviation_labels=abbreviation_labels)
-        self.request(request.command, request.subcommand, request.payload)
-
-    @staticmethod
-    def build_array_label_read_payload(
-        points: Sequence[LabelArrayReadPoint],
-        *,
-        abbreviation_labels: Sequence[str] = (),
-    ) -> bytes:
-        """Build the binary payload for array label read command.
-
-        Args:
-            points: List of points to read.
-            abbreviation_labels: Optional abbreviation labels.
-
-        Returns:
-            Binary payload.
-
-        """
-        return _operations.build_array_label_read_payload(points, abbreviation_labels=abbreviation_labels)
-
-    @staticmethod
-    def build_array_label_write_payload(
-        points: Sequence[LabelArrayWritePoint],
-        *,
-        abbreviation_labels: Sequence[str] = (),
-    ) -> bytes:
-        """Build the binary payload for array label write command.
-
-        Args:
-            points: List of points and data to write.
-            abbreviation_labels: Optional abbreviation labels.
-
-        Returns:
-            Binary payload.
-
-        """
-        return _operations.build_array_label_write_payload(points, abbreviation_labels=abbreviation_labels)
-
-    @staticmethod
-    def build_label_read_random_payload(
-        labels: Sequence[str],
-        *,
-        abbreviation_labels: Sequence[str] = (),
-    ) -> bytes:
-        """Build the binary payload for label random read command.
-
-        Args:
-            labels: List of label names to read.
-            abbreviation_labels: Optional abbreviation labels.
-
-        Returns:
-            Binary payload.
-
-        """
-        return _operations.build_label_read_random_payload(labels, abbreviation_labels=abbreviation_labels)
-
-    @staticmethod
-    def build_label_write_random_payload(
-        points: Sequence[LabelRandomWritePoint],
-        *,
-        abbreviation_labels: Sequence[str] = (),
-    ) -> bytes:
-        """Build the binary payload for label random write command.
-
-        Args:
-            points: List of labels and data to write.
-            abbreviation_labels: Optional abbreviation labels.
-
-        Returns:
-            Binary payload.
-
-        """
-        return _operations.build_label_write_random_payload(points, abbreviation_labels=abbreviation_labels)
-
-    @staticmethod
-    def parse_array_label_read_response(
-        data: bytes,
-        *,
-        expected_points: int | None = None,
-    ) -> list[LabelArrayReadResult]:
-        """Parse binary response data from array label read command.
-
-        Args:
-            data: Binary response data.
-            expected_points: Optional expected point count.
-
-        Returns:
-            List of LabelArrayReadResult.
-
-        """
-        return _operations.parse_array_label_read_response(data, expected_points=expected_points)
-
-    @staticmethod
-    def parse_label_read_random_response(
-        data: bytes,
-        *,
-        expected_points: int | None = None,
-    ) -> list[LabelRandomReadResult]:
-        """Parse binary response data from label random read command.
-
-        Args:
-            data: Binary response data.
-            expected_points: Optional expected point count.
-
-        Returns:
-            List of LabelRandomReadResult.
-
-        """
-        return _operations.parse_label_read_random_response(data, expected_points=expected_points)
-
-    # --------------------
-    # Full command wrappers (raw payload)
-    # --------------------
-
-    def array_label_read(self, payload: bytes = b"") -> bytes:
-        """Low-level wrapper for LABEL_ARRAY_READ command."""
-        return self.request(Command.LABEL_ARRAY_READ, 0x0000, payload).data
-
-    def array_label_write(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for LABEL_ARRAY_WRITE command."""
-        self.request(Command.LABEL_ARRAY_WRITE, 0x0000, payload)
-
-    def label_read_random(self, payload: bytes = b"") -> bytes:
-        """Low-level wrapper for LABEL_READ_RANDOM command."""
-        return self.request(Command.LABEL_READ_RANDOM, 0x0000, payload).data
-
-    def label_write_random(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for LABEL_WRITE_RANDOM command."""
-        self.request(Command.LABEL_WRITE_RANDOM, 0x0000, payload)
-
-    def memory_read(self, payload: bytes = b"") -> bytes:
-        """Low-level wrapper for MEMORY_READ command."""
-        return self.request(Command.MEMORY_READ, 0x0000, payload).data
-
-    def memory_write(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for MEMORY_WRITE command."""
-        self.request(Command.MEMORY_WRITE, 0x0000, payload)
-
-    def extend_unit_read(self, payload: bytes = b"") -> bytes:
-        """Low-level wrapper for EXTEND_UNIT_READ command."""
-        return self.request(Command.EXTEND_UNIT_READ, 0x0000, payload).data
-
-    def extend_unit_write(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for EXTEND_UNIT_WRITE command."""
-        self.request(Command.EXTEND_UNIT_WRITE, 0x0000, payload)
-
-    def remote_run_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_RUN command."""
-        self.request(Command.REMOTE_RUN, 0x0000, payload)
-
-    def remote_stop_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_STOP command."""
-        self.request(Command.REMOTE_STOP, 0x0000, payload)
-
-    def remote_pause_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_PAUSE command."""
-        self.request(Command.REMOTE_PAUSE, 0x0000, payload)
-
-    def remote_latch_clear_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_LATCH_CLEAR command."""
-        self.request(Command.REMOTE_LATCH_CLEAR, 0x0000, payload)
-
-    def remote_reset_raw(self, payload: bytes = b"\x01\x00") -> None:
-        """Low-level wrapper for REMOTE_RESET command (no response)."""
-        self._send_no_response(Command.REMOTE_RESET, 0x0000, payload)
+        self._request(request.command, request.subcommand, request.payload)
 
     def read_type_name(self) -> TypeNameInfo:
         """Read the PLC model name and code."""
         self._ensure_profile_feature_allowed("type_name")
         request = _operations.build_read_type_name_request()
-        resp = self.request(request.command, request.subcommand, request.payload)
+        resp = self._request(request.command, request.subcommand, request.payload)
         return _operations.decode_read_type_name_response(resp)
 
     def read_device_range_catalog_for_plc_profile(
@@ -1473,27 +1360,32 @@ class SlmpClient:
         """Read SD203 and decode the CPU operation state from the lower 4 bits."""
         return decode_cpu_operation_state(self.read_devices("SD203", 1, bit_unit=False)[0])
 
-    def remote_password_lock_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_PASSWORD_LOCK command."""
-        self.request(Command.REMOTE_PASSWORD_LOCK, 0x0000, payload)
-
-    def remote_password_unlock_raw(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for REMOTE_PASSWORD_UNLOCK command."""
-        self.request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, payload)
-
-    def self_test(self, payload: bytes = b"") -> bytes:
-        """Low-level wrapper for SELF_TEST command."""
-        return self.request(Command.SELF_TEST, 0x0000, payload).data
-
-    def clear_error(self, payload: bytes = b"") -> None:
-        """Low-level wrapper for CLEAR_ERROR command."""
-        self.request(Command.CLEAR_ERROR, 0x0000, payload)
-
     # --------------------
     # Internal I/O
     # --------------------
 
     def _send_no_response(
+        self,
+        command: int | Command,
+        subcommand: int,
+        data: bytes,
+        *,
+        serial: int | None = None,
+        target: SlmpTarget | None = None,
+        monitoring_timer: int | None = None,
+    ) -> None:
+        """Serialize one no-response request on this client connection."""
+        with self._request_lock:
+            self._send_no_response_unlocked(
+                command,
+                subcommand,
+                data,
+                serial=serial,
+                target=target,
+                monitoring_timer=monitoring_timer,
+            )
+
+    def _send_no_response_unlocked(
         self,
         command: int | Command,
         subcommand: int,
@@ -1521,7 +1413,7 @@ class SlmpClient:
         if self.transport == "tcp":
             self._sock.sendall(frame)
             self._emit_trace(
-                SlmpTraceFrame(
+                _SlmpTraceFrame(
                     serial=serial_no,
                     command=int(command),
                     subcommand=subcommand,
@@ -1536,7 +1428,7 @@ class SlmpClient:
             return
         self._sock.send(frame)
         self._emit_trace(
-            SlmpTraceFrame(
+            _SlmpTraceFrame(
                 serial=serial_no,
                 command=int(command),
                 subcommand=subcommand,
@@ -1595,11 +1487,11 @@ class SlmpClient:
             if timeout is not None and self._sock is sock:
                 sock.settimeout(previous_timeout)
 
-    def _emit_trace(self, trace: SlmpTraceFrame) -> None:
-        if self.trace_hook is None:
+    def _emit_trace(self, trace: _SlmpTraceFrame) -> None:
+        if self._trace_hook is None:
             return
         try:
-            self.trace_hook(trace)
+            self._trace_hook(trace)
         except Exception:
             # Trace callback failures must not affect protocol behavior.
             pass

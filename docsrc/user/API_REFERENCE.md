@@ -4,7 +4,7 @@ This page is a user-facing index of the public Python SLMP API surface.
 Use the usage guide for examples, and this page when you need to find the
 operation name for a specific SLMP command family.
 
-The sync `SlmpClient` and async `AsyncSlmpClient` expose the same low-level
+The sync `SlmpClient` and async `AsyncSlmpClient` expose the same semantic
 operation names unless noted otherwise.
 
 ## Direct And Random Device Operations
@@ -26,6 +26,9 @@ operation names unless noted otherwise.
 
 Extended random APIs use the 008x subcommands. Use qualified device notation
 such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
+Raw extension fields are not part of the public semantic API. Use
+`SlmpExtendedDevice` with `SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect` only
+when a typed modification is required; otherwise pass the qualified string.
 
 ## Specialized Operations
 
@@ -48,15 +51,22 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
 | Typed values | `read_typed`, `write_typed` |
 | Named mixed snapshots | `read_named`, `write_named`, `poll` |
-| Chunked word/dword reads | `read_words_single_request`, `read_words_chunked`, `read_dwords_single_request`, `read_dwords_chunked` |
-| Address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
+| Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
+| Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
+| Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word` |
+
+The contiguous helpers and the random-read portion of `read_named` never
+split one call into multiple protocol requests. Counts above the applicable
+single-request limit are rejected before transport. Applications that need
+larger logical ranges must issue explicit requests and define their own
+snapshot/version and partial-write handling.
 
 ## Target Module I/O Constants
 
 `ModuleIONo` provides named request-header module I/O numbers for multi-CPU
-and routed CPU targets. Pass these values to `SlmpTarget(module_io=...)`;
-the default `SlmpTarget()` remains the own-station route `0x03FF`.
+and routed CPU targets. Construct `SlmpTarget` with all four route fields;
+there is no implicit own-station route in the public connection API.
 
 | Constant | Value |
 | --- | --- |

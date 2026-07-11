@@ -22,8 +22,8 @@ def int_auto(value: str) -> int:
 
 def add_connection_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--host", required=True, help="PLC or Ethernet module host name / IP")
-    parser.add_argument("--port", type=int, default=1025, help="SLMP port number")
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp", help="Transport protocol")
+    parser.add_argument("--port", type=int, required=True, help="SLMP port number")
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True, help="Transport protocol")
     parser.add_argument(
         "--plc-profile",
         choices=(
@@ -63,7 +63,7 @@ def add_target_args(parser: argparse.ArgumentParser) -> None:
 def create_client_from_args(
     args: argparse.Namespace,
     *,
-    default_target: SlmpTarget | None = None,
+    default_target: SlmpTarget,
 ) -> SlmpClient:
     return SlmpClient(
         args.host,
@@ -74,6 +74,11 @@ def create_client_from_args(
         monitoring_timer=args.monitoring_timer,
         default_target=default_target,
     )
+
+
+def own_station_target() -> SlmpTarget:
+    """Return an explicit own-station route for samples that intentionally use it."""
+    return SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
 
 
 def build_target_from_args(args: argparse.Namespace) -> SlmpTarget:

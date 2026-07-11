@@ -1,6 +1,5 @@
 from slmp import (
     SlmpError,
-    get_end_code_message,
     get_end_code_name,
     is_remote_password_end_code,
 )
@@ -16,13 +15,6 @@ def test_end_code_names_are_code_derived() -> None:
     assert get_end_code_name(0xDEAD) == "slmp_end_code_dead"
 
 
-def test_end_code_messages_are_not_embedded() -> None:
-    assert get_end_code_message(0x1080) is None
-    assert get_end_code_message(0x1080, "ja") is None
-    assert get_end_code_message(0xC201) is None
-    assert get_end_code_message(0xDEAD) is None
-
-
 def test_remote_password_codes() -> None:
     assert is_remote_password_end_code(0xC201)
     assert is_remote_password_end_code(0xC810)
@@ -32,10 +24,10 @@ def test_remote_password_codes() -> None:
 def test_slmp_error_end_code_helpers() -> None:
     error = SlmpError("SLMP error", end_code=0xC201)
     assert error.end_code_name == "slmp_end_code_c201"
-    assert error.end_code_message is None
+    assert not hasattr(error, "end_code_message")
     assert error.is_remote_password_error
 
     without_code = SlmpError("no end code")
     assert without_code.end_code_name is None
-    assert without_code.end_code_message is None
+    assert not hasattr(without_code, "end_code_message")
     assert not without_code.is_remote_password_error

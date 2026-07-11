@@ -18,7 +18,7 @@ class TestDeviceVectors(unittest.TestCase):
                 continue
             with self.subTest(case=vec["id"]):
                 series = PLCSeries.IQR if vec["series"] == "iqr" else PLCSeries.QL
-                result = encode_device_spec(vec["device"], series=series)
+                result = encode_device_spec(vec["device"], series=series, plc_profile="melsec:iq-r")
                 expected = bytes.fromhex(vec["hex"])
                 self.assertEqual(
                     result,

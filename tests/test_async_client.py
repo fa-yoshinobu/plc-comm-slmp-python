@@ -35,8 +35,8 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
     pytest = _PytestFallback()
 
 from slmp.async_client import AsyncSlmpClient
-from slmp.constants import Command, PLCSeries
-from slmp.core import DeviceRef, ExtensionSpec, SlmpError, SlmpResponse, SlmpTarget, pack_bit_values
+from slmp.constants import Command, PLCSeries, RemoteClearMode
+from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
 from slmp.errors import SlmpProfileFeatureError
 
 # --- Mock SLMP Server for Testing ---
@@ -138,13 +138,17 @@ class FakeAsyncClient(AsyncSlmpClient):
 
     def __init__(self, **kwargs) -> None:
         """Initialize fake client."""
-        kwargs.setdefault("_allow_manual_profile", True)
+        if not any(name in kwargs for name in ("plc_profile", "plc_series", "frame_type", "address_profile")):
+            kwargs["plc_profile"] = "melsec:iq-r"
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request = None
         self.next_response_data = b""
         self.next_response_end_code = 0
 
-    async def request(
+    async def _request(
         self,
         command: int | Command,
         subcommand: int = 0x0000,
@@ -166,7 +170,13 @@ class FakeAsyncClient(AsyncSlmpClient):
                 end_code=end_code,
                 data=response_data,
             )
-        return SlmpResponse(serial=0, target=SlmpTarget(), end_code=end_code, data=response_data, raw=b"")
+        return SlmpResponse(
+            serial=0,
+            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            end_code=end_code,
+            data=response_data,
+            raw=b"",
+        )
 
 
 # --- Test Cases ---
@@ -179,7 +189,13 @@ async def test_async_connect_and_read_model() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
+        async with AsyncSlmpClient(
+            mock.host,
+            mock.port,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        ) as cli:
             info = await cli.read_type_name()
             assert info.model == "MOCK-PLC"
             assert info.model_code == 0x1234
@@ -194,8 +210,14 @@ async def test_async_read_devices() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
-            val = await cli.read_devices("D100", 1)
+        async with AsyncSlmpClient(
+            mock.host,
+            mock.port,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        ) as cli:
+            val = await cli.read_devices("D100", 1, bit_unit=False)
             assert val == [1]
     finally:
         await mock.stop()
@@ -207,40 +229,34 @@ async def test_async_4e_request_ignores_mismatched_serial_response() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
-            val = await cli.read_devices("D100", 1)
+        async with AsyncSlmpClient(
+            mock.host,
+            mock.port,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        ) as cli:
+            val = await cli.read_devices("D100", 1, bit_unit=False)
             assert val == [0x2222]
     finally:
         await mock.stop()
 
 
 @pytest.mark.asyncio
-async def test_async_read_devices_xy_requires_explicit_address_profile_for_string_addresses() -> None:
+async def test_async_read_devices_rejects_deviceref_from_different_profile() -> None:
     cli = FakeAsyncClient()
-    with pytest.raises(ValueError, match="plc_profile"):
-        await cli.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
+    with pytest.raises(ValueError, match="does not match"):
+        await cli.read_devices(DeviceRef("X", 0x10, "melsec:iq-f"), 8, bit_unit=True)
     assert cli.last_request is None
 
 
 @pytest.mark.asyncio
-async def test_async_read_devices_xy_allows_numeric_deviceref_without_address_profile() -> None:
-    cli = FakeAsyncClient()
-    cli.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
-
-    values = await cli.read_devices(DeviceRef("X", 0x40), 8, bit_unit=True, series=PLCSeries.QL)
-
-    assert values == [True, False, True, False, True, False, True, False]
-    assert cli.last_request is not None
-    assert cli.last_request[0] == int(Command.DEVICE_READ)
-    assert cli.last_request[1] == 0x0001
-    assert cli.last_request[2] == b"\x40\x00\x00\x9c\x08\x00"
-
-
-@pytest.mark.asyncio
-async def test_async_remote_run_default_clear_mode_does_not_clear_devices() -> None:
+async def test_async_remote_run_requires_explicit_force_and_clear_mode() -> None:
     cli = FakeAsyncClient()
 
-    await cli.remote_run()
+    with pytest.raises(TypeError):
+        await cli.remote_run()  # type: ignore[call-arg]
+    await cli.remote_run(force=False, clear_mode=RemoteClearMode.NO_CLEAR)
 
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.REMOTE_RUN)
@@ -261,12 +277,12 @@ async def test_async_remote_stop_uses_manual_fixed_mode() -> None:
 
 
 def test_async_client_rejects_invalid_address_profile() -> None:
-    with pytest.raises(ValueError, match="Unsupported plc_profile"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'address_profile'"):
         FakeAsyncClient(address_profile="auto")
 
 
 def test_async_client_rejects_address_profile_alias() -> None:
-    with pytest.raises(ValueError, match="Unsupported plc_profile"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'address_profile'"):
         FakeAsyncClient(address_profile="iqf")
 
 
@@ -275,13 +291,13 @@ async def test_async_read_devices_iqf_xy_uses_octal_start_address() -> None:
     cli = FakeAsyncClient(plc_profile="melsec:iq-f")
     cli.next_response_data = b"\x10"
 
-    values = await cli.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
+    values = await cli.read_devices("Y217", 2, bit_unit=True)
 
     assert values == [True, False]
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.DEVICE_READ)
-    assert cli.last_request[1] == 0x0003
-    assert cli.last_request[2] == b"\x8f\x00\x00\x00\x9d\x00\x02\x00"
+    assert cli.last_request[1] == 0x0001
+    assert cli.last_request[2] == b"\x8f\x00\x00\x9d\x02\x00"
 
 
 def test_async_client_rejects_invalid_plc_profile() -> None:
@@ -304,6 +320,24 @@ def test_async_client_plc_profile_derives_fixed_profile_defaults() -> None:
     assert cli.range_profile == "melsec:iq-l"
 
 
+@pytest.mark.asyncio
+async def test_async_removed_overrides_and_raw_serial_are_rejected_before_transport() -> None:
+    cli = FakeAsyncClient()
+    assert not hasattr(cli, "request")
+    assert not hasattr(cli, "memory_read")
+    assert not hasattr(cli, "remote_reset_raw")
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'serial'"):
+        await cli.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", serial=1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="unexpected keyword argument 'series'"):
+        await cli.read_devices("D0", 1, bit_unit=False, series=PLCSeries.QL)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="unexpected keyword argument 'series'"):
+        await cli.remote_password_lock("secret1", series=PLCSeries.QL)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="missing 2 required keyword-only arguments"):
+        await cli.read_long_timer()  # type: ignore[call-arg]
+    assert cli.last_request is None
+
+
 def test_async_client_unit_profile_keeps_frame_and_series_independent() -> None:
     cli = FakeAsyncClient(plc_profile="melsec:qcpu:qj71e71-100")
 
@@ -321,9 +355,15 @@ async def test_async_concurrency() -> None:
     await mock.start()
 
     try:
-        async with AsyncSlmpClient(mock.host, mock.port, plc_profile="melsec:iq-r") as cli:
+        async with AsyncSlmpClient(
+            mock.host,
+            mock.port,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        ) as cli:
             # Send 5 requests concurrently
-            tasks = [cli.read_devices(f"D{i}", 1) for i in range(5)]
+            tasks = [cli.read_devices(f"D{i}", 1, bit_unit=False) for i in range(5)]
             results = await asyncio.gather(*tasks)
 
             assert len(results) == 5
@@ -337,7 +377,14 @@ async def test_async_concurrency() -> None:
 async def test_async_timeout() -> None:
     """Test timeout behavior."""
     # Specify a port that is not listening
-    cli = AsyncSlmpClient("127.0.0.1", 1, plc_profile="melsec:iq-r", timeout=0.1)
+    cli = AsyncSlmpClient(
+        "127.0.0.1",
+        1,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+        timeout=0.1,
+    )
     with pytest.raises(ConnectionError):
         await cli.connect()
 
@@ -347,11 +394,18 @@ async def test_async_udp_read() -> None:
     """Test device reading over UDP (using a simple mock)."""
     # Note: Mocking UDP server is slightly different, but for simplicity
     # we test the client setup and a simulated timeout to verify the UDP path.
-    cli = AsyncSlmpClient("127.0.0.1", 9999, plc_profile="melsec:iq-r", transport="udp", timeout=0.1)
+    cli = AsyncSlmpClient(
+        "127.0.0.1",
+        9999,
+        plc_profile="melsec:iq-r",
+        transport="udp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        timeout=0.1,
+    )
     await cli.connect()
     try:
         with pytest.raises(SlmpError, match="UDP communication timeout"):
-            await cli.read_devices("D100", 1)
+            await cli.read_devices("D100", 1, bit_unit=False)
     finally:
         await cli.close()
 
@@ -376,7 +430,7 @@ async def test_async_direct_bit_read_rejects_long_timer_state_devices() -> None:
     cli = FakeAsyncClient()
 
     with pytest.raises(ValueError, match="Direct bit read is not supported for LTC"):
-        await cli.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
+        await cli.read_devices("LTC0", 1, bit_unit=True)
 
     assert cli.last_request is None
 
@@ -387,12 +441,12 @@ async def test_async_direct_word_read_requires_four_word_long_timer_blocks() -> 
     cli = FakeAsyncClient()
 
     with pytest.raises(ValueError, match="requires 4-word blocks"):
-        await cli.read_devices("LTN0", 2, bit_unit=False, series=PLCSeries.IQR)
+        await cli.read_devices("LTN0", 2, bit_unit=False)
 
     assert cli.last_request is None
 
     cli.next_response_data = b"\x01\x00\x02\x00\x03\x00\x04\x00"
-    values = await cli.read_devices("LTN0", 4, bit_unit=False, series=PLCSeries.IQR)
+    values = await cli.read_devices("LTN0", 4, bit_unit=False)
     assert values == [1, 2, 3, 4]
 
 
@@ -402,7 +456,7 @@ async def test_async_read_random_rejects_lcs_lcc() -> None:
     cli = FakeAsyncClient()
 
     with pytest.raises(ValueError, match="Read Random \\(0x0403\\) does not support LCS/LCC"):
-        await cli.read_random(word_devices=["LCS10"], series=PLCSeries.IQR)
+        await cli.read_random(word_devices=["LCS10"])
 
     assert cli.last_request is None
 
@@ -411,7 +465,7 @@ async def test_async_read_random_rejects_lcs_lcc() -> None:
 async def test_async_read_block_rejects_lcs_lcc() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match=r"Read Block \(0x0406\) does not support LCS/LCC"):
-        await cli.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
+        await cli.read_block(bit_blocks=[("LCS10", 1)])
     assert cli.last_request is None
 
 
@@ -444,7 +498,7 @@ async def test_async_read_type_name_qnudv_rejects_by_profile_guard() -> None:
 async def test_async_write_block_rejects_lcs_lcc() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match=r"Write Block \(0x1406\) does not support LCS/LCC"):
-        await cli.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
+        await cli.write_block(bit_blocks=[("LCC10", [1])])
     assert cli.last_request is None
 
 
@@ -463,7 +517,7 @@ async def test_async_register_monitor_devices_rejects_lcs_lcc() -> None:
     cli = FakeAsyncClient()
 
     with pytest.raises(ValueError, match="Entry Monitor Device \\(0x0801\\) does not support LCS/LCC"):
-        await cli.register_monitor_devices(word_devices=["LCS10"], series=PLCSeries.IQR)
+        await cli.register_monitor_devices(word_devices=["LCS10"])
 
     assert cli.last_request is None
 
@@ -472,7 +526,7 @@ async def test_async_register_monitor_devices_rejects_lcs_lcc() -> None:
 async def test_async_read_devices_ext_rejects_long_counter_current_before_transport() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match="Direct word read is not supported for LCN"):
-        await cli.read_devices_ext(r"J1\LCN10", 4, extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+        await cli.read_devices_ext(r"J1\LCN10", 4, bit_unit=False)
     assert cli.last_request is None
 
 
@@ -480,7 +534,7 @@ async def test_async_read_devices_ext_rejects_long_counter_current_before_transp
 async def test_async_read_random_ext_rejects_lcs_lcc_before_transport() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match=r"Read Random \(0x0403\) does not support LCS/LCC"):
-        await cli.read_random_ext(dword_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
+        await cli.read_random_ext(dword_devices=[r"J1\LCS10"])
     assert cli.last_request is None
 
 
@@ -488,7 +542,7 @@ async def test_async_read_random_ext_rejects_lcs_lcc_before_transport() -> None:
 async def test_async_register_monitor_devices_ext_rejects_lcs_lcc_before_transport() -> None:
     cli = FakeAsyncClient()
     with pytest.raises(ValueError, match=r"Entry Monitor Device \(0x0801\) does not support LCS/LCC"):
-        await cli.register_monitor_devices_ext(word_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
+        await cli.register_monitor_devices_ext(word_devices=[r"J1\LCS10"])
     assert cli.last_request is None
 
 

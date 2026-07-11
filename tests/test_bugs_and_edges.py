@@ -39,14 +39,14 @@ class TestBugsAndEdges(unittest.TestCase):
         for name, value in expected.items():
             self.assertEqual(ModuleIONo.__members__[name].value, value)
 
-        t = SlmpTarget(module_io="CONTROL_SYSTEM_CPU")
+        t = SlmpTarget(network=0, station=0xFF, module_io="CONTROL_SYSTEM_CPU", multidrop=0)
         self.assertEqual(t.module_io, 0x03D0)
-        t = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
+        t = SlmpTarget(network=0, station=0xFF, module_io=ModuleIONo.MULTIPLE_CPU_2, multidrop=0)
         self.assertEqual(t.module_io, 0x03E1)
-        t = SlmpTarget(module_io="own_station")
+        t = SlmpTarget(network=0, station=0xFF, module_io="own_station", multidrop=0)
         self.assertEqual(t.module_io, 0x03FF)
         with self.assertRaises(ValueError):
-            SlmpTarget(module_io="INVALID_KEYWORD")
+            SlmpTarget(network=0, station=0xFF, module_io="INVALID_KEYWORD", multidrop=0)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from _common import add_connection_args, create_client_from_args, int_auto
+from _common import add_connection_args, create_client_from_args, int_auto, own_station_target
 
 from slmp import LabelArrayReadPoint
 
@@ -44,7 +44,7 @@ def main() -> int:
     if not args.label_random and not args.label_array:
         raise SystemExit("specify at least one --label-random or --label-array entry")
 
-    with create_client_from_args(args) as cli:
+    with create_client_from_args(args, default_target=own_station_target()) as cli:
         if args.label_random:
             print("random label results:")
             random_items = cli.read_random_labels(args.label_random)

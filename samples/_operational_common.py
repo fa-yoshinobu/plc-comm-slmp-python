@@ -7,7 +7,7 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from slmp import SlmpConnectionOptions, open_and_connect, read_named
+from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, read_named
 from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
@@ -56,8 +56,8 @@ class PlcEndpoint:
     name: str
     host: str
     plc_profile: str
-    port: int | None = None
-    transport: str = "tcp"
+    port: int
+    transport: str
     timeout: float = 3.0
     interval: float = 1.0
 
@@ -114,7 +114,7 @@ def parse_plc_spec(
     value: str,
     *,
     default_port: int | None,
-    default_transport: str,
+    default_transport: str | None,
     default_timeout: float,
     default_interval: float,
 ) -> PlcEndpoint:
@@ -132,8 +132,12 @@ def parse_plc_spec(
     profile = validate_profile(parts[1])
     port = int(parts[2], 0) if len(parts) >= 3 and parts[2] else default_port
     transport = parts[3].lower() if len(parts) == 4 and parts[3] else default_transport
+    if port is None:
+        raise argparse.ArgumentTypeError("port is required either in --plc or --port")
+    if isinstance(port, bool) or not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be in range 1..65535")
     if transport not in {"tcp", "udp"}:
-        raise argparse.ArgumentTypeError("transport must be tcp or udp")
+        raise argparse.ArgumentTypeError("transport is required either in --plc or --transport")
 
     return PlcEndpoint(
         name=name,
@@ -143,25 +147,6 @@ def parse_plc_spec(
         transport=transport,
         timeout=default_timeout,
         interval=default_interval,
-    )
-
-
-def endpoint_with_defaults(
-    endpoint: PlcEndpoint,
-    *,
-    default_port: int | None,
-    default_transport: str,
-    default_timeout: float,
-    default_interval: float,
-) -> PlcEndpoint:
-    """Fill missing endpoint fields from CLI or config defaults."""
-
-    return replace(
-        endpoint,
-        port=endpoint.port if endpoint.port is not None else default_port,
-        transport=endpoint.transport or default_transport,
-        timeout=endpoint.timeout or default_timeout,
-        interval=endpoint.interval or default_interval,
     )
 
 
@@ -208,6 +193,7 @@ def build_options(endpoint: PlcEndpoint) -> SlmpConnectionOptions:
         transport=endpoint.transport,
         timeout=endpoint.timeout,
         plc_profile=endpoint.plc_profile,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
 
 
@@ -244,7 +230,7 @@ async def monitor_endpoint(
                 log_state(
                     endpoint.name,
                     "reconnecting",
-                    f"{endpoint.transport} {endpoint.host}:{endpoint.port or 'default'} profile={endpoint.plc_profile}",
+                    f"{endpoint.transport} {endpoint.host}:{endpoint.port} profile={endpoint.plc_profile}",
                 )
                 try:
                     client = await open_and_connect(options)

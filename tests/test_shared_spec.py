@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from slmp.client import SlmpClient
+from slmp.core import SlmpTarget, encode_request
 from slmp.utils import _parse_address, normalize_address
 
 _SHARED_SPEC_DIR = Path(__file__).resolve().parent / "shared-spec"
@@ -34,6 +35,9 @@ class CaptureClient(SlmpClient):
     def __init__(self, response_data: bytes) -> None:
         super().__init__(
             "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
             plc_profile="melsec:iq-r",
             monitoring_timer=0x0010,
             raise_on_error=True,
@@ -45,6 +49,18 @@ class CaptureClient(SlmpClient):
         self.captured_frame = frame
         return _build_4e_response(frame, self._response_data)
 
+    def _send_no_response(self, command, subcommand, data, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        del kwargs
+        self.captured_frame = encode_request(
+            frame_type=self.frame_type,
+            serial=self._next_serial(),
+            target=self.default_target,
+            monitoring_timer=self.monitoring_timer,
+            command=int(command),
+            subcommand=subcommand,
+            data=data,
+        )
+
 
 class TestSharedAddressVectors(unittest.TestCase):
     def test_normalize_vectors(self) -> None:
@@ -53,7 +69,10 @@ class TestSharedAddressVectors(unittest.TestCase):
             if "python" not in case.get("implementations", []):
                 continue
             with self.subTest(case=case["id"]):
-                self.assertEqual(normalize_address(case["input"]), case["expected"])
+                self.assertEqual(
+                    normalize_address(case["input"], plc_profile="melsec:iq-r"),
+                    case["expected"],
+                )
 
     def test_parse_vectors(self) -> None:
         data = _load_json("high_level_address_parse_vectors.json")
@@ -91,7 +110,7 @@ class TestSharedFrameVectors(unittest.TestCase):
             return
 
         if operation == "read_words":
-            values = client.read_devices(args["device"], args["points"])
+            values = client.read_devices(args["device"], args["points"], bit_unit=False)
             self.assertEqual(values, [0x1234, 0x5678])
             return
 
@@ -128,7 +147,7 @@ class TestSharedFrameVectors(unittest.TestCase):
             return
 
         if operation == "remote_reset":
-            client.remote_reset(expect_response=bool(args.get("expect_response", True)))
+            client.remote_reset()
             return
 
         raise AssertionError(f"Unsupported shared frame operation: {operation}")

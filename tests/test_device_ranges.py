@@ -86,32 +86,46 @@ def _canonical_expected_point_count(rule: dict[str, object]) -> int | None:
 
 class _FakeSyncClient(SlmpClient):
     def __init__(self, **kwargs: object) -> None:
-        kwargs.setdefault("_allow_manual_profile", True)
+        kwargs.setdefault("plc_profile", "melsec:iq-r")
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
         self.rejected_prefixes: tuple[str, ...] = ()
 
-    def request(self, command: int | Command, subcommand: int = 0x0000, data: bytes = b"", **_: object) -> SlmpResponse:
+    def _request(
+        self, command: int | Command, subcommand: int = 0x0000, data: bytes = b"", **_: object
+    ) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
-        return SlmpResponse(serial=0, target=SlmpTarget(), end_code=0, data=self.next_response_data, raw=b"")
+        return SlmpResponse(
+            serial=0,
+            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            end_code=0,
+            data=self.next_response_data,
+            raw=b"",
+        )
 
     def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
         text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
         if text.startswith(self.rejected_prefixes):
             raise SlmpError("rejected by test")
-        return super().read_devices(device, points, bit_unit=bit_unit, series=series)
+        return super().read_devices(device, points, bit_unit=bit_unit)
 
 
 class _FakeAsyncClient(AsyncSlmpClient):
     def __init__(self, **kwargs: object) -> None:
-        kwargs.setdefault("_allow_manual_profile", True)
+        kwargs.setdefault("plc_profile", "melsec:iq-r")
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
         self.rejected_prefixes: tuple[str, ...] = ()
 
-    async def request(
+    async def _request(
         self,
         command: int | Command,
         subcommand: int = 0x0000,
@@ -119,13 +133,19 @@ class _FakeAsyncClient(AsyncSlmpClient):
         **_: object,
     ) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
-        return SlmpResponse(serial=0, target=SlmpTarget(), end_code=0, data=self.next_response_data, raw=b"")
+        return SlmpResponse(
+            serial=0,
+            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            end_code=0,
+            data=self.next_response_data,
+            raw=b"",
+        )
 
     async def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
         text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
         if text.startswith(self.rejected_prefixes):
             raise SlmpError("rejected by test")
-        return await super().read_devices(device, points, bit_unit=bit_unit, series=series)
+        return await super().read_devices(device, points, bit_unit=bit_unit)
 
 
 class TestSyncDeviceRanges(unittest.TestCase):
@@ -134,7 +154,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
             normalize_plc_profile("iqf")
 
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
-        client = _FakeSyncClient()
+        client = _FakeSyncClient(plc_profile="melsec:iq-f")
         client.next_response_data = _build_word_block(
             260,
             46,
@@ -171,7 +191,8 @@ class TestSyncDeviceRanges(unittest.TestCase):
             (
                 int(Command.DEVICE_READ),
                 0x0000,
-                encode_device_spec("SD260", series=PLCSeries.QL) + (46).to_bytes(2, "little"),
+                encode_device_spec("SD260", series=PLCSeries.QL, plc_profile="melsec:iq-f")
+                + (46).to_bytes(2, "little"),
             ),
         )
 
@@ -286,6 +307,7 @@ class TestSyncDeviceRanges(unittest.TestCase):
         assert isinstance(profiles, dict)
 
         for profile_name, profile_payload in profiles.items():
+            semantic_profile = "melsec:qcpu:qj71e71-100" if profile_name == "melsec:qcpu" else profile_name
             assert isinstance(profile_payload, dict)
             rules = profile_payload["rules"]
             assert isinstance(rules, dict)
@@ -299,10 +321,10 @@ class TestSyncDeviceRanges(unittest.TestCase):
                     device = str(device_payload["device"])
                     address = f"{device}10"
                     if expected_supported:
-                        self.assertEqual(parse_device(address, plc_profile=profile_name).code, device)
+                        self.assertEqual(parse_device(address, plc_profile=semantic_profile).code, device)
                     else:
                         with self.assertRaises(SlmpUnsupportedDeviceError, msg=f"{profile_name} {device}"):
-                            parse_device(address, plc_profile=profile_name)
+                            parse_device(address, plc_profile=semantic_profile)
 
         with self.assertRaises(SlmpUnsupportedDeviceError):
             parse_device("DX10", plc_profile="melsec:iq-f")
@@ -331,14 +353,15 @@ class TestSyncDeviceRanges(unittest.TestCase):
             (
                 int(Command.DEVICE_READ),
                 0x0002,
-                encode_device_spec("SD260", series=PLCSeries.IQR) + (50).to_bytes(2, "little"),
+                encode_device_spec("SD260", series=PLCSeries.IQR, plc_profile="melsec:iq-l")
+                + (50).to_bytes(2, "little"),
             ),
         )
 
 
 class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
     async def test_qnu_uses_sd300_for_st_and_fixed_z_range(self) -> None:
-        client = _FakeAsyncClient()
+        client = _FakeAsyncClient(plc_profile="melsec:qnu")
         client.rejected_prefixes = ("ZR",)
         client.next_response_data = _build_word_block(
             286,
@@ -371,7 +394,7 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
             (
                 int(Command.DEVICE_READ),
                 0x0000,
-                encode_device_spec("SD286", series=PLCSeries.QL) + (26).to_bytes(2, "little"),
+                encode_device_spec("SD286", series=PLCSeries.QL, plc_profile="melsec:qnu") + (26).to_bytes(2, "little"),
             ),
         )
 

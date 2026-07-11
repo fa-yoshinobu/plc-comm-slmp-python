@@ -18,15 +18,22 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from slmp.async_client import AsyncSlmpClient
+from slmp.core import SlmpTarget
 
 
 async def read_one_plc(host: str, port: int) -> dict[str, object]:
     """Connect to a single PLC and return a snapshot of several devices."""
     # The standard client route requires plc_profile so frame and address rules
     # are derived from one explicit PLC profile.
-    async with AsyncSlmpClient(host, port, plc_profile="melsec:iq-r") as cli:
+    async with AsyncSlmpClient(
+        host,
+        port,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    ) as cli:
         info = await cli.read_type_name()
-        d100 = await cli.read_devices("D100", 1)
+        d100 = await cli.read_devices("D100", 1, bit_unit=False)
         m0 = await cli.read_devices("M0", 1, bit_unit=True)
         return {"host": host, "model": info.model, "D100": d100[0], "M0": bool(m0[0])}
 

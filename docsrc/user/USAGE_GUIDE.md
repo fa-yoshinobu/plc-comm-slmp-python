@@ -4,7 +4,7 @@
 
 | Entry point | Signature | Use |
 | --- | --- | --- |
-| `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int \| None = None, transport: str = "tcp", timeout: float = 3.0, default_target: SlmpTarget \| None = None, monitoring_timer: int = 16, raise_on_error: bool = True, trace_hook: Any \| None = None)` | Store stable connection settings. Omitted ports resolve to `1025` for TCP and `1035` for UDP. |
+| `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int, transport: str, default_target: SlmpTarget, timeout: float = 3.0, monitoring_timer: int = 16, raise_on_error: bool = True)` | Store stable connection settings. Port, transport, profile, and the complete four-field route are required. |
 | `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> QueuedAsyncSlmpClient` | Open one queued async connection. |
 | `open_and_connect_sync` | `def open_and_connect_sync(options: SlmpConnectionOptions) -> SlmpClient` | Open one synchronous connection. |
 | `read_typed` | `async def read_typed(client, device, dtype) -> int | float | bool` | Read one typed value. |
@@ -12,15 +12,18 @@
 | `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed snapshot. |
 | `write_named` | `async def write_named(client, updates) -> None` | Write mixed values. |
 | `read_words_single_request` | `async def read_words_single_request(client, device, count) -> list[int]` | Read one contiguous 16-bit range in one request. |
-| `read_words_chunked` | `async def read_words_chunked(client, device, count, max_per_request=960) -> list[int]` | Read a large 16-bit range with explicit chunking. |
 | `read_dwords_single_request` | `async def read_dwords_single_request(client, device, count) -> list[int]` | Read one contiguous 32-bit range in one request. |
-| `read_dwords_chunked` | `async def read_dwords_chunked(client, device, count, max_dwords_per_request=480) -> list[int]` | Read a large 32-bit range with explicit chunking. |
 | `write_bit_in_word` | `async def write_bit_in_word(client, device, bit_index, value) -> None` | Set or clear one bit in a word device. |
 | `poll` | `async def poll(client, addresses, interval)` | Yield repeated mixed snapshots. |
-| `SlmpClient.read_devices_ext` | `read_devices_ext(device, count, extension=None, bit_unit=False)` | Read routed devices such as `Un\G...` and `Jn\...`. |
-| `SlmpClient.write_devices_ext` | `write_devices_ext(device, values, extension=None, bit_unit=False)` | Write routed devices such as `Un\G...` and `Jn\...`. |
+| `SlmpClient.read_devices_ext` | `read_devices_ext(qualified_device, count, *, bit_unit)` | Read routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
+| `SlmpClient.write_devices_ext` | `write_devices_ext(qualified_device, values, *, bit_unit)` | Write routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
 
 The synchronous helpers use the same names with `_sync`.
+
+`read_named` sends at most one random-read request for its batchable word and
+dword addresses. More than 255 word addresses or 255 dword addresses is
+rejected before transport; the library does not divide one result across
+multiple request times.
 
 ## Connection
 
@@ -36,7 +39,7 @@ async def main() -> None:
         transport="tcp",
         timeout=3.0,
         plc_profile="melsec:iq-r",
-        default_target=SlmpTarget(),
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
         monitoring_timer=0x0010,
         raise_on_error=True,
     )
@@ -69,9 +72,9 @@ page.
 
 ## Routing / target station
 
-Most applications keep the default target, which means the directly connected
-own station. Change the target only when your PLC network is
-configured for another station, multi-CPU module I/O, or multidrop access.
+Every connection explicitly supplies all four target fields. The own-station
+values shown above are suitable only when that is the intended route. Change
+them when your PLC network targets another station, CPU, or multidrop route.
 
 `SlmpTarget` controls the SLMP destination header. It is not a device family
 selector; routed devices such as `Un\Gn` and `Jn\...` still need their own
@@ -83,6 +86,7 @@ from slmp import ModuleIONo, SlmpConnectionOptions, SlmpTarget
 options = SlmpConnectionOptions(
     host="192.168.250.100",
     port=1025,
+    transport="tcp",
     plc_profile="melsec:iq-r",
     default_target=SlmpTarget(
         network=0x01,
@@ -96,10 +100,10 @@ options = SlmpConnectionOptions(
 For a multi-CPU self target, you can also use the named module I/O helpers:
 
 ```python
-target = SlmpTarget(module_io=ModuleIONo.MULTIPLE_CPU_2)
+target = SlmpTarget(network=0, station=0xFF, module_io=ModuleIONo.MULTIPLE_CPU_2, multidrop=0)
 ```
 
-Use the default target unless the PLC routing setup gives you specific values.
+Always confirm the explicit target against the PLC routing setup.
 
 ## Extended device access
 
@@ -109,6 +113,14 @@ device families such as `D`, `M`, `X`, and `Y`.
 
 `SlmpTarget` controls the SLMP destination header. It does not replace routed
 device notation: `Un\G...` and `Jn\...` still need their own address syntax.
+
+The public Extended Device methods derive the module/network selector,
+direct-memory kind, and fixed protocol fields from the qualified address.
+They do not accept a raw extension-field object. For Z, LZ, or word-device
+indirect modification, wrap the qualified text in `SlmpExtendedDevice` with
+`SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect`. Invalid combinations, such as
+LZ on a Q/L access profile or an index modifier on `Jn\...`, are rejected
+before transport.
 
 ### Module buffer access
 
@@ -121,16 +133,26 @@ buffer memory.
 | `Un\HG` | Extended buffer memory word access | `U3E0\HG1000` |
 
 ```python
-from slmp import ExtensionSpec, SlmpClient
+from slmp import SlmpClient, SlmpTarget
 
 
-with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
-    values = client.read_devices_ext("U3\\G100", 4, extension=ExtensionSpec())
-    client.write_devices_ext("U3\\G100", [1, 2, 3, 4], extension=ExtensionSpec())
+with SlmpClient("192.168.250.100", 1025, transport="tcp", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0), plc_profile="melsec:iq-r") as client:
+    values = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
+    client.write_devices_ext("U3\\G100", [1, 2, 3, 4], bit_unit=False)
     print(values)
 ```
 
 `Un` is the module number in hexadecimal text, for example `U3` or `U3E0`.
+
+Typed modification example:
+
+```python
+from slmp import SlmpExtendedDevice, SlmpIndexZ
+
+
+device = SlmpExtendedDevice("U3\\D100", SlmpIndexZ(2))
+values = client.read_devices_ext(device, 1, bit_unit=False)
+```
 
 ### Link direct device access
 
@@ -143,14 +165,14 @@ through the connected PLC.
 | Bit read/write | `J1\X10`, `J1\SB10` |
 
 ```python
-from slmp import ExtensionSpec, SlmpClient
+from slmp import SlmpClient, SlmpTarget
 
 
-with SlmpClient("192.168.250.100", port=1025, plc_profile="melsec:iq-r") as client:
-    value = client.read_devices_ext("J2\\SW10", 1, extension=ExtensionSpec())
-    bits = client.read_devices_ext("J1\\X10", 16, extension=ExtensionSpec(), bit_unit=True)
-    client.write_devices_ext("J1\\SW14", [2], extension=ExtensionSpec())
-    client.write_devices_ext("J1\\X11", [True], extension=ExtensionSpec(), bit_unit=True)
+with SlmpClient("192.168.250.100", 1025, transport="tcp", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0), plc_profile="melsec:iq-r") as client:
+    value = client.read_devices_ext("J2\\SW10", 1, bit_unit=False)
+    bits = client.read_devices_ext("J1\\X10", 16, bit_unit=True)
+    client.write_devices_ext("J1\\SW14", [2], bit_unit=False)
+    client.write_devices_ext("J1\\X11", [True], bit_unit=True)
     print(value, bits)
 ```
 
@@ -189,11 +211,11 @@ except SlmpError as exc:
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_typed
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         value = await read_typed(client, "D100", "U")
         print(f"D100={value}")
@@ -206,11 +228,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_typed
+from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_typed, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         original = await read_typed(client, "D100", "U")
         try:
@@ -227,11 +249,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_named
+from slmp import SlmpConnectionOptions, open_and_connect, read_named, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         snapshot = await read_named(client, ["D100:U", "D101:S", "D200:F", "D202:L", "D50.3"])
         print(f"snapshot={snapshot}")
@@ -247,25 +269,25 @@ import asyncio
 from slmp import (
     SlmpConnectionOptions,
     open_and_connect,
-    read_dwords_chunked,
     read_dwords_single_request,
-    read_words_chunked,
     read_words_single_request,
 )
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         words = await read_words_single_request(client, "D0", 10)
         dwords = await read_dwords_single_request(client, "D200", 4)
-        large_words = await read_words_chunked(client, "D0", 1000)
-        large_dwords = await read_dwords_chunked(client, "D200", 120)
-        print(f"words={len(words)} dwords={len(dwords)} large={len(large_words)}/{len(large_dwords)}")
+        print(f"words={len(words)} dwords={len(dwords)}")
 
 
 asyncio.run(main())
 ```
+
+Contiguous helpers issue exactly one request and reject counts above the
+protocol limit. If multiple snapshots are acceptable, split them explicitly
+in application code so their different acquisition times remain visible.
 
 ## Packed bit-device word access
 
@@ -284,8 +306,17 @@ at `M1000` is `0x0005`.
 | `X` | `read_named(client, ["X20:BIT"])` | `read_typed(client, "X20", "U")` | profile-dependent |
 | `Y` | `read_named(client, ["Y20:BIT"])` | `read_typed(client, "Y20", "U")` | profile-dependent |
 
-For `X` and `Y`, set `plc_profile` explicitly. `melsec:iq-f` uses octal text
-for `X` and `Y`; the other supported profiles use hexadecimal text.
+Every semantic device address is interpreted with an exact `plc_profile`.
+`DeviceRef(code, number, plc_profile)` therefore stores the profile as part of
+the value, and `parse_device(text, plc_profile=...)` requires it explicitly.
+A `DeviceRef` created for one profile is rejected by a client configured for a
+different profile before any request is sent.
+
+This is especially visible for `X` and `Y`: `melsec:iq-f` uses octal text,
+while the other supported profiles use hexadecimal text. For example,
+`X10` means numeric address 8 for `melsec:iq-f` and numeric address 16 for
+`melsec:iq-r`. Binding the profile prevents a previously parsed address from
+silently changing meaning when passed to another client.
 
 The same packed-unit rule applies when writing one word value to a bit-device
 group:
@@ -293,11 +324,11 @@ group:
 ```python
 import asyncio
 
-from slmp import SlmpConnectionOptions, open_and_connect, write_typed
+from slmp import SlmpConnectionOptions, open_and_connect, write_typed, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         await write_typed(client, "M1000", "U", 0x0005)
 
@@ -315,11 +346,11 @@ Use `write_bit_in_word` when a PLC stores flags inside a word register. Use `.n`
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_bit_in_word
+from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_bit_in_word, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         original = await read_named(client, ["D50.3"])
         try:
@@ -337,11 +368,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, poll
+from slmp import SlmpConnectionOptions, open_and_connect, poll, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         index = 0
         async for snapshot in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
@@ -426,11 +457,11 @@ The source rules for this catalog are maintained in the shared [SLMP device rang
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect
+from slmp import SlmpConnectionOptions, open_and_connect, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         catalog = await client.read_device_range_catalog()
         entry = next(item for item in catalog.entries if item.device == "D")
@@ -446,11 +477,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_named
+from slmp import SlmpConnectionOptions, open_and_connect, read_named, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
         values = await read_named(client, ["LTN0:D", "LCN0:L"])
         print(f"values={values}")

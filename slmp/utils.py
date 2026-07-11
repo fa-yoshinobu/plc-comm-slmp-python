@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import struct
 import time
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
 from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
     SlmpTarget,
+    _normalize_plc_profile_hint,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
-    _resolve_plc_profile_defaults,
     _resolve_port,
     _validate_direct_dword_read_device,
     parse_device,
@@ -75,15 +76,12 @@ class SlmpConnectionOptions:
         host: PLC hostname or IP address.
         plc_profile: Canonical high-level PLC profile. This is the only
             application-level PLC selector for the recommended helper layer.
-        port: TCP or UDP port used by the SLMP endpoint. Defaults to
-            ``1025`` for TCP and ``1035`` for UDP when omitted.
+        port: Required TCP or UDP port used by the SLMP endpoint.
         transport: Transport name such as ``"tcp"`` or ``"udp"``.
         timeout: Socket timeout in seconds.
         default_target: Optional routing target applied to requests.
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.
-        trace_hook: Optional callback for transport tracing.
-        strict_profile: Whether high-level APIs reject blocked/unverified features before transport.
         plc_series: Derived access profile fixed by ``plc_profile``.
         frame_type: Derived frame type fixed by ``plc_profile``.
         address_profile: Derived address profile used for string device parsing.
@@ -92,14 +90,12 @@ class SlmpConnectionOptions:
 
     host: str
     plc_profile: object
-    port: int | None = None
-    transport: str = "tcp"
+    port: int
+    transport: str
+    default_target: SlmpTarget
     timeout: float = 3.0
-    default_target: SlmpTarget | None = None
     monitoring_timer: int = 0x0010
     raise_on_error: bool = True
-    trace_hook: Any | None = None
-    strict_profile: bool = True
     plc_series: PLCSeries = field(init=False)
     frame_type: FrameType = field(init=False)
     address_profile: str = field(init=False)
@@ -108,8 +104,25 @@ class SlmpConnectionOptions:
     def __post_init__(self) -> None:
         if self.plc_profile is None:
             raise ValueError("plc_profile is required. Use an explicit canonical PLC profile such as 'melsec:iq-r'.")
-        transport = self.transport.lower()
+        if not isinstance(self.transport, str):
+            raise ValueError("transport must be 'tcp' or 'udp'")
+        transport = self.transport.strip().lower()
         port = _resolve_port(self.port, transport)
+        if not isinstance(self.default_target, SlmpTarget):
+            raise ValueError("default_target is required and must be a complete SlmpTarget")
+        if (
+            isinstance(self.timeout, bool)
+            or not isinstance(self.timeout, (int, float))
+            or not math.isfinite(self.timeout)
+            or self.timeout <= 0
+        ):
+            raise ValueError("timeout must be a finite number greater than zero")
+        if (
+            isinstance(self.monitoring_timer, bool)
+            or not isinstance(self.monitoring_timer, int)
+            or not 0 <= self.monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535")
         (
             normalized_plc_profile,
             plc_series,
@@ -124,6 +137,7 @@ class SlmpConnectionOptions:
         )
         object.__setattr__(self, "transport", transport)
         object.__setattr__(self, "port", port)
+        object.__setattr__(self, "timeout", float(self.timeout))
         object.__setattr__(self, "plc_profile", normalized_plc_profile)
         object.__setattr__(self, "plc_series", plc_series)
         object.__setattr__(self, "frame_type", frame_type)
@@ -143,12 +157,12 @@ class SlmpAddress:
 
 
 def _client_address_profile(client: object) -> str | None:
-    address_profile = getattr(client, "address_profile", None)
-    if address_profile is None:
+    plc_profile = getattr(client, "plc_profile", None)
+    if plc_profile is None:
         return None
-    if isinstance(address_profile, str):
-        return address_profile
-    value = getattr(address_profile, "value", None)
+    if isinstance(plc_profile, str):
+        return plc_profile
+    value = getattr(plc_profile, "value", None)
     if isinstance(value, str):
         return value
     return None
@@ -156,7 +170,7 @@ def _client_address_profile(client: object) -> str | None:
 
 def _parse_device_for_address_profile(
     device: str | DeviceRef,
-    address_profile: object | None = None,
+    address_profile: object,
 ) -> DeviceRef:
     ref = parse_device(device, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
@@ -249,7 +263,6 @@ async def write_typed(
     if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         await client.write_random_words(
             dword_values={ref: int(value) & 0xFFFFFFFF},
-            series=client.plc_series,
         )
         return
     if key not in {"D", "L", "F"}:
@@ -314,7 +327,6 @@ def write_typed_sync(
     if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         client.write_random_words(
             dword_values={ref: int(value) & 0xFFFFFFFF},
-            series=client.plc_series,
         )
         return
     if key not in {"D", "L", "F"}:
@@ -521,15 +533,14 @@ def _effective_address_profile(
     plc_profile: object | None = None,
 ) -> object | None:
     if plc_profile is not None:
-        defaults = _resolve_plc_profile_defaults(plc_profile)
-        return None if defaults is None else defaults.address_profile
+        return _normalize_plc_profile_hint(plc_profile)
     return None
 
 
 def parse_address(
     address: str | DeviceRef,
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> SlmpAddress:
     """Parse public SLMP helper-layer address notation.
 
@@ -574,7 +585,7 @@ def parse_address(
 def try_parse_address(
     address: str | DeviceRef,
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> SlmpAddress | None:
     """Return parsed address information, or ``None`` when parsing fails."""
 
@@ -587,7 +598,7 @@ def try_parse_address(
 def format_address(
     address: SlmpAddress | str | DeviceRef,
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> str:
     """Return canonical public SLMP address text."""
 
@@ -607,7 +618,7 @@ def format_address(
 def normalize_address(
     address: str | DeviceRef,
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
 
@@ -643,7 +654,7 @@ def _plain_bit_word_read(device: DeviceRef) -> tuple[DeviceRef, int] | None:
     if device.code not in _PLAIN_BIT_WORD_BATCHABLE_CODES:
         return None
     bit_index = device.number % 16
-    word_device = DeviceRef(device.code, device.number - bit_index, device.radix_override)
+    word_device = DeviceRef(device.code, device.number - bit_index, device.plc_profile)
     return word_device, bit_index
 
 
@@ -699,10 +710,9 @@ async def _write_long_family_value(
     if role == "current":
         await client.write_random_words(
             dword_values={device: int(value) & 0xFFFFFFFF},
-            series=client.plc_series,
         )
         return
-    await client.write_random_bits({device: bool(value)}, series=client.plc_series)
+    await client.write_random_bits({device: bool(value)})
 
 
 def _write_long_family_value_sync(
@@ -716,10 +726,9 @@ def _write_long_family_value_sync(
     if role == "current":
         client.write_random_words(
             dword_values={device: int(value) & 0xFFFFFFFF},
-            series=client.plc_series,
         )
         return
-    client.write_random_bits({device: bool(value)}, series=client.plc_series)
+    client.write_random_bits({device: bool(value)})
 
 
 def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
@@ -810,7 +819,7 @@ def _read_long_family_value_sync(
 def _compile_read_plan(
     addresses: list[str],
     *,
-    address_profile: object | None = None,
+    address_profile: object,
 ) -> _ReadPlan:
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
@@ -931,21 +940,15 @@ def _unpack_dword_words(words: list[int], count: int) -> list[int]:
     return [struct.unpack("<I", struct.pack("<HH", words[i], words[i + 1]))[0] for i in range(0, count * 2, 2)]
 
 
-def _effective_word_chunk_size(max_per_request: int) -> int:
-    effective_max = (max_per_request // 2) * 2
-    if effective_max <= 0:
-        raise ValueError("max_per_request must be at least 2")
-    return effective_max
-
-
 def _validate_unsplit_word_count(count: int, max_per_request: int) -> int:
-    effective_max = _effective_word_chunk_size(max_per_request)
-    if count > effective_max:
+    if max_per_request <= 0:
+        raise ValueError("max_per_request must be at least 1")
+    if count > max_per_request:
         raise ValueError(
-            f"count {count} exceeds max_per_request {effective_max};"
-            " pass allow_split=True to split the read across multiple requests"
+            f"count {count} exceeds the single-request limit {max_per_request}; "
+            "issue multiple explicit requests with application-level consistency handling"
         )
-    return effective_max
+    return max_per_request
 
 
 def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> int:
@@ -953,33 +956,10 @@ def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> in
         raise ValueError("max_dwords_per_request must be at least 1")
     if count > max_dwords_per_request:
         raise ValueError(
-            f"count {count} exceeds max_dwords_per_request {max_dwords_per_request};"
-            " pass allow_split=True to split the read across multiple requests"
+            f"count {count} exceeds the single-request dword limit {max_dwords_per_request}; "
+            "issue multiple explicit requests with application-level consistency handling"
         )
     return max_dwords_per_request
-
-
-def _word_chunks(ref: DeviceRef, total_count: int, max_per_request: int) -> Iterator[tuple[DeviceRef, int, int]]:
-    effective_max = _effective_word_chunk_size(max_per_request)
-    remaining = total_count
-    offset = 0
-    while remaining > 0:
-        chunk = min(remaining, effective_max)
-        yield replace(ref, number=ref.number + offset), offset, chunk
-        offset += chunk
-        remaining -= chunk
-
-
-def _dword_chunks(
-    ref: DeviceRef, total_count: int, max_dwords_per_request: int
-) -> Iterator[tuple[DeviceRef, int, int]]:
-    if max_dwords_per_request <= 0:
-        raise ValueError("max_dwords_per_request must be at least 1")
-    offset = 0
-    while offset < total_count:
-        chunk = min(total_count - offset, max_dwords_per_request)
-        yield replace(ref, number=ref.number + (offset * 2)), offset, chunk
-        offset += chunk
 
 
 async def _read_random_maps(
@@ -990,17 +970,10 @@ async def _read_random_maps(
     dword_values: dict[str, int] = {}
     word_devices = list(plan.word_devices)
     dword_devices = list(plan.dword_devices)
-    word_index = 0
-    dword_index = 0
-
-    while word_index < len(word_devices) or dword_index < len(dword_devices):
-        word_chunk = word_devices[word_index : word_index + 0xFF]
-        dword_chunk = dword_devices[dword_index : dword_index + 0xFF]
-        word_index += len(word_chunk)
-        dword_index += len(dword_chunk)
-        if not word_chunk and not dword_chunk:
-            break
-        result = await client.read_random(word_devices=word_chunk, dword_devices=dword_chunk)
+    if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
+        raise ValueError("read_named supports at most 255 word devices and 255 dword devices in one request")
+    if word_devices or dword_devices:
+        result = await client.read_random(word_devices=word_devices, dword_devices=dword_devices)
         word_values.update(result.word)
         dword_values.update(result.dword)
 
@@ -1015,17 +988,10 @@ def _read_random_maps_sync(
     dword_values: dict[str, int] = {}
     word_devices = list(plan.word_devices)
     dword_devices = list(plan.dword_devices)
-    word_index = 0
-    dword_index = 0
-
-    while word_index < len(word_devices) or dword_index < len(dword_devices):
-        word_chunk = word_devices[word_index : word_index + 0xFF]
-        dword_chunk = dword_devices[dword_index : dword_index + 0xFF]
-        word_index += len(word_chunk)
-        dword_index += len(dword_chunk)
-        if not word_chunk and not dword_chunk:
-            break
-        result = client.read_random(word_devices=word_chunk, dword_devices=dword_chunk)
+    if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
+        raise ValueError("read_named supports at most 255 word devices and 255 dword devices in one request")
+    if word_devices or dword_devices:
+        result = client.read_random(word_devices=word_devices, dword_devices=dword_devices)
         word_values.update(result.word)
         dword_values.update(result.dword)
 
@@ -1172,8 +1138,8 @@ async def read_words_single_request(
 ) -> list[int]:
     """Read contiguous 16-bit values using one protocol request.
 
-    This is the explicit atomic path for one contiguous word range. If the
-    caller wants multi-request behavior, use :func:`read_words_chunked`.
+    Counts above the profile's one-request limit must be split explicitly by
+    the application together with its required consistency checks.
     """
 
     ref = _parse_device_for_client(client, device)
@@ -1223,115 +1189,24 @@ async def write_dwords_single_request(
     await write_words_single_request(client, device, _pack_dword_words(values))
 
 
-async def read_words_chunked(
-    client: AsyncSlmpClient,
-    device: str | DeviceRef,
-    count: int,
-    max_per_request: int = 960,
-) -> list[int]:
-    """Read contiguous 16-bit values across multiple aligned requests.
-
-    Chunking is explicit here. Use this helper only when multi-request read
-    semantics are acceptable to the caller.
-    """
-
-    _effective_word_chunk_size(max_per_request)
-    ref = _parse_device_for_client(client, device)
-    result: list[int] = []
-    for chunk_ref, _, chunk in _word_chunks(ref, count, max_per_request):
-        words = await read_words_single_request(client, chunk_ref, chunk)
-        result.extend(words)
-    return result
-
-
-async def read_dwords_chunked(
-    client: AsyncSlmpClient,
-    device: str | DeviceRef,
-    count: int,
-    max_dwords_per_request: int = 480,
-) -> list[int]:
-    """Read contiguous unsigned 32-bit values across multiple aligned requests.
-
-    Chunk boundaries stay aligned to full dwords so one logical 32-bit value
-    is never torn across requests.
-    """
-
-    ref = _validate_dword_read_target(client, device)
-    words = await read_words_chunked(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
-    return _unpack_dword_words(words, count)
-
-
-async def write_words_chunked(
-    client: AsyncSlmpClient,
-    device: str | DeviceRef,
-    values: list[int],
-    max_per_request: int = 960,
-) -> None:
-    """Write contiguous 16-bit values across multiple aligned requests.
-
-    Use this helper only when multiple write operations are acceptable to the
-    caller.
-    """
-
-    _effective_word_chunk_size(max_per_request)
-    ref = _parse_device_for_client(client, device)
-    for chunk_ref, offset, chunk in _word_chunks(ref, len(values), max_per_request):
-        await write_words_single_request(client, chunk_ref, values[offset : offset + chunk])
-
-
-async def write_dwords_chunked(
-    client: AsyncSlmpClient,
-    device: str | DeviceRef,
-    values: list[int],
-    max_dwords_per_request: int = 480,
-) -> None:
-    """Write contiguous unsigned 32-bit values across multiple aligned requests.
-
-    Each chunk boundary is aligned to full dwords so one logical value remains
-    intact inside one request.
-    """
-
-    if max_dwords_per_request <= 0:
-        raise ValueError("max_dwords_per_request must be at least 1")
-    ref = _parse_device_for_client(client, device)
-    for chunk_ref, offset, chunk in _dword_chunks(ref, len(values), max_dwords_per_request):
-        await write_dwords_single_request(client, chunk_ref, values[offset : offset + chunk])
-
-
 async def read_words(
     client: AsyncSlmpClient,
     device: str | DeviceRef,
     count: int,
-    max_per_request: int = 960,
-    *,
-    allow_split: bool = False,
 ) -> list[int]:
-    """Read a contiguous word-device range with optional chunk splitting.
-
-    Chunk boundaries stay aligned to 2-word boundaries so 32-bit values are
-    not torn across split requests.
-    """
-    if not allow_split:
-        _validate_unsplit_word_count(count, max_per_request)
-        return await read_words_single_request(client, device, count)
-
-    return await read_words_chunked(client, device, count, max_per_request=max_per_request)
+    """Read a contiguous word-device range using exactly one request."""
+    _validate_unsplit_word_count(count, 960)
+    return await read_words_single_request(client, device, count)
 
 
 async def read_dwords(
     client: AsyncSlmpClient,
     device: str | DeviceRef,
     count: int,
-    max_dwords_per_request: int = 480,
-    *,
-    allow_split: bool = False,
 ) -> list[int]:
-    """Read a contiguous DWord range as unsigned 32-bit integers."""
-    if not allow_split:
-        _validate_unsplit_dword_count(count, max_dwords_per_request)
-        return await read_dwords_single_request(client, device, count)
-
-    return await read_dwords_chunked(client, device, count, max_dwords_per_request=max_dwords_per_request)
+    """Read a contiguous DWord range using exactly one request."""
+    _validate_unsplit_dword_count(count, 480)
+    return await read_dwords_single_request(client, device, count)
 
 
 # ---------------------------------------------------------------------------
@@ -1382,95 +1257,24 @@ def write_dwords_single_request_sync(
     write_words_single_request_sync(client, device, _pack_dword_words(values))
 
 
-def read_words_chunked_sync(
-    client: SlmpClient,
-    device: str | DeviceRef,
-    count: int,
-    max_per_request: int = 960,
-) -> list[int]:
-    """Synchronously read contiguous 16-bit values across multiple aligned requests."""
-
-    _effective_word_chunk_size(max_per_request)
-    ref = _parse_device_for_client(client, device)
-    result: list[int] = []
-    for chunk_ref, _, chunk in _word_chunks(ref, count, max_per_request):
-        words = read_words_single_request_sync(client, chunk_ref, chunk)
-        result.extend(words)
-    return result
-
-
-def read_dwords_chunked_sync(
-    client: SlmpClient,
-    device: str | DeviceRef,
-    count: int,
-    max_dwords_per_request: int = 480,
-) -> list[int]:
-    """Synchronously read contiguous unsigned 32-bit values across multiple aligned requests."""
-
-    ref = _validate_dword_read_target(client, device)
-    words = read_words_chunked_sync(client, ref, count * 2, max_per_request=max_dwords_per_request * 2)
-    return _unpack_dword_words(words, count)
-
-
-def write_words_chunked_sync(
-    client: SlmpClient,
-    device: str | DeviceRef,
-    values: list[int],
-    max_per_request: int = 960,
-) -> None:
-    """Synchronously write contiguous 16-bit values across multiple aligned requests."""
-
-    _effective_word_chunk_size(max_per_request)
-    ref = _parse_device_for_client(client, device)
-    for chunk_ref, offset, chunk in _word_chunks(ref, len(values), max_per_request):
-        write_words_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
-
-
-def write_dwords_chunked_sync(
-    client: SlmpClient,
-    device: str | DeviceRef,
-    values: list[int],
-    max_dwords_per_request: int = 480,
-) -> None:
-    """Synchronously write contiguous unsigned 32-bit values across multiple aligned requests."""
-
-    if max_dwords_per_request <= 0:
-        raise ValueError("max_dwords_per_request must be at least 1")
-    ref = _parse_device_for_client(client, device)
-    for chunk_ref, offset, chunk in _dword_chunks(ref, len(values), max_dwords_per_request):
-        write_dwords_single_request_sync(client, chunk_ref, values[offset : offset + chunk])
-
-
 def read_words_sync(
     client: SlmpClient,
     device: str | DeviceRef,
     count: int,
-    max_per_request: int = 960,
-    *,
-    allow_split: bool = False,
 ) -> list[int]:
-    """Synchronously read a contiguous word-device range."""
-    if not allow_split:
-        _validate_unsplit_word_count(count, max_per_request)
-        return read_words_single_request_sync(client, device, count)
-
-    return read_words_chunked_sync(client, device, count, max_per_request=max_per_request)
+    """Synchronously read a contiguous word-device range using one request."""
+    _validate_unsplit_word_count(count, 960)
+    return read_words_single_request_sync(client, device, count)
 
 
 def read_dwords_sync(
     client: SlmpClient,
     device: str | DeviceRef,
     count: int,
-    max_dwords_per_request: int = 480,
-    *,
-    allow_split: bool = False,
 ) -> list[int]:
-    """Synchronously read a contiguous DWord range."""
-    if not allow_split:
-        _validate_unsplit_dword_count(count, max_dwords_per_request)
-        return read_dwords_single_request_sync(client, device, count)
-
-    return read_dwords_chunked_sync(client, device, count, max_dwords_per_request=max_dwords_per_request)
+    """Synchronously read a contiguous DWord range using one request."""
+    _validate_unsplit_dword_count(count, 480)
+    return read_dwords_single_request_sync(client, device, count)
 
 
 # ---------------------------------------------------------------------------
@@ -1504,8 +1308,6 @@ async def open_and_connect(
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
-        trace_hook=options.trace_hook,
-        strict_profile=options.strict_profile,
     )
     await inner.connect()
     return QueuedAsyncSlmpClient(inner)
@@ -1534,8 +1336,6 @@ def open_and_connect_sync(
         default_target=options.default_target,
         monitoring_timer=options.monitoring_timer,
         raise_on_error=options.raise_on_error,
-        trace_hook=options.trace_hook,
-        strict_profile=options.strict_profile,
     )
     client.connect()
     return client

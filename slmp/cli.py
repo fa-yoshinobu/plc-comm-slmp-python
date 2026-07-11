@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
+from . import _operations
 from .client import SlmpClient as _StandardSlmpClient
 from .constants import (
     DEVICE_CODES,
@@ -32,22 +33,22 @@ from .constants import (
 )
 from .core import (
     DeviceRef,
-    ExtensionSpec,
     LabelArrayReadPoint,
     LabelArrayReadResult,
     LabelArrayWritePoint,
     LabelRandomReadResult,
     LabelRandomWritePoint,
     SlmpTarget,
-    SlmpTraceFrame,
     TypeNameInfo,
+    _ExtensionSpec,
+    _resolve_extended_device_and_extension,
     _resolve_port,
+    _SlmpTraceFrame,
     decode_device_words,
     encode_device_spec,
     pack_bit_values,
     parse_device,
     resolve_device_subcommand,
-    resolve_extended_device_and_extension,
     unpack_bit_values,
 )
 from .errors import SlmpPracticalPathWarning
@@ -69,25 +70,44 @@ class SlmpClient(_StandardSlmpClient):
         default_target: SlmpTarget | None = None,
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
-        trace_hook: Callable[[SlmpTraceFrame], None] | None = None,
+        trace_hook: Callable[[_SlmpTraceFrame], None] | None = None,
         address_profile: object | None = None,
         _allow_manual_profile: bool = True,
     ) -> None:
+        if port is None:
+            raise ValueError("port is required")
+        if default_target is None:
+            raise ValueError("default_target is required and must be a complete SlmpTarget")
+        requested_series = plc_series
+        requested_frame = frame_type
+        requested_address_profile = address_profile
+        if plc_profile is None and requested_series is not None:
+            plc_profile = _canonical_profile_for_series(requested_series)
+        if plc_profile is None:
+            raise ValueError("plc_profile or maintainer plc_series is required")
         super().__init__(
             host,
             port,
             transport=transport,
             timeout=timeout,
             plc_profile=plc_profile,
-            plc_series=plc_series,
-            frame_type=frame_type,
             default_target=default_target,
             monitoring_timer=monitoring_timer,
             raise_on_error=raise_on_error,
-            trace_hook=trace_hook,
-            address_profile=address_profile,
-            _allow_manual_profile=_allow_manual_profile,
+            _maintainer_trace_hook=trace_hook,
         )
+        if requested_series is not None:
+            self.plc_series = PLCSeries(requested_series)
+        if requested_frame is not None:
+            self.frame_type = FrameType(requested_frame)
+        if requested_address_profile is not None:
+            self.address_profile = str(requested_address_profile)
+        _ = _allow_manual_profile
+
+
+def _canonical_profile_for_series(series: PLCSeries | str) -> str:
+    normalized = PLCSeries(series)
+    return "melsec:iq-r" if normalized is PLCSeries.IQR else "melsec:qnu"
 
 
 def _int_auto(text: str) -> int:
@@ -1143,7 +1163,7 @@ class CompatibilityCommandSpec:
 
 
 @dataclass(frozen=True)
-class ExtendedDeviceWordProbeSpec:
+class _ExtendedDeviceWordProbeSpec:
     """Specification for an Extended Device word-device probe."""
 
     label: str
@@ -1349,7 +1369,7 @@ def _default_named_target(target: SlmpTarget) -> NamedTarget:
     )
 
 
-def _parse_boundary_spec(text: str) -> BoundarySpec:
+def _parse_boundary_spec(text: str, *, plc_profile: object) -> BoundarySpec:
     parts = [part.strip() for part in text.split(",")]
     if len(parts) not in {3, 4}:
         raise ValueError(
@@ -1358,7 +1378,7 @@ def _parse_boundary_spec(text: str) -> BoundarySpec:
     label, last_device, unit_text = parts[:3]
     if not label:
         raise ValueError("boundary spec label must not be empty")
-    ref = parse_device(last_device)
+    ref = parse_device(last_device, plc_profile=plc_profile)
     if ref.number >= 0xFFFFFFFF:
         raise ValueError(f"last device is already at maximum encodable number: {last_device}")
     unit = unit_text.lower()
@@ -1377,16 +1397,21 @@ def _parse_boundary_spec(text: str) -> BoundarySpec:
     )
 
 
-def _load_boundary_specs(values: list[str] | None, file_path: str | None) -> list[BoundarySpec]:
+def _load_boundary_specs(
+    values: list[str] | None,
+    file_path: str | None,
+    *,
+    plc_profile: object,
+) -> list[BoundarySpec]:
     specs: list[BoundarySpec] = []
     for value in values or []:
-        specs.append(_parse_boundary_spec(value))
+        specs.append(_parse_boundary_spec(value, plc_profile=plc_profile))
     if file_path:
         for line in Path(file_path).read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            specs.append(_parse_boundary_spec(stripped))
+            specs.append(_parse_boundary_spec(stripped, plc_profile=plc_profile))
     if not specs:
         raise ValueError("at least one --spec or --spec-file entry is required")
     return specs
@@ -1402,7 +1427,7 @@ def _parse_point_list(text: str) -> tuple[int, ...]:
     return values
 
 
-def _parse_focused_boundary_spec(text: str) -> FocusedBoundarySpec:
+def _parse_focused_boundary_spec(text: str, *, plc_profile: object) -> FocusedBoundarySpec:
     parts = [part.strip() for part in text.split(",")]
     if len(parts) != 5:
         raise ValueError(
@@ -1412,7 +1437,7 @@ def _parse_focused_boundary_spec(text: str) -> FocusedBoundarySpec:
     label, edge_device, unit_text, edge_points_text, next_points_text = parts
     if not label:
         raise ValueError("focused boundary spec label must not be empty")
-    ref = parse_device(edge_device)
+    ref = parse_device(edge_device, plc_profile=plc_profile)
     if ref.number >= 0xFFFFFFFF:
         raise ValueError(f"edge device is already at maximum encodable number: {edge_device}")
     unit = unit_text.lower()
@@ -1530,16 +1555,18 @@ def _make_manual_label_test_bytes(before: bytes) -> bytes:
 def _load_focused_boundary_specs(
     values: list[str] | None,
     file_path: str | None,
+    *,
+    plc_profile: object,
 ) -> list[FocusedBoundarySpec]:
     specs: list[FocusedBoundarySpec] = []
     for value in values or []:
-        specs.append(_parse_focused_boundary_spec(value))
+        specs.append(_parse_focused_boundary_spec(value, plc_profile=plc_profile))
     if file_path:
         for line in Path(file_path).read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            specs.append(_parse_focused_boundary_spec(stripped))
+            specs.append(_parse_focused_boundary_spec(stripped, plc_profile=plc_profile))
     if not specs:
         return list(DEFAULT_FOCUSED_BOUNDARY_SPECS)
     return specs
@@ -1668,7 +1695,8 @@ def _probe_device_read_with_series(
     last_error: Exception | None = None
     for candidate in series_candidates:
         try:
-            values = client.read_devices(device, points, bit_unit=bit_unit, series=candidate)
+            client.plc_series = PLCSeries(candidate)
+            values = client.read_devices(device, points, bit_unit=bit_unit)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             continue
@@ -1712,7 +1740,7 @@ def _probe_device_read_with_frame_and_series(
                 monitoring_timer=monitoring_timer,
                 _allow_manual_profile=True,
             ) as client:
-                values = client.read_devices(device, points, bit_unit=bit_unit, series=series)
+                values = client.read_devices(device, points, bit_unit=bit_unit)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             continue
@@ -1960,16 +1988,16 @@ def _initialize_model_docs(
     return model_dir, created, skipped
 
 
-def _increment_device_text(device: str) -> str:
-    ref = parse_device(device)
+def _increment_device_text(device: str, *, plc_profile: object) -> str:
+    ref = parse_device(device, plc_profile=plc_profile)
     next_number = ref.number + 1
     radix = DEVICE_CODES[ref.code].radix
     suffix = f"{next_number:X}" if radix == 16 else str(next_number)
     return f"{ref.code}{suffix}"
 
 
-def _offset_device_text(device: str | DeviceRef, offset: int) -> str:
-    ref = parse_device(device)
+def _offset_device_text(device: str | DeviceRef, offset: int, *, plc_profile: object) -> str:
+    ref = parse_device(device, plc_profile=plc_profile)
     next_number = ref.number + offset
     if next_number < 0 or next_number > 0xFFFFFFFF:
         raise ValueError(f"device offset out of encodable range: {device} + {offset}")
@@ -2017,7 +2045,7 @@ def _dedupe_preserve_order(values: Sequence[str | int]) -> list[str | int]:
     return ordered
 
 
-def _parse_extended_device_word_probe(text: str, *, default_direct_memory: int) -> ExtendedDeviceWordProbeSpec:
+def __parse_extended_device_word_probe(text: str, *, default_direct_memory: int) -> _ExtendedDeviceWordProbeSpec:
     parts = next(csv.reader([text], skipinitialspace=True))
     if len(parts) not in {3, 4}:
         raise ValueError("probe must be LABEL,DEVICE,WRITE_VALUE[,DIRECT_MEMORY]")
@@ -2029,7 +2057,7 @@ def _parse_extended_device_word_probe(text: str, *, default_direct_memory: int) 
         raise ValueError("probe device must not be empty")
     preferred_write_value = _int_auto(parts[2].strip())
     direct_memory = default_direct_memory if len(parts) == 3 else _int_auto(parts[3].strip())
-    return ExtendedDeviceWordProbeSpec(
+    return _ExtendedDeviceWordProbeSpec(
         label=label,
         device=device,
         preferred_write_value=preferred_write_value,
@@ -2040,10 +2068,10 @@ def _parse_extended_device_word_probe(text: str, *, default_direct_memory: int) 
 def _make_frame_dump_trace_hook(
     *,
     dump_dir_ref: list[Path | None],
-) -> tuple[Callable[[SlmpTraceFrame], None], list[int]]:
+) -> tuple[Callable[[_SlmpTraceFrame], None], list[int]]:
     trace_counter = [0]
 
-    def _trace_hook(trace: SlmpTraceFrame) -> None:
+    def _trace_hook(trace: _SlmpTraceFrame) -> None:
         dump_dir = dump_dir_ref[0]
         if dump_dir is None:
             return
@@ -2063,18 +2091,18 @@ def _run_extended_device_word_probe(
     item_name: str,
     device: str,
     preferred_write_value: int,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     series: str,
     restore_enabled: bool,
     record: Callable[[str, str, str], None],
 ) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-        before_values = client.read_devices_ext(device, 1, extension=extension, bit_unit=False, series=series)
+        before_values = client._read_devices_ext_raw(device, 1, extension=extension, bit_unit=False, series=series)
         before = int(before_values[0])
         write_value = _choose_probe_word_value(current=before, preferred=preferred_write_value)
-        client.write_devices_ext(device, [write_value], extension=extension, bit_unit=False, series=series)
-        readback_values = client.read_devices_ext(device, 1, extension=extension, bit_unit=False, series=series)
+        client._write_devices_ext_raw(device, [write_value], extension=extension, bit_unit=False, series=series)
+        readback_values = client._read_devices_ext_raw(device, 1, extension=extension, bit_unit=False, series=series)
         readback = int(readback_values[0])
 
         detail_parts = [
@@ -2092,8 +2120,8 @@ def _run_extended_device_word_probe(
             record(item_name, "OK", ", ".join(detail_parts + ["restore=disabled"]))
             return
 
-        client.write_devices_ext(device, [before], extension=extension, bit_unit=False, series=series)
-        restored_values = client.read_devices_ext(device, 1, extension=extension, bit_unit=False, series=series)
+        client._write_devices_ext_raw(device, [before], extension=extension, bit_unit=False, series=series)
+        restored_values = client._read_devices_ext_raw(device, 1, extension=extension, bit_unit=False, series=series)
         restored = int(restored_values[0])
         detail_parts.append(f"restored=0x{restored:04X}")
         if restored != before:
@@ -2110,7 +2138,7 @@ def _run_extended_device_word_span_probe(
     device: str,
     points: int,
     preferred_write_value: int,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     series: str,
     restore_enabled: bool,
     write_check: bool,
@@ -2120,7 +2148,7 @@ def _run_extended_device_word_span_probe(
         warnings.simplefilter("ignore", SlmpPracticalPathWarning)
         before_values = [
             int(value) & 0xFFFF
-            for value in client.read_devices_ext(
+            for value in client._read_devices_ext_raw(
                 device,
                 points,
                 extension=extension,
@@ -2147,10 +2175,12 @@ def _run_extended_device_word_span_probe(
             return
 
         write_values = _choose_probe_word_values(current_values=before_values, preferred_base=preferred_write_value)
-        client.write_devices_ext(device, write_values, extension=extension, bit_unit=False, series=series)
+        client._write_devices_ext_raw(device, write_values, extension=extension, bit_unit=False, series=series)
         readback_values = [
             int(value) & 0xFFFF
-            for value in client.read_devices_ext(device, points, extension=extension, bit_unit=False, series=series)
+            for value in client._read_devices_ext_raw(
+                device, points, extension=extension, bit_unit=False, series=series
+            )
         ]
         detail_parts.extend(
             [
@@ -2166,10 +2196,12 @@ def _run_extended_device_word_span_probe(
             record(item_name, "OK", ", ".join(detail_parts + ["restore=disabled"]))
             return
 
-        client.write_devices_ext(device, before_values, extension=extension, bit_unit=False, series=series)
+        client._write_devices_ext_raw(device, before_values, extension=extension, bit_unit=False, series=series)
         restored_values = [
             int(value) & 0xFFFF
-            for value in client.read_devices_ext(device, points, extension=extension, bit_unit=False, series=series)
+            for value in client._read_devices_ext_raw(
+                device, points, extension=extension, bit_unit=False, series=series
+            )
         ]
         detail_parts.append(f"restored={_format_word_values(restored_values)}")
         if restored_values != before_values:
@@ -2224,9 +2256,9 @@ def _raw_device_read(
 ) -> tuple[int, object | None]:
     resolved_series = PLCSeries(series) if series else client.plc_series
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=resolved_series, extension=False)
-    payload = encode_device_spec(device, series=resolved_series)
+    payload = encode_device_spec(device, series=resolved_series, plc_profile=client.plc_profile)
     payload += points.to_bytes(2, "little")
-    resp = client.request(Command.DEVICE_READ, subcommand=subcommand, data=payload, raise_on_error=False)
+    resp = client._request(Command.DEVICE_READ, subcommand=subcommand, data=payload, raise_on_error=False)
     values: object | None = None
     if resp.end_code == 0:
         values = unpack_bit_values(resp.data, points) if bit_unit else decode_device_words(resp.data)
@@ -2244,21 +2276,21 @@ def _raw_device_write(
     resolved_series = PLCSeries(series) if series else client.plc_series
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=resolved_series, extension=False)
     payload = bytearray()
-    payload += encode_device_spec(device, series=resolved_series)
+    payload += encode_device_spec(device, series=resolved_series, plc_profile=client.plc_profile)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
         payload += pack_bit_values(values)
     else:
         for value in values:
             payload += int(value).to_bytes(2, "little", signed=False)
-    resp = client.request(Command.DEVICE_WRITE, subcommand=subcommand, data=bytes(payload), raise_on_error=False)
+    resp = client._request(Command.DEVICE_WRITE, subcommand=subcommand, data=bytes(payload), raise_on_error=False)
     return resp.end_code
 
 
-def _known_boundary_probe_limitation(device: str, series: str) -> str | None:
+def _known_boundary_probe_limitation(device: str, series: str, *, plc_profile: object) -> str | None:
     if series != "iqr":
         return None
-    code = parse_device(device).code
+    code = parse_device(device, plc_profile=plc_profile).code
     if code in {"LTC", "LTS", "LSTC", "LSTS"}:
         return "known direct-path issue on validated iQ-R target"
     return None
@@ -2268,8 +2300,8 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
     """Perform SLMP binary connection check."""
     parser = argparse.ArgumentParser(description="SLMP binary connection check")
     parser.add_argument("--host", required=True, help="PLC IP address or host name")
-    parser.add_argument("--port", type=int, default=None, help="SLMP port (default: 1025 for TCP, 1035 for UDP)")
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True, help="SLMP port")
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
     parser.add_argument(
@@ -2361,7 +2393,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
         dump_dir.mkdir(parents=True, exist_ok=True)
         print(f"[INFO] Frame dump directory: {dump_dir}")
 
-    def _trace_hook(trace: SlmpTraceFrame) -> None:
+    def _trace_hook(trace: _SlmpTraceFrame) -> None:
         nonlocal trace_counter
         if dump_dir is None:
             return
@@ -2455,7 +2487,6 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
                         args.read_device,
                         args.points,
                         bit_unit=args.bit_unit,
-                        series=resolved_access_profile,
                     )
                     print(
                         f"[OK] Read Device (0401): device={args.read_device}, "
@@ -2478,7 +2509,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
                         bit_unit: bool = False,
                     ) -> None:
                         try:
-                            ext = client.make_extension_spec(
+                            ext = client._make_extension_spec(
                                 extension_specification=ext_spec,
                                 extension_specification_modification=args.extended_device_ext_mod,
                                 device_modification_index=args.extended_device_dev_mod_index,
@@ -2487,7 +2518,7 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
                                 direct_memory_specification=direct_mem,
                                 series=resolved_series.value,
                             )
-                            values = client.read_devices_ext(
+                            values = client._read_devices_ext_raw(
                                 device,
                                 args.extended_device_points,
                                 extension=ext,
@@ -2554,8 +2585,8 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
     """Recheck Extended Device word-device read-write-readback with restore."""
     parser = argparse.ArgumentParser(description="Recheck Extended Device word-device read-write-readback with restore")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="ql")
     parser.add_argument(
@@ -2632,7 +2663,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
 
     try:
         probes = [
-            _parse_extended_device_word_probe(text, default_direct_memory=args.direct_memory) for text in args.probe
+            __parse_extended_device_word_probe(text, default_direct_memory=args.direct_memory) for text in args.probe
         ]
     except ValueError as exc:
         parser.error(str(exc))
@@ -2704,7 +2735,7 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
 
         restore_enabled = not args.keep_written_value
         for probe in probes:
-            extension = cli.make_extension_spec(
+            extension = cli._make_extension_spec(
                 extension_specification=args.extension_specification,
                 extension_specification_modification=args.extended_device_ext_mod,
                 device_modification_index=args.extended_device_dev_mod_index,
@@ -2714,7 +2745,11 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
                 series=args.series,
             )
             try:
-                _, extension = resolve_extended_device_and_extension(probe.device, extension)
+                _, extension = _resolve_extended_device_and_extension(
+                    probe.device,
+                    extension,
+                    plc_profile=cli.plc_profile,
+                )
                 _run_extended_device_word_probe(
                     cli,
                     item_name=probe.label,
@@ -2771,8 +2806,8 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
     """Recheck iQ-R Extended Device G/HG read-write-readback with restore."""
     parser = argparse.ArgumentParser(description="Recheck iQ-R Extended Device G/HG read-write-readback with restore")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
@@ -2857,7 +2892,7 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
         dump_dir = Path(args.dump_frame_dir)
         dump_dir.mkdir(parents=True, exist_ok=True)
 
-    def _trace_hook(trace: SlmpTraceFrame) -> None:
+    def _trace_hook(trace: _SlmpTraceFrame) -> None:
         nonlocal trace_counter
         if dump_dir is None:
             return
@@ -2906,7 +2941,7 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
             dump_dir.mkdir(parents=True, exist_ok=True)
         print(f"[INFO] Frame dump directory: {dump_dir}")
 
-        extension = cli.make_extension_spec(
+        extension = cli._make_extension_spec(
             extension_specification=args.cpu_io,
             extension_specification_modification=args.extended_device_ext_mod,
             device_modification_index=args.extended_device_dev_mod_index,
@@ -2919,10 +2954,14 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
         restore_enabled = not args.keep_written_value
 
         def run_probe(item_name: str, *, device: str, preferred_write_value: int) -> None:
-            _, effective_extension = resolve_extended_device_and_extension(device, extension)
+            _, effective_extension = _resolve_extended_device_and_extension(
+                device,
+                extension,
+                plc_profile=cli.plc_profile,
+            )
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-                before_values = cli.read_devices_ext(
+                before_values = cli._read_devices_ext_raw(
                     device,
                     1,
                     extension=effective_extension,
@@ -2931,14 +2970,14 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
                 )
                 before = int(before_values[0])
                 write_value = _choose_probe_word_value(current=before, preferred=preferred_write_value)
-                cli.write_devices_ext(
+                cli._write_devices_ext_raw(
                     device,
                     [write_value],
                     extension=effective_extension,
                     bit_unit=False,
                     series=args.series,
                 )
-                readback_values = cli.read_devices_ext(
+                readback_values = cli._read_devices_ext_raw(
                     device,
                     1,
                     extension=effective_extension,
@@ -2962,14 +3001,14 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
                     record(item_name, "OK", ", ".join(detail_parts + ["restore=disabled"]))
                     return
 
-                cli.write_devices_ext(
+                cli._write_devices_ext_raw(
                     device,
                     [before],
                     extension=effective_extension,
                     bit_unit=False,
                     series=args.series,
                 )
-                restored_values = cli.read_devices_ext(
+                restored_values = cli._read_devices_ext_raw(
                     device,
                     1,
                     extension=effective_extension,
@@ -3030,8 +3069,8 @@ def other_station_check_main(argv: Sequence[str] | None = None) -> int:
     """Verify SLMP access to other targets/stations."""
     parser = argparse.ArgumentParser(description="Verify SLMP access to other targets/stations")
     parser.add_argument("--host", required=True, help="PLC IP address or host name")
-    parser.add_argument("--port", type=int, default=1025, help="SLMP port")
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True, help="SLMP port")
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--frame-type", choices=("3e", "4e"), default="4e")
@@ -3238,8 +3277,8 @@ def device_range_probe_main(argv: Sequence[str] | None = None) -> int:
     """Probe configured device-range boundaries against a live PLC."""
     parser = argparse.ArgumentParser(description="Probe configured device-range boundaries against a live PLC")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010)
@@ -3273,7 +3312,8 @@ def device_range_probe_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     try:
-        specs = _load_boundary_specs(args.spec, args.spec_file)
+        plc_profile = _canonical_profile_for_series(args.series)
+        specs = _load_boundary_specs(args.spec, args.spec_file, plc_profile=plc_profile)
     except Exception as exc:  # noqa: BLE001
         parser.error(str(exc))
 
@@ -3314,8 +3354,12 @@ def device_range_probe_main(argv: Sequence[str] | None = None) -> int:
     ) as client:
         for spec in specs:
             try:
-                next_device = _increment_device_text(spec.last_device)
-                limitation = _known_boundary_probe_limitation(spec.last_device, args.series)
+                next_device = _increment_device_text(spec.last_device, plc_profile=plc_profile)
+                limitation = _known_boundary_probe_limitation(
+                    spec.last_device,
+                    args.series,
+                    plc_profile=plc_profile,
+                )
 
                 in_end_code, in_values = _raw_device_read(
                     client,
@@ -3454,8 +3498,8 @@ def register_boundary_probe_main(argv: Sequence[str] | None = None) -> int:
     """Probe focused register-boundary behavior against a live PLC."""
     parser = argparse.ArgumentParser(description="Probe focused register-boundary behavior against a live PLC")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -3480,7 +3524,8 @@ def register_boundary_probe_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     try:
-        specs = _load_focused_boundary_specs(args.spec, args.spec_file)
+        plc_profile = _canonical_profile_for_series(args.series)
+        specs = _load_focused_boundary_specs(args.spec, args.spec_file, plc_profile=plc_profile)
     except Exception as exc:  # noqa: BLE001
         parser.error(str(exc))
 
@@ -3519,7 +3564,7 @@ def register_boundary_probe_main(argv: Sequence[str] | None = None) -> int:
         _allow_manual_profile=True,
     ) as client:
         for spec in specs:
-            next_device = _increment_device_text(spec.edge_device)
+            next_device = _increment_device_text(spec.edge_device, plc_profile=plc_profile)
             edge_reads: dict[int, object | None] = {}
 
             for points in spec.edge_points:
@@ -3631,12 +3676,13 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
         description="Sweep qualified Extended Device G/HG devices across addresses and point counts"
     )
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
+    parser.add_argument("--port", type=int, required=True)
     parser.add_argument(
         "--transport",
         choices=("tcp", "udp"),
         action="append",
-        help="transport to sweep; repeatable, defaults to tcp",
+        required=True,
+        help="transport to sweep; repeatable",
     )
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
@@ -3832,7 +3878,7 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
                 print(f"[INFO] Frame dump directory: {dump_dir_ref[0]}")
 
                 for direct_memory in direct_memories:
-                    base_extension = cli.make_extension_spec(
+                    base_extension = cli._make_extension_spec(
                         extension_specification=args.extension_specification,
                         extension_specification_modification=args.extended_device_ext_mod,
                         device_modification_index=args.extended_device_dev_mod_index,
@@ -3843,7 +3889,11 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
                     )
                     for device in devices:
                         try:
-                            _, extension = resolve_extended_device_and_extension(device, base_extension)
+                            _, extension = _resolve_extended_device_and_extension(
+                                device,
+                                base_extension,
+                                plc_profile=cli.plc_profile,
+                            )
                         except Exception as exc:  # noqa: BLE001
                             for points in point_counts:
                                 item_name = (
@@ -3920,8 +3970,8 @@ def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
     """Recheck open SLMP items."""
     parser = argparse.ArgumentParser(description="Recheck open SLMP items")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -3968,19 +4018,23 @@ def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
     ) as cli:
         for dev in ("LSTC0", "LSTS0", "LTC0", "LTS0"):
             try:
-                values = cli.read_devices(dev, 1, bit_unit=True, series=args.series)
+                values = cli.read_devices(dev, 1, bit_unit=True)
                 record(f"{dev} read bit", "OK", f"values={values}")
             except Exception as exc:  # noqa: BLE001
                 record(f"{dev} read bit", "NG", str(exc))
 
-        ext = cli.make_extension_spec(
+        ext = cli._make_extension_spec(
             extension_specification=args.cpu_io,
+            extension_specification_modification=0,
+            device_modification_index=0,
+            use_indirect_specification=False,
+            register_mode="none",
             direct_memory_specification=DIRECT_MEMORY_CPU_BUFFER,
             series=args.series,
         )
         for dev in ("G0", "HG0"):
             try:
-                values = cli.read_devices_ext(dev, 1, extension=ext, bit_unit=False, series=args.series)
+                values = cli._read_devices_ext_raw(dev, 1, extension=ext, bit_unit=False, series=args.series)
                 record(f"{dev} CPU buffer ext read", "OK", f"values={values}")
             except Exception as exc:  # noqa: BLE001
                 record(f"{dev} CPU buffer ext read", "NG", str(exc))
@@ -4007,8 +4061,8 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
     """Perform SLMP pending live verification against a live PLC."""
     parser = argparse.ArgumentParser(description="SLMP pending live verification")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
@@ -4114,10 +4168,10 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
             add("141A label array write", "SKIP", "array read unavailable; no safe same-value payload")
         else:
             try:
-                payload = cli.build_array_label_write_payload(
+                payload = _operations.build_array_label_write_payload(
                     [LabelArrayWritePoint(label="LabelW", unit_specification=1, array_data_length=2, data=b"\x31\x00")]
                 )
-                resp = cli.request(Command.LABEL_ARRAY_WRITE, 0x0000, payload, raise_on_error=False)
+                resp = cli._request(Command.LABEL_ARRAY_WRITE, 0x0000, payload, raise_on_error=False)
                 add(
                     "141A label array write",
                     "OK" if resp.end_code == 0 else "NG",
@@ -4155,10 +4209,10 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
             add("141B label random write", "SKIP", "random read unavailable; no safe same-value payload")
         else:
             try:
-                payload = cli.build_label_write_random_payload(
+                payload = _operations.build_label_write_random_payload(
                     [LabelRandomWritePoint(label="LabelW", data=b"\x31\x00")]
                 )
-                resp = cli.request(Command.LABEL_WRITE_RANDOM, 0x0000, payload, raise_on_error=False)
+                resp = cli._request(Command.LABEL_WRITE_RANDOM, 0x0000, payload, raise_on_error=False)
                 add(
                     "141B label random write",
                     "OK" if resp.end_code == 0 else "NG",
@@ -4197,7 +4251,7 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
         ]
         for name, cmd, sub, payload in remote_cmds:
             try:
-                resp = cli.request(cmd, sub, payload, raise_on_error=False)
+                resp = cli._request(cmd, sub, payload, raise_on_error=False)
                 status = "OK" if resp.end_code == 0 else "NG"
                 add(name, status, f"end_code=0x{resp.end_code:04X}")
             except Exception as exc:  # noqa: BLE001
@@ -4211,17 +4265,17 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
                 pwd_payload = len(raw).to_bytes(2, "little") + raw
             else:
                 pwd_payload = (4).to_bytes(2, "little") + args.password.encode("ascii")[:4].ljust(4, b" ")
-            pre = cli.request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, pwd_payload, raise_on_error=False)
+            pre = cli._request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, pwd_payload, raise_on_error=False)
             add("1630 unlock (pre)", "OK" if pre.end_code == 0 else "NG", f"end_code=0x{pre.end_code:04X}")
-            lock = cli.request(Command.REMOTE_PASSWORD_LOCK, 0x0000, pwd_payload, raise_on_error=False)
+            lock = cli._request(Command.REMOTE_PASSWORD_LOCK, 0x0000, pwd_payload, raise_on_error=False)
             add("1631 lock", "OK" if lock.end_code == 0 else "NG", f"end_code=0x{lock.end_code:04X}")
-            unlock = cli.request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, pwd_payload, raise_on_error=False)
+            unlock = cli._request(Command.REMOTE_PASSWORD_UNLOCK, 0x0000, pwd_payload, raise_on_error=False)
             add("1630 unlock", "OK" if unlock.end_code == 0 else "NG", f"end_code=0x{unlock.end_code:04X}")
         except Exception as exc:  # noqa: BLE001
             add("1631/1630 lock-unlock", "NG", str(exc))
 
         try:
-            clr = cli.request(Command.CLEAR_ERROR, 0x0000, b"", raise_on_error=False)
+            clr = cli._request(Command.CLEAR_ERROR, 0x0000, b"", raise_on_error=False)
             add("1617 clear error", "OK" if clr.end_code == 0 else "NG", f"end_code=0x{clr.end_code:04X}")
         except Exception as exc:  # noqa: BLE001
             add("1617 clear error", "NG", str(exc))
@@ -4254,8 +4308,8 @@ def manual_label_verification_main(argv: Sequence[str] | None = None) -> int:
         )
     )
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
@@ -4488,8 +4542,8 @@ def read_soak_main(argv: Sequence[str] | None = None) -> int:
     """Perform repeated single-command read soak test."""
     parser = argparse.ArgumentParser(description="Repeated single-command read soak test")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -4551,13 +4605,17 @@ def read_soak_main(argv: Sequence[str] | None = None) -> int:
     ) as cli:
         for iteration in range(args.rounds):
             device = (
-                _offset_device_text(args.device, iteration % args.rotate_span)
+                _offset_device_text(
+                    args.device,
+                    iteration % args.rotate_span,
+                    plc_profile=cli.plc_profile,
+                )
                 if args.rotate_span > 0
-                else str(parse_device(args.device))
+                else str(parse_device(args.device, plc_profile=cli.plc_profile))
             )
             t0 = time.perf_counter()
             try:
-                values = cli.read_devices(device, args.points, bit_unit=args.bit_unit, series=args.series)
+                values = cli.read_devices(device, args.points, bit_unit=args.bit_unit)
                 values_seen[_format_probe_values(values)] += 1
             except Exception as exc:  # noqa: BLE001
                 errors[type(exc).__name__] += 1
@@ -4608,8 +4666,8 @@ def mixed_read_load_main(argv: Sequence[str] | None = None) -> int:
     """Perform mixed 0401/0403/0406 read load test."""
     parser = argparse.ArgumentParser(description="Mixed 0401/0403/0406 read load test")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp")
+    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -4674,10 +4732,10 @@ def mixed_read_load_main(argv: Sequence[str] | None = None) -> int:
         for cycle in range(args.rounds):
             base_offset = cycle % args.rotate_span if args.rotate_span > 0 else 0
 
-            direct_device = _offset_device_text(args.base_device, base_offset)
+            direct_device = _offset_device_text(args.base_device, base_offset, plc_profile=cli.plc_profile)
             t0 = time.perf_counter()
             try:
-                cli.read_devices(direct_device, args.direct_points, bit_unit=False, series=args.series)
+                cli.read_devices(direct_device, args.direct_points, bit_unit=False)
             except Exception as exc:  # noqa: BLE001
                 op_errors["0401 direct read"][type(exc).__name__] += 1
                 if len(sample_errors["0401 direct read"]) < 3:
@@ -4685,21 +4743,30 @@ def mixed_read_load_main(argv: Sequence[str] | None = None) -> int:
             op_durations["0401 direct read"].append(time.perf_counter() - t0)
 
             random_devices = [
-                _offset_device_text(args.base_device, base_offset + index) for index in range(args.random_word_count)
+                _offset_device_text(
+                    args.base_device,
+                    base_offset + index,
+                    plc_profile=cli.plc_profile,
+                )
+                for index in range(args.random_word_count)
             ]
             t0 = time.perf_counter()
             try:
-                cli.read_random(word_devices=random_devices, series=args.series)
+                cli.read_random(word_devices=random_devices)
             except Exception as exc:  # noqa: BLE001
                 op_errors["0403 random read"][type(exc).__name__] += 1
                 if len(sample_errors["0403 random read"]) < 3:
                     sample_errors["0403 random read"].append(f"{random_devices[0]}..: {exc}")
             op_durations["0403 random read"].append(time.perf_counter() - t0)
 
-            block_device = _offset_device_text(args.base_device, base_offset + args.block_offset)
+            block_device = _offset_device_text(
+                args.base_device,
+                base_offset + args.block_offset,
+                plc_profile=cli.plc_profile,
+            )
             t0 = time.perf_counter()
             try:
-                cli.read_block(word_blocks=[(block_device, args.block_points)], bit_blocks=(), series=args.series)
+                cli.read_block(word_blocks=[(block_device, args.block_points)], bit_blocks=())
             except Exception as exc:  # noqa: BLE001
                 op_errors["0406 block read"][type(exc).__name__] += 1
                 if len(sample_errors["0406 block read"]) < 3:
@@ -4772,7 +4839,7 @@ def tcp_concurrency_main(argv: Sequence[str] | None = None) -> int:
     """Perform practical multi-client TCP read concurrency test."""
     parser = argparse.ArgumentParser(description="Practical multi-client TCP read concurrency test")
     parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, default=1025)
+    parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--network", type=_int_auto, default=0x00)
@@ -4855,10 +4922,14 @@ def tcp_concurrency_main(argv: Sequence[str] | None = None) -> int:
                         local_errors.append((type(exc).__name__, f"barrier failed for client {index}: {exc}"))
                         return
                     for iteration in range(args.rounds_per_client):
-                        device = _offset_device_text(args.device, index * args.rounds_per_client + iteration)
+                        device = _offset_device_text(
+                            args.device,
+                            index * args.rounds_per_client + iteration,
+                            plc_profile=cli.plc_profile,
+                        )
                         t0 = time.perf_counter()
                         try:
-                            cli.read_devices(device, args.points, bit_unit=args.bit_unit, series=args.series)
+                            cli.read_devices(device, args.points, bit_unit=args.bit_unit)
                         except Exception as exc:  # noqa: BLE001
                             local_errors.append((type(exc).__name__, f"{device}: {exc}"))
                         local_durations.append(time.perf_counter() - t0)
@@ -4950,11 +5021,10 @@ def regression_suite_main(argv: Sequence[str] | None = None) -> int:
         help="also run the safe connection check against a live PLC",
     )
     parser.add_argument("--host", help="PLC host for the optional live connection check")
-    parser.add_argument("--port", type=int, default=1025, help="PLC port for the optional live connection check")
+    parser.add_argument("--port", type=int, help="PLC port for the optional live connection check")
     parser.add_argument(
         "--transport",
         choices=("tcp", "udp"),
-        default="tcp",
         help="transport for the optional live connection check",
     )
     parser.add_argument(
@@ -4974,8 +5044,10 @@ def regression_suite_main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    if args.include_live_connection_check and (not args.host or not args.series):
-        parser.error("--include-live-connection-check requires --host and --series")
+    if args.include_live_connection_check and (
+        not args.host or args.port is None or not args.transport or not args.series
+    ):
+        parser.error("--include-live-connection-check requires --host, --port, --transport, and --series")
 
     steps = _build_regression_steps(
         python_executable=args.python,

@@ -11,7 +11,6 @@ from .core import (
     BlockReadResult,
     DeviceBlockResult,
     DeviceRef,
-    ExtensionSpec,
     LabelArrayReadPoint,
     LabelArrayReadResult,
     LabelArrayWritePoint,
@@ -34,9 +33,12 @@ from .core import (
     _check_u32,
     _encode_label_name,
     _encode_remote_password_payload,
+    _encode_resolved_extended_device_spec,
+    _ExtensionSpec,
     _label_array_data_bytes,
     _normalize_items,
     _require_explicit_plc_profile_for_xy,
+    _resolve_extended_device_and_extension,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_direct_dword_read_device,
@@ -51,11 +53,9 @@ from .core import (
     decode_device_dwords,
     decode_device_words,
     encode_device_spec,
-    encode_resolved_extended_device_spec,
     pack_bit_values,
     parse_device,
     resolve_device_subcommand,
-    resolve_extended_device_and_extension,
     unpack_bit_values,
 )
 from .errors import SlmpError
@@ -99,10 +99,10 @@ def _parse_device_for_address_profile(device: str | DeviceRef, address_profile: 
 
 def _resolve_extended_device_for_family(
     device: str | DeviceRef,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     address_profile: object | None,
-) -> tuple[DeviceRef, ExtensionSpec]:
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=address_profile)
+) -> tuple[DeviceRef, _ExtensionSpec]:
+    ref, effective_extension = _resolve_extended_device_and_extension(device, extension, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref), effective_extension
 
 
@@ -298,7 +298,7 @@ def build_read_devices_ext_request(
     device: str | DeviceRef,
     points: int,
     *,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -321,7 +321,7 @@ def build_read_devices_ext_request(
         effective_series = PLCSeries.QL
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
-    payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+    payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     payload += points.to_bytes(2, "little")
     return OperationRequest(Command.DEVICE_READ, subcommand, bytes(payload))
 
@@ -330,7 +330,7 @@ def build_write_devices_ext_request(
     device: str | DeviceRef,
     values: Sequence[int | bool],
     *,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -356,7 +356,7 @@ def build_write_devices_ext_request(
         effective_series = PLCSeries.QL
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
-    payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+    payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
         payload += pack_bit_values(values)
@@ -410,8 +410,8 @@ def build_register_monitor_devices_request(
 
 def build_register_monitor_devices_ext_request(
     *,
-    word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
-    dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
+    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
+    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -440,12 +440,12 @@ def build_register_monitor_devices_ext_request(
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for dev, ext in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_monitor_register_devices(word_refs, dword_refs)
     return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, bytes(payload))
 
@@ -602,8 +602,8 @@ def build_read_random_request(
 
 def build_read_random_ext_request(
     *,
-    word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
-    dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
+    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
+    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -632,12 +632,12 @@ def build_read_random_ext_request(
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         words.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for device, extension in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dwords.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_random_read_devices(words, dwords)
     return RandomReadOperation(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
@@ -708,8 +708,8 @@ def build_write_random_words_request(
 
 def build_write_random_words_ext_request(
     *,
-    word_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]],
-    dword_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]],
+    word_values: Sequence[tuple[str | DeviceRef, int, _ExtensionSpec]],
+    dword_values: Sequence[tuple[str | DeviceRef, int, _ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -737,13 +737,13 @@ def build_write_random_words_ext_request(
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(2, "little", signed=False)
     for device, value, extension in dword_values:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += int(value).to_bytes(4, "little", signed=False)
     _validate_random_write_word_devices(word_refs, dword_refs, plc_profile=address_profile)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
@@ -784,7 +784,7 @@ def build_write_random_bits_request(
 
 
 def build_write_random_bits_ext_request(
-    bit_values: Sequence[tuple[str | DeviceRef, bool | int, ExtensionSpec]],
+    bit_values: Sequence[tuple[str | DeviceRef, bool | int, _ExtensionSpec]],
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -811,7 +811,7 @@ def build_write_random_bits_ext_request(
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         if effective_series == PLCSeries.IQR:
             payload += b"\x01\x00" if bool(state) else b"\x00\x00"
         else:

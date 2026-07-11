@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
         help="Read-only tag, for example speed=D100:U. Repeat for multiple tags.",
     )
     parser.add_argument("--port", type=int, default=None, help="Default port when a --plc omits it")
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp", help="Default transport")
+    parser.add_argument("--transport", choices=("tcp", "udp"), default=None, help="Default transport")
     parser.add_argument("--timeout", type=positive_float, default=3.0, help="Socket timeout in seconds")
     parser.add_argument("--interval", type=positive_float, default=1.0, help="Polling interval in seconds")
     parser.add_argument(
@@ -80,8 +80,7 @@ async def run(args: argparse.Namespace) -> None:
     if args.dry_run:
         for endpoint in endpoints:
             print(
-                f"{endpoint.name}: {endpoint.transport} {endpoint.host}:{endpoint.port or 'default'} "
-                f"profile={endpoint.plc_profile}"
+                f"{endpoint.name}: {endpoint.transport} {endpoint.host}:{endpoint.port} profile={endpoint.plc_profile}"
             )
         print("tags: " + ", ".join(f"{tag.name}={tag.address}" for tag in tags))
         return

@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- Library: Made connection `port`, `transport`, canonical `plc_profile`, and all four `SlmpTarget` route fields explicit requirements. Missing or invalid values now fail before transport.
+- Library: Removed request-level `series` overrides from normal device, remote-password, and long-device APIs. Wire format is derived only from the connection PLC profile.
+- Library: Removed the public low-level `request()` method and caller-selected 4E serial numbers. `raw_command(command, subcommand, payload)` remains the single maintainer raw entry point and allocates serials internally.
+- Library: Removed command-specific raw-payload wrappers and public label payload builder/parser methods. Use the semantic typed APIs, or the single maintainer `raw_command` entry point for investigation.
+- Library: Removed public chunked read/write helpers and mixed-block request splitting. One standard API call now produces one protocol request and rejects profile-limit overflow before transport.
+- Library: Made generic device access unit (`bit_unit`), CPU-buffer module number, remote run/pause modes, and long-timer head/count values explicit where their omission could select a different operation or address.
+- Library: Replaced public raw Extended Device field controls with qualified addresses and typed `SlmpExtendedDevice` modifiers.
+- Library: Removed public error-code message/language lookup and public trace/strict-profile controls; structured end codes remain available without embedding manual wording.
+
+### Changed
+
+- Library: Standardized communication timeout omission to 3 seconds, monitoring timer omission to 4 seconds (`0x0010`), and TCP keepalive idle to 30 seconds.
+- Library: Reset UDP transport state after timeout/cancellation so a delayed 3E response cannot be accepted by a later request.
+- Tooling: Required explicit port and transport for every bundled CLI command that communicates with a PLC.
+- Samples: Required explicit port and transport and bound address parsing/formatting to the selected PLC profile.
+
+### Tests
+
+- Tests: Added sync/async contract tests for removed overrides, internal serial allocation, required parameters, profile-derived wire shapes, timeout validation, UDP reset behavior, and public-surface removal.
+
 ## [3.1.0] - 2026-07-10
 
 ### Added
