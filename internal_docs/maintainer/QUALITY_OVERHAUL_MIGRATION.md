@@ -2,6 +2,17 @@
 
 This document records source migrations required by the cross-library quality overhaul. The approved rationale and acceptance history remain in the workspace decision records.
 
+## Legacy validation scripts
+
+The repository no longer ships one-off scripts that select frame/series
+combinations independently, call removed raw or split APIs, or probe
+standalone G/HG routes. Those scripts could bypass the canonical profile and
+reintroduce behavior intentionally removed from the public contract.
+
+Use `plc-comm-slmp-profiles/tools/live_profile_probe.py` with
+`capability/slmp_ethernet_profiles.json` for live profile evidence. This is a
+breaking removal; there are no compatibility wrappers.
+
 ## Connection construction
 
 Always provide `port`, `transport`, `plc_profile`, and a complete `SlmpTarget`. The library no longer chooses a destination port, TCP, a PLC family, or an own-station route when those values are missing.

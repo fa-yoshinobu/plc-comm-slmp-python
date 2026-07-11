@@ -944,14 +944,12 @@ def _default_regression_help_scripts() -> tuple[str, ...]:
         "slmp_open_items_recheck.py",
         "slmp_pending_live_verification.py",
         "slmp_manual_label_verification.py",
-        "slmp_special_device_probe.py",
         "slmp_read_soak.py",
         "slmp_mixed_read_load.py",
         "slmp_tcp_concurrency.py",
         "slmp_extended_device_device_recheck.py",
         "slmp_g_hg_extended_device_recheck.py",
         "slmp_g_hg_extended_device_coverage.py",
-        "slmp_mixed_block_compare.py",
     )
 
 

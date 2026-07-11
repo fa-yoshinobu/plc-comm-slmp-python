@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- Tooling: Removed legacy library-local discovery, monitor, mixed-block split,
+  and raw live-validation scripts that depended on APIs removed by the quality
+  overhaul. Canonical live evidence collection now belongs to the profile
+  repository and its profile-JSON-driven probe.
 - Library: Made connection `port`, `transport`, canonical `plc_profile`, and all four `SlmpTarget` route fields explicit requirements. Missing or invalid values now fail before transport.
 - Library: Removed request-level `series` overrides from normal device, remote-password, and long-device APIs. Wire format is derived only from the connection PLC profile.
 - Library: Removed the public low-level `request()` method and caller-selected 4E serial numbers. `raw_command(command, subcommand, payload)` remains the single maintainer raw entry point and allocates serials internally.
