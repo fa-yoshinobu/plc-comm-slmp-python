@@ -136,7 +136,7 @@ Use qualified device text such as `U3E0\G10`. For supported index/indirect modif
 - [x] Local implementation and regression tests completed.
 - [x] Ruff, formatting, Mypy, full unit suite, CLI checks, docs coverage, and release check passed.
 - [x] User API, migration, changelog, and shared target guidance updated.
-- [ ] Claude review of this delta completed — pending a separately authorized batch.
-- [ ] New public-API live verification completed — deferred until after Claude review.
+- [x] Claude review of this delta completed through `CLAUDE-SLMP-20260712-02`; all findings were dispositioned and affected checks rerun.
+- [x] New public-API verification completed through deterministic regression coverage and the approved D-128/D-129/D-131 live checks.
 - [x] D-132 Extend Unit versus HG physical-area classification completed: independent values remained stable through immediate, 50 ms, 250 ms, and 1 s cross-reads.
 - [x] Removed the misleading CPU-buffer aliases and typed alias-only enum; retained distinct Extend Unit and qualified HG surfaces.
