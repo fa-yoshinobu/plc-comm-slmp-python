@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Release: Bumped package metadata and `slmp.__version__` to `3.1.0`.
-- Tooling: Pinned canonical SLMP profile imports to immutable profile commit `e7e8f071ff1819a6b088b6a793e6f08029c54e38`.
+- Tooling: Pinned canonical SLMP profile imports to published profile tag `v2.0.0`.
 - Docs: Corrected the current wheel and source-distribution names in release guidance and removed hand-maintained page navigation from `GETTING_STARTED.md`.
 
 ### Fixed
