@@ -56,8 +56,14 @@ when a typed modification is required; otherwise pass the qualified string.
 | Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word` |
 
-The contiguous helpers and the random-read portion of `read_named` never
-split one call into multiple protocol requests. Counts above the applicable
+`write_named` emits exactly one random-write request. It rejects mixed
+bit/word command families and bit-in-word read-modify-write entries. The
+dedicated `write_bit_in_word` helper visibly performs the required read and
+write requests.
+
+The contiguous helpers, `read_named`, and `write_named` never split one call
+into multiple protocol requests. Named entries that require another command
+family are rejected before transport. Counts above the applicable
 single-request limit are rejected before transport. Applications that need
 larger logical ranges must issue explicit requests and define their own
 snapshot/version and partial-write handling.

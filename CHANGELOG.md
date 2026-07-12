@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### BREAKING
+- Library: `read_named` and `poll` now accept only one random-readable named batch, and reject routes that would require hidden follow-up requests. `write_named` likewise emits one random-write request or rejects the complete update set before transport.
 
 - Tooling: Removed legacy library-local discovery, monitor, mixed-block split,
   and raw live-validation scripts that depended on APIs removed by the quality
@@ -35,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Profile feature errors no longer append an internal bypass hint placeholder or the literal text `None`; normal error text reports only the profile, feature state, and available evidence.
 - Library: `raise_on_error` now accepts only actual Booleans in connection options, sync/async clients, and internal request overrides. Omission remains `True`; strings, numbers, null, and containers cannot silently change PLC end-code handling. Each request snapshots the effective policy before waiting or transport, so later mutation cannot change an in-flight response decision.
 - Library: The maintainer-only trace callback remains disabled by omission and now rejects non-callable values during sync/async client construction.
+- Library: `write_named` now emits exactly one protocol request. It batches compatible word/DWord or bit entries, rejects mixed command families, and rejects hidden bit-in-word read-modify-write; callers must use `write_bit_in_word` explicitly for that two-request operation.
+- Library: Typed and generic write APIs now reject strings, fractional integers, Boolean-as-numeric values, truthy bit values, and out-of-range integers before transport instead of converting, masking, wrapping, or saturating them.
 
 ### Changed
 
@@ -46,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: TCP connection setup now fails closed when required keepalive configuration cannot be applied. Sync sockets and async writers are closed before the failure is returned, and no partially configured connection is retained.
 - Tooling: Standardized every communicating CLI `--timeout` omission to 3 seconds; read-soak, mixed-load, and TCP-concurrency tools no longer select 5 seconds when the option is absent.
 - Library: Reset UDP transport state after timeout/cancellation so a delayed 3E response cannot be accepted by a later request.
+- Library: Close TCP or UDP transport after the send-only remote reset request, and close a UDP socket generation after any receive timeout or error, so residual 3E responses cannot be assigned to a later request.
+- Library: Empty named read/write/poll inputs are rejected, LZ modifiers accept only index 0 or 1, write-block error policy is snapshotted before transport, and the internal Q/L evidence CLI explicitly uses the maintainer profile bypass.
 - Tooling: Required explicit port and transport for every bundled CLI command that communicates with a PLC.
 - Tooling: The internal CLI probe client signature now also requires `transport`; direct internal construction can no longer infer TCP even when a command wrapper is bypassed.
 - Tooling: The internal CLI probe client now requires a complete `default_target`, and every communicating CLI plus the shared sample parser requires explicit `--network`, `--station`, `--module-io`, and `--multidrop` values instead of constructing an own-station route from omission.

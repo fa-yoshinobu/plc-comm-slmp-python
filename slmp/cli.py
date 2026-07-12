@@ -91,6 +91,7 @@ class SlmpClient(_StandardSlmpClient):
             monitoring_timer=monitoring_timer,
             raise_on_error=raise_on_error,
             _maintainer_trace_hook=trace_hook,
+            _maintainer_strict_profile=False,
         )
         if requested_series is not None:
             self.plc_series = PLCSeries(requested_series)

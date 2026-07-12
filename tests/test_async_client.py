@@ -156,6 +156,32 @@ async def test_async_request_monitoring_timer_rejects_invalid_override_before_tr
 
 
 @pytest.mark.asyncio
+async def test_async_remote_reset_closes_transport_in_same_serialized_exchange() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    client._reader = MagicMock()
+    client._writer = writer
+
+    await client.remote_reset()
+
+    writer.write.assert_called_once()
+    writer.drain.assert_awaited_once()
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+    assert client._reader is None
+    assert client._writer is None
+
+
+@pytest.mark.asyncio
 async def test_async_generic_device_bit_unit_is_required_and_must_be_boolean() -> None:
     client = AsyncSlmpClient(
         "127.0.0.1",
@@ -608,11 +634,10 @@ async def test_async_udp_read() -> None:
         timeout=0.1,
     )
     await cli.connect()
-    try:
-        with pytest.raises(SlmpError, match="UDP communication timeout"):
-            await cli.read_devices("D100", 1, bit_unit=False)
-    finally:
-        await cli.close()
+    with pytest.raises(SlmpError, match="UDP communication timeout"):
+        await cli.read_devices("D100", 1, bit_unit=False)
+    assert cli._udp_transport is None
+    assert cli._udp_protocol is None
 
 
 @pytest.mark.asyncio

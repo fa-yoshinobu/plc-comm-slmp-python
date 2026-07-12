@@ -331,14 +331,13 @@ class TestReadNamedSync(unittest.TestCase):
         result = read_named_sync(client, ["D0.0"])
         self.assertFalse(result["D0.0"])
 
-    def test_excluded_bit_device_falls_back_to_single_read(self):
+    def test_excluded_bit_device_is_rejected_before_transport(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-        client.read_devices.return_value = [True]
-        result = read_named_sync(client, ["TS100:BIT"])
-        self.assertTrue(result["TS100:BIT"])
+        with self.assertRaisesRegex(ValueError, "one random-read request"):
+            read_named_sync(client, ["TS100:BIT"])
         client.read_random.assert_not_called()
-        client.read_devices.assert_called_once_with(DeviceRef("TS", 100, "melsec:iq-r"), 1, bit_unit=True)
+        client.read_devices.assert_not_called()
 
     def test_plain_bit_devices_batch_as_random_word_reads(self):
         client = MagicMock()
@@ -378,7 +377,7 @@ class TestReadNamedSync(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only valid for word devices"):
             read_named_sync(client, ["M100.0"])
 
-    def test_long_timer_family_uses_helper_backed_reads(self):
+    def test_long_timer_helper_routes_are_rejected_before_transport(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         client.read_long_timer.side_effect = [
@@ -393,40 +392,12 @@ class TestReadNamedSync(unittest.TestCase):
             [True],
         ]
 
-        result = read_named_sync(
-            client,
-            [
-                "LTN10:D",
-                "LTS10:BIT",
-                "LTC10:BIT",
-                "LSTN20:D",
-                "LSTS20:BIT",
-                "LSTC20:BIT",
-                "LCN30:D",
-                "LCS30:BIT",
-                "LCC30:BIT",
-            ],
-        )
-
-        self.assertEqual(result["LTN10:D"], 0x00010002)
-        self.assertTrue(result["LTS10:BIT"])
-        self.assertFalse(result["LTC10:BIT"])
-        self.assertEqual(result["LSTN20:D"], 7)
-        self.assertFalse(result["LSTS20:BIT"])
-        self.assertTrue(result["LSTC20:BIT"])
-        self.assertEqual(result["LCN30:D"], 8)
-        self.assertTrue(result["LCS30:BIT"])
-        self.assertTrue(result["LCC30:BIT"])
-        client.read_random.assert_called_once_with(word_devices=[], dword_devices=[DeviceRef("LCN", 30, "melsec:iq-r")])
-        client.read_long_timer.assert_called_once_with(head_no=10, points=1)
-        client.read_long_retentive_timer.assert_called_once_with(head_no=20, points=1)
-        self.assertEqual(
-            client.read_devices.call_args_list,
-            [
-                unittest.mock.call(DeviceRef("LCS", 30, "melsec:iq-r"), 1, bit_unit=True),
-                unittest.mock.call(DeviceRef("LCC", 30, "melsec:iq-r"), 1, bit_unit=True),
-            ],
-        )
+        with self.assertRaisesRegex(ValueError, "one random-read request"):
+            read_named_sync(client, ["LTN10:D", "LTS10:BIT", "LCN30:D"])
+        client.read_random.assert_not_called()
+        client.read_long_timer.assert_not_called()
+        client.read_long_retentive_timer.assert_not_called()
+        client.read_devices.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -435,30 +406,69 @@ class TestReadNamedSync(unittest.TestCase):
 
 
 class TestWriteNamedSync(unittest.TestCase):
+    def test_empty_and_multi_request_named_writes_are_rejected_before_transport(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        with self.assertRaisesRegex(ValueError, "updates must not be empty"):
+            write_named_sync(client, {})
+        with self.assertRaisesRegex(ValueError, "cannot mix bit and word"):
+            write_named_sync(client, {"D0:U": 1, "M0:BIT": True})
+        client.write_random_words.assert_not_called()
+        client.write_random_bits.assert_not_called()
+
+    def test_typed_writes_reject_coercion_and_out_of_range_before_transport(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        cases = [
+            ("D0", "U", -1),
+            ("D0", "U", 0x10000),
+            ("D0", "U", True),
+            ("D0", "S", 0x8000),
+            ("D0", "D", 0x1_0000_0000),
+            ("D0", "L", -0x80000001),
+            ("D0", "F", float("inf")),
+            ("M0", "BIT", 1),
+        ]
+        for device, dtype, value in cases:
+            with self.subTest(dtype=dtype, value=value):
+                with self.assertRaises(ValueError):
+                    write_typed_sync(client, device, dtype, value)
+        client.write_devices.assert_not_called()
+        client.write_random_words.assert_not_called()
+
     def test_write_multiple(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         write_named_sync(client, {"D100:U": 1, "D200:U": 2})
-        self.assertEqual(client.write_devices.call_count, 2)
+        client.write_random_words.assert_called_once_with(
+            word_values=[
+                (DeviceRef("D", 100, "melsec:iq-r"), 1),
+                (DeviceRef("D", 200, "melsec:iq-r"), 2),
+            ],
+            dword_values=[],
+        )
 
     def test_write_float(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         write_named_sync(client, {"D100:F": 1.0})
-        raw = struct.pack("<f", 1.0)
-        expected = list(struct.unpack("<HH", raw))
-        client.write_devices.assert_called_once_with("D100", expected, bit_unit=False)
+        expected = struct.unpack("<I", struct.pack("<f", 1.0))[0]
+        client.write_random_words.assert_called_once_with(
+            word_values=[],
+            dword_values=[(DeviceRef("D", 100, "melsec:iq-r"), expected)],
+        )
 
     def test_write_bit_in_word(self):
         client = _make_sync_client([0x0000])
-        write_named_sync(client, {"D0.2": True})
-        client.write_devices.assert_called_once_with("D0", [0x0004], bit_unit=False)
+        with self.assertRaisesRegex(ValueError, "two-request operation is visible"):
+            write_named_sync(client, {"D0.2": True})
+        client.write_devices.assert_not_called()
 
     def test_write_direct_bit_device(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         write_named_sync(client, {"M100:BIT": True})
-        client.write_devices.assert_called_once_with("M100", [True], bit_unit=True)
+        client.write_random_bits.assert_called_once_with([(DeviceRef("M", 100, "melsec:iq-r"), True)])
 
     def test_write_bit_device_bit_suffix_raises(self):
         client = MagicMock()
@@ -471,12 +481,12 @@ class TestWriteNamedSync(unittest.TestCase):
         client.plc_profile = "melsec:iq-r"
         write_named_sync(client, {"LTN10:D": 1, "LSTN20:D": 2, "LCN30:D": 3})
 
-        self.assertEqual(
-            client.write_random_words.call_args_list,
-            [
-                unittest.mock.call(dword_values={DeviceRef("LTN", 10, "melsec:iq-r"): 1}),
-                unittest.mock.call(dword_values={DeviceRef("LSTN", 20, "melsec:iq-r"): 2}),
-                unittest.mock.call(dword_values={DeviceRef("LCN", 30, "melsec:iq-r"): 3}),
+        client.write_random_words.assert_called_once_with(
+            word_values=[],
+            dword_values=[
+                (DeviceRef("LTN", 10, "melsec:iq-r"), 1),
+                (DeviceRef("LSTN", 20, "melsec:iq-r"), 2),
+                (DeviceRef("LCN", 30, "melsec:iq-r"), 3),
             ],
         )
 
@@ -495,16 +505,15 @@ class TestWriteNamedSync(unittest.TestCase):
             },
         )
 
-        self.assertEqual(
-            client.write_random_bits.call_args_list,
+        client.write_random_bits.assert_called_once_with(
             [
-                unittest.mock.call({DeviceRef("LTC", 10, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LTS", 10, "melsec:iq-r"): False}),
-                unittest.mock.call({DeviceRef("LSTC", 20, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LSTS", 20, "melsec:iq-r"): False}),
-                unittest.mock.call({DeviceRef("LCC", 30, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LCS", 30, "melsec:iq-r"): False}),
-            ],
+                (DeviceRef("LTC", 10, "melsec:iq-r"), True),
+                (DeviceRef("LTS", 10, "melsec:iq-r"), False),
+                (DeviceRef("LSTC", 20, "melsec:iq-r"), True),
+                (DeviceRef("LSTS", 20, "melsec:iq-r"), False),
+                (DeviceRef("LCC", 30, "melsec:iq-r"), True),
+                (DeviceRef("LCS", 30, "melsec:iq-r"), False),
+            ]
         )
         client.write_devices.assert_not_called()
 
@@ -601,6 +610,10 @@ class TestPollSync(unittest.TestCase):
 
 
 class TestReadPlan(unittest.TestCase):
+    def test_empty_read_plan_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "addresses must not be empty"):
+            _compile_read_plan([], address_profile="melsec:iq-r")
+
     def test_compile_read_plan_batches_word_and_dword_addresses(self):
         plan = _compile_read_plan(
             ["D100:U", "D100.3", "D101:F", "M10:BIT"],
@@ -613,36 +626,13 @@ class TestReadPlan(unittest.TestCase):
         self.assertEqual(plan.entries[3].dtype, "BIT_IN_WORD")
         self.assertEqual(plan.entries[3].bit_index, 10)
 
-    def test_compile_read_plan_keeps_risky_bit_families_on_direct_read(self):
-        plan = _compile_read_plan(
-            ["TS10:BIT", "TC10:BIT", "STS10:BIT", "STC10:BIT", "CS10:BIT", "CC10:BIT", "DX10:BIT", "DY10:BIT"],
-            address_profile="melsec:iq-r",
-        )
-        self.assertEqual(plan.word_devices, ())
-        self.assertEqual(plan.dword_devices, ())
-        self.assertTrue(all(entry.batch_kind is None for entry in plan.entries))
-        self.assertTrue(all(entry.dtype == "BIT" for entry in plan.entries))
+    def test_compile_read_plan_rejects_direct_read_fallback(self):
+        with self.assertRaisesRegex(ValueError, "one random-read request"):
+            _compile_read_plan(["TS10:BIT", "DX10:BIT"], address_profile="melsec:iq-r")
 
-    def test_compile_read_plan_marks_long_timer_helper_reads_and_long_currents(self):
-        plan = _compile_read_plan(
-            ["LTN10:D", "LTS10:BIT", "LTC10:BIT", "LSTN20:D", "LCN30:D", "LCS30:BIT", "LCC30:BIT"],
-            address_profile="melsec:iq-r",
-        )
-
-        self.assertEqual(plan.word_devices, ())
-        self.assertEqual(plan.dword_devices, (DeviceRef("LCN", 30, "melsec:iq-r"),))
-        self.assertEqual(
-            [(entry.address, entry.dtype, entry.batch_kind) for entry in plan.entries],
-            [
-                ("LTN10:D", "D", "LONG_TIMER"),
-                ("LTS10:BIT", "BIT", "LONG_TIMER"),
-                ("LTC10:BIT", "BIT", "LONG_TIMER"),
-                ("LSTN20:D", "D", "LONG_TIMER"),
-                ("LCN30:D", "D", "DWORD"),
-                ("LCS30:BIT", "BIT", "LONG_TIMER"),
-                ("LCC30:BIT", "BIT", "LONG_TIMER"),
-            ],
-        )
+    def test_compile_read_plan_rejects_long_timer_helper_routes(self):
+        with self.assertRaisesRegex(ValueError, "one random-read request"):
+            _compile_read_plan(["LTN10:D", "LTS10:BIT", "LCN30:D"], address_profile="melsec:iq-r")
 
 
 class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
@@ -769,13 +759,15 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
     async def test_write_multiple(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-
-        async def _write(*a, **kw):
-            pass
-
-        client.write_devices = MagicMock(side_effect=lambda *a, **kw: _make_coro(None))
+        client.write_random_words = AsyncMock()
         await write_named(client, {"D100:U": 1, "D200:U": 2})
-        self.assertEqual(client.write_devices.call_count, 2)
+        client.write_random_words.assert_awaited_once_with(
+            word_values=[
+                (DeviceRef("D", 100, "melsec:iq-r"), 1),
+                (DeviceRef("D", 200, "melsec:iq-r"), 2),
+            ],
+            dword_values=[],
+        )
 
     async def test_write_named_requires_explicit_long_current_dtype(self):
         client = MagicMock()
@@ -786,12 +778,12 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
 
         await write_named(client, {"LTN10:D": 1, "LSTN20:D": 2, "LCN30:D": 3})
 
-        self.assertEqual(
-            client.write_random_words.call_args_list,
-            [
-                unittest.mock.call(dword_values={DeviceRef("LTN", 10, "melsec:iq-r"): 1}),
-                unittest.mock.call(dword_values={DeviceRef("LSTN", 20, "melsec:iq-r"): 2}),
-                unittest.mock.call(dword_values={DeviceRef("LCN", 30, "melsec:iq-r"): 3}),
+        client.write_random_words.assert_called_once_with(
+            word_values=[],
+            dword_values=[
+                (DeviceRef("LTN", 10, "melsec:iq-r"), 1),
+                (DeviceRef("LSTN", 20, "melsec:iq-r"), 2),
+                (DeviceRef("LCN", 30, "melsec:iq-r"), 3),
             ],
         )
 
@@ -814,16 +806,15 @@ class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-        self.assertEqual(
-            client.write_random_bits.call_args_list,
+        client.write_random_bits.assert_called_once_with(
             [
-                unittest.mock.call({DeviceRef("LTC", 10, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LTS", 10, "melsec:iq-r"): False}),
-                unittest.mock.call({DeviceRef("LSTC", 20, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LSTS", 20, "melsec:iq-r"): False}),
-                unittest.mock.call({DeviceRef("LCC", 30, "melsec:iq-r"): True}),
-                unittest.mock.call({DeviceRef("LCS", 30, "melsec:iq-r"): False}),
-            ],
+                (DeviceRef("LTC", 10, "melsec:iq-r"), True),
+                (DeviceRef("LTS", 10, "melsec:iq-r"), False),
+                (DeviceRef("LSTC", 20, "melsec:iq-r"), True),
+                (DeviceRef("LSTS", 20, "melsec:iq-r"), False),
+                (DeviceRef("LCC", 30, "melsec:iq-r"), True),
+                (DeviceRef("LCS", 30, "melsec:iq-r"), False),
+            ]
         )
         client.write_devices.assert_not_called()
 

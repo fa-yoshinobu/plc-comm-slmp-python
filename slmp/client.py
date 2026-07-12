@@ -930,6 +930,7 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
+        effective_raise_on_error = self.raise_on_error
         resp = self._request(
             request.command,
             subcommand=request.subcommand,
@@ -938,7 +939,7 @@ class SlmpClient:
         )
         if resp.end_code == 0:
             return
-        if self.raise_on_error:
+        if effective_raise_on_error:
             _raise_response_error(resp, command=request.command, subcommand=request.subcommand)
 
     def read_long_timer(
@@ -1441,21 +1442,25 @@ class SlmpClient:
                     monitoring_timer=monitor,
                 )
             )
-            return
-        self._sock.send(frame)
-        self._emit_trace(
-            _SlmpTraceFrame(
-                serial=serial_no,
-                command=int(command),
-                subcommand=subcommand,
-                request_data=data,
-                request_frame=frame,
-                response_frame=b"",
-                response_end_code=None,
-                target=target_info,
-                monitoring_timer=monitor,
+        else:
+            self._sock.send(frame)
+            self._emit_trace(
+                _SlmpTraceFrame(
+                    serial=serial_no,
+                    command=int(command),
+                    subcommand=subcommand,
+                    request_data=data,
+                    request_frame=frame,
+                    response_frame=b"",
+                    response_end_code=None,
+                    target=target_info,
+                    monitoring_timer=monitor,
+                )
             )
-        )
+        # A send-only command can still produce an NG response. 3E has no
+        # serial field, so retaining this transport could assign that response
+        # to the next request. Reconnection is therefore mandatory.
+        self.close()
 
     def _next_serial(self) -> int:
         serial = self._serial & 0xFFFF
@@ -1478,11 +1483,15 @@ class SlmpClient:
                 self.close()
                 raise
 
-        self._sock.send(frame)
-        while True:
-            raw = self._receive_frame()
-            if _response_matches_serial(raw, expected_serial):
-                return raw
+        try:
+            self._sock.send(frame)
+            while True:
+                raw = self._receive_frame()
+                if _response_matches_serial(raw, expected_serial):
+                    return raw
+        except (OSError, SlmpError):
+            self.close()
+            raise
 
     def _receive_frame(self, *, timeout: float | None = None) -> bytes:
         self.connect()
@@ -1496,8 +1505,7 @@ class SlmpClient:
                 return _recv_tcp_frame(sock, frame_type=self.frame_type)
             return sock.recv(65535)
         except (OSError, SlmpError):
-            if self.transport == "tcp":
-                self.close()
+            self.close()
             raise
         finally:
             if timeout is not None and self._sock is sock:

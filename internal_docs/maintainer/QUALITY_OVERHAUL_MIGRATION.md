@@ -66,11 +66,31 @@ Specify choices that change the command meaning or destination: `bit_unit`, CPU-
 
 Replace chunked helpers and automatic mixed-block splitting with explicit application-controlled requests. If a logical read spans requests, the application must define snapshot/version checks. If a logical write spans requests, it must define partial-success and retry handling.
 
+Named reads, polling cycles, and named writes are also single-request-or-reject. A named read/poll accepts only entries that fit one random-read request. A named write accepts one word/DWord random family or one random-bit family. Other routes must be called explicitly by the application.
+
 Random read may omit either the word or DWord device collection. At least one valid device is required across both categories; all-empty and invalid supplied collections fail before transport. The result always contains both mappings, with the unused category represented by an empty mapping. The same rule applies to semantic Extended Device random reads.
 
 Random word write follows the same category-omission rule for word and DWord value collections. At least one valid address/value pair is required; all-empty, malformed, invalid, duplicate, and overlapping destinations fail before transport. Random bit write remains a separate API with one required bit-value collection.
 
 Block read and write may omit either the word or bit block collection. At least one valid block is required; all-empty, malformed, invalid-unit, out-of-limit, and overlapping write ranges fail before transport. A block-read result always contains both block lists, with the unused category represented by an empty list. One mixed call remains one protocol request.
+
+`write_named` no longer performs one hidden request per entry. Compatible
+word/DWord entries are compiled to one random-word write and compatible bit
+entries to one random-bit write. Mixing those command families fails before
+transport. Bit-in-word entries are not accepted because they require a
+read-modify-write pair; maintainers and applications must call
+`write_bit_in_word` explicitly and account for its two-request race window.
+
+All numeric write builders require exact integers in their wire range and all
+bit builders require `bool` or the exact integers 0/1. Typed helpers are
+stricter: `BIT` requires `bool`; U/S/D/L enforce their semantic ranges; F
+requires a finite value representable as float32. No write path masks,
+truncates, parses, or applies truthiness to an invalid value.
+
+Send-only remote reset always invalidates the current transport after the
+frame is transmitted. UDP receive timeout/error also invalidates the socket
+generation. These are response-ownership requirements: a possible residual
+3E response must never be eligible for the next request.
 
 ## Extended Device access
 

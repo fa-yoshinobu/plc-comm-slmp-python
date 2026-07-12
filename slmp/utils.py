@@ -16,6 +16,8 @@ from .core import (
     SlmpTarget,
     _normalize_plc_profile_hint,
     _require_explicit_plc_profile_for_xy,
+    _require_write_u16,
+    _require_write_u32,
     _resolve_connection_profile,
     _resolve_port,
     _validate_direct_dword_read_device,
@@ -260,15 +262,15 @@ async def write_typed(
         await _write_long_family_value(client, ref, key, value, long_read)
         return
     if key == "BIT":
-        await client.write_devices(device, [bool(value)], bit_unit=True)
+        await client.write_devices(device, [_require_typed_bool(value)], bit_unit=True)
         return
     if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         await client.write_random_words(
-            dword_values={ref: int(value) & 0xFFFFFFFF},
+            dword_values={ref: _encode_typed_dword(value, key)},
         )
         return
     if key not in {"D", "L", "F"}:
-        await client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
+        await client.write_devices(device, [_encode_typed_word(value, key)], bit_unit=False)
         return
     await client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
@@ -324,15 +326,15 @@ def write_typed_sync(
         _write_long_family_value_sync(client, ref, key, value, long_read)
         return
     if key == "BIT":
-        client.write_devices(device, [bool(value)], bit_unit=True)
+        client.write_devices(device, [_require_typed_bool(value)], bit_unit=True)
         return
     if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         client.write_random_words(
-            dword_values={ref: int(value) & 0xFFFFFFFF},
+            dword_values={ref: _encode_typed_dword(value, key)},
         )
         return
     if key not in {"D", "L", "F"}:
-        client.write_devices(device, [int(value) & 0xFFFF], bit_unit=False)
+        client.write_devices(device, [_encode_typed_word(value, key)], bit_unit=False)
         return
     client.write_devices(device, _encode_dword_words(value, key), bit_unit=False)
 
@@ -455,18 +457,11 @@ async def write_named(
     ``D50.3`` updates one bit inside one word. Direct bit devices such as
     ``M1000`` are normalized to ``"BIT"`` writes.
     """
-    address_profile = _client_address_profile(client)
-    for address, value in updates.items():
-        base, dtype, bit_idx = _parse_address(address)
-        if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
-            await write_bit_in_word(client, base, _require_bit_in_word_index(address, bit_idx), bool(value))
-        else:
-            device = _parse_device_for_address_profile(base, address_profile)
-            resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
-            _validate_device_dtype(address, device, resolved_dtype)
-            _validate_long_timer_entry(address, device, resolved_dtype)
-            await write_typed(client, base, resolved_dtype, value)
+    word_values, dword_values, bit_values = _compile_named_write(updates, _client_address_profile(client))
+    if bit_values:
+        await client.write_random_bits(bit_values)
+    else:
+        await client.write_random_words(word_values=word_values, dword_values=dword_values)
 
 
 def write_named_sync(
@@ -474,18 +469,48 @@ def write_named_sync(
     updates: dict[str, int | float | bool],
 ) -> None:
     """Synchronously write a mixed logical snapshot by address string."""
-    address_profile = _client_address_profile(client)
+    word_values, dword_values, bit_values = _compile_named_write(updates, _client_address_profile(client))
+    if bit_values:
+        client.write_random_bits(bit_values)
+    else:
+        client.write_random_words(word_values=word_values, dword_values=dword_values)
+
+
+def _compile_named_write(
+    updates: dict[str, int | float | bool],
+    address_profile: object,
+) -> tuple[list[tuple[DeviceRef, int]], list[tuple[DeviceRef, int]], list[tuple[DeviceRef, bool]]]:
+    """Compile one named write into exactly one protocol command family."""
+    if not updates:
+        raise ValueError("updates must not be empty")
+    word_values: list[tuple[DeviceRef, int]] = []
+    dword_values: list[tuple[DeviceRef, int]] = []
+    bit_values: list[tuple[DeviceRef, bool]] = []
     for address, value in updates.items():
         base, dtype, bit_idx = _parse_address(address)
+        device = _parse_device_for_address_profile(base, address_profile)
         if dtype == "BIT_IN_WORD":
-            _validate_bit_in_word_target(address, _parse_device_for_address_profile(base, address_profile))
-            write_bit_in_word_sync(client, base, _require_bit_in_word_index(address, bit_idx), bool(value))
+            _validate_bit_in_word_target(address, device)
+            raise ValueError(
+                f"Address '{address}' requires read-modify-write and is not supported by write_named; "
+                "call write_bit_in_word explicitly so the two-request operation is visible"
+            )
+        resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
+        _validate_device_dtype(address, device, resolved_dtype)
+        _validate_long_timer_entry(address, device, resolved_dtype)
+        if resolved_dtype == "BIT":
+            bit_values.append((device, _require_typed_bool(value)))
+        elif resolved_dtype in _WORD_DTYPES:
+            word_values.append((device, _encode_typed_word(value, resolved_dtype)))
+        elif resolved_dtype == "F":
+            dword_values.append((device, _encode_typed_float32(value)))
         else:
-            device = _parse_device_for_address_profile(base, address_profile)
-            resolved_dtype = _resolve_dtype_for_address(address, device, dtype, bit_idx)
-            _validate_device_dtype(address, device, resolved_dtype)
-            _validate_long_timer_entry(address, device, resolved_dtype)
-            write_typed_sync(client, base, resolved_dtype, value)
+            dword_values.append((device, _encode_typed_dword(value, resolved_dtype)))
+    if bit_values and (word_values or dword_values):
+        raise ValueError(
+            "write_named cannot mix bit and word/dword destinations because that requires multiple protocol requests"
+        )
+    return word_values, dword_values, bit_values
 
 
 # ---------------------------------------------------------------------------
@@ -711,10 +736,10 @@ async def _write_long_family_value(
     _, role = long_read
     if role == "current":
         await client.write_random_words(
-            dword_values={device: int(value) & 0xFFFFFFFF},
+            dword_values={device: _encode_typed_dword(value, dtype)},
         )
         return
-    await client.write_random_bits({device: bool(value)})
+    await client.write_random_bits({device: _require_typed_bool(value)})
 
 
 def _write_long_family_value_sync(
@@ -727,10 +752,47 @@ def _write_long_family_value_sync(
     _, role = long_read
     if role == "current":
         client.write_random_words(
-            dword_values={device: int(value) & 0xFFFFFFFF},
+            dword_values={device: _encode_typed_dword(value, dtype)},
         )
         return
-    client.write_random_bits({device: bool(value)})
+    client.write_random_bits({device: _require_typed_bool(value)})
+
+
+def _require_typed_bool(value: object) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"BIT value must be bool: {value!r}")
+    return value
+
+
+def _require_typed_int(value: object, *, minimum: int, maximum: int, dtype: str) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise ValueError(f"{dtype} value must be an integer in range {minimum}..{maximum}: {value!r}")
+    return value
+
+
+def _encode_typed_word(value: object, dtype: str) -> int:
+    if dtype == "S":
+        signed = _require_typed_int(value, minimum=-0x8000, maximum=0x7FFF, dtype=dtype)
+        return cast(int, struct.unpack("<H", struct.pack("<h", signed))[0])
+    return _require_write_u16(value, f"{dtype} value")
+
+
+def _encode_typed_dword(value: object, dtype: str) -> int:
+    if dtype == "L":
+        signed = _require_typed_int(value, minimum=-0x80000000, maximum=0x7FFFFFFF, dtype=dtype)
+        return cast(int, struct.unpack("<I", struct.pack("<i", signed))[0])
+    if dtype == "D":
+        return _require_write_u32(value, "D value")
+    raise ValueError(f"{dtype} is not an integer dword dtype")
+
+
+def _encode_typed_float32(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"F value must be a finite int or float: {value!r}")
+    try:
+        return cast(int, struct.unpack("<I", struct.pack("<f", value))[0])
+    except (OverflowError, struct.error) as error:
+        raise ValueError(f"F value is outside the finite float32 range: {value!r}") from error
 
 
 def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
@@ -823,6 +885,8 @@ def _compile_read_plan(
     *,
     address_profile: object,
 ) -> _ReadPlan:
+    if not addresses:
+        raise ValueError("addresses must not be empty")
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
     dword_devices: list[DeviceRef] = []
@@ -880,6 +944,13 @@ def _compile_read_plan(
 
         entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind, long_timer_read))
 
+    unsupported = [entry.address for entry in entries if entry.batch_kind not in {"WORD", "DWORD"}]
+    if unsupported:
+        raise ValueError(
+            "read_named accepts only addresses that fit one random-read request; "
+            f"use explicit read calls for {unsupported}"
+        )
+
     return _ReadPlan(tuple(entries), tuple(word_devices), tuple(dword_devices))
 
 
@@ -909,11 +980,9 @@ def _decode_word_pair_value(words: list[int] | list[bool], dtype: str) -> int | 
 
 def _encode_dword_words(value: int | float, dtype: str) -> list[int]:
     if dtype == "F":
-        raw = struct.pack("<f", float(value))
-    elif dtype == "L":
-        raw = struct.pack("<i", int(value))
+        raw = struct.pack("<I", _encode_typed_float32(value))
     else:
-        raw = struct.pack("<I", int(value))
+        raw = struct.pack("<I", _encode_typed_dword(value, dtype))
     return list(struct.unpack("<HH", raw))
 
 
@@ -933,8 +1002,8 @@ def _bool_values(values: list[int] | list[bool]) -> list[bool]:
 
 def _pack_dword_words(values: list[int]) -> list[int]:
     words: list[int] = []
-    for value in values:
-        words.extend(struct.unpack("<HH", struct.pack("<I", int(value) & 0xFFFFFFFF)))
+    for index, value in enumerate(values):
+        words.extend(struct.unpack("<HH", struct.pack("<I", _require_write_u32(value, f"values[{index}]"))))
     return words
 
 
@@ -1175,7 +1244,11 @@ async def write_words_single_request(
     write operation.
     """
 
-    await client.write_devices(device, [int(value) & 0xFFFF for value in values], bit_unit=False)
+    await client.write_devices(
+        device,
+        [_require_write_u16(value, f"values[{index}]") for index, value in enumerate(values)],
+        bit_unit=False,
+    )
 
 
 async def write_dwords_single_request(
@@ -1246,7 +1319,11 @@ def write_words_single_request_sync(
 ) -> None:
     """Synchronously write contiguous 16-bit values using one protocol request."""
 
-    client.write_devices(device, [int(value) & 0xFFFF for value in values], bit_unit=False)
+    client.write_devices(
+        device,
+        [_require_write_u16(value, f"values[{index}]") for index, value in enumerate(values)],
+        bit_unit=False,
+    )
 
 
 def write_dwords_single_request_sync(

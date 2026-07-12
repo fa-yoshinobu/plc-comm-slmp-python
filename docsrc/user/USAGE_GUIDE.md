@@ -10,7 +10,7 @@
 | `read_typed` | `async def read_typed(client, device, dtype) -> int | float | bool` | Read one typed value. |
 | `write_typed` | `async def write_typed(client, device, dtype, value: int | float | bool) -> None` | Write one typed value. |
 | `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed snapshot. |
-| `write_named` | `async def write_named(client, updates) -> None` | Write mixed values. |
+| `write_named` | `async def write_named(client, updates) -> None` | Write one word/DWord family or one bit family in one random-write request. |
 | `read_words_single_request` | `async def read_words_single_request(client, device, count) -> list[int]` | Read one contiguous 16-bit range in one request. |
 | `read_dwords_single_request` | `async def read_dwords_single_request(client, device, count) -> list[int]` | Read one contiguous 32-bit range in one request. |
 | `write_bit_in_word` | `async def write_bit_in_word(client, device, bit_index, value) -> None` | Set or clear one bit in a word device. |
@@ -22,10 +22,17 @@
 
 The synchronous helpers use the same names with `_sync`.
 
-`read_named` sends at most one random-read request for its batchable word and
-dword addresses. More than 255 word addresses or 255 dword addresses is
-rejected before transport; the library does not divide one result across
-multiple request times.
+`read_named` sends exactly one random-read request. Every entry must be
+representable in that request; direct/block/long-timer fallback routes and
+oversized batches are rejected before transport. Use the explicit typed or
+long-device API when another command family is required.
+
+`write_named` also has a one-request contract. Word and DWord entries may be
+combined in one random-word request, or bit entries may be combined in one
+random-bit request. Mixing those command families is rejected. `.n`
+bit-in-word updates are rejected by `write_named`; call `write_bit_in_word`
+explicitly because that helper is an intentional read-modify-write operation
+consisting of one read followed by one write.
 
 ## Connection
 
@@ -485,7 +492,7 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, SlmpTarget
 async def main() -> None:
     options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
     async with await open_and_connect(options) as client:
-        values = await read_named(client, ["LTN0:D", "LCN0:L"])
+        values = await read_named(client, ["LCN0:L", "LZ0:D"])
         print(f"values={values}")
 
 
@@ -507,3 +514,12 @@ asyncio.run(main())
 | `.n` | `D50.3` | One bit inside a word | Hex bit index from `0` to `F`. |
 
 Named addresses used with `read_named`, `write_named`, and `poll` must include the intended type, for example `D100:U` or `M1000:BIT`.
+Empty named read, write, and polling collections are rejected. Numeric write
+values must have the exact documented type and range; values are never
+truncated, wrapped, parsed from strings, or converted by truthiness.
+
+`remote_reset` returns after the complete request frame is sent and then
+closes the transport. This prevents a possible reset NG response from being
+mistaken for the next 3E response. Open a new connection and verify the PLC
+state before continuing; the return value confirms transmission, not PLC
+execution.

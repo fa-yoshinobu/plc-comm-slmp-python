@@ -187,6 +187,7 @@ class _SendRecvSocket(_RecvIntoSocket):
         super().__init__(chunks)
         self.sent: list[bytes] = []
         self.timeout: float | None = None
+        self.closed = False
 
     def sendall(self, data: bytes) -> None:
         self.sent.append(bytes(data))
@@ -196,6 +197,30 @@ class _SendRecvSocket(_RecvIntoSocket):
 
     def settimeout(self, timeout: float | None) -> None:
         self.timeout = timeout
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _TimeoutUdpSocket:
+    def __init__(self) -> None:
+        self.closed = False
+        self.timeout: float | None = None
+
+    def send(self, data: bytes) -> int:
+        return len(data)
+
+    def recv(self, size: int) -> bytes:
+        raise TimeoutError("timed out")
+
+    def gettimeout(self) -> float | None:
+        return self.timeout
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def _build_3e_response(data: bytes, *, end_code: int = 0) -> bytes:
@@ -432,6 +457,46 @@ class TestReceiveHelpers(unittest.TestCase):
                     client.write_random_words_ext(word_values=invalid)  # type: ignore[arg-type]
         self.assertEqual(len(client.requests), request_count)
 
+    def test_write_values_reject_coercion_and_wrapping_before_transport(self) -> None:
+        client = FakeClient()
+        invalid_words = (-1, 0x10000, 1.5, "1", True, object())
+        for value in invalid_words:
+            with self.subTest(path="direct-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_devices("D0", [value], bit_unit=False)  # type: ignore[list-item]
+            with self.subTest(path="random-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_random_words(word_values=[("D0", value)])  # type: ignore[list-item]
+            with self.subTest(path="block-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_block(word_blocks=[("D0", [value])])  # type: ignore[list-item]
+        for value in ("false", "0", 2, -1, 0.5, object()):
+            with self.subTest(path="direct-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_devices("M0", [value], bit_unit=True)  # type: ignore[list-item]
+            with self.subTest(path="random-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_random_bits([("M0", value)])  # type: ignore[list-item]
+        for value in (-1, 0x1_0000_0000, 1.5, "1", True):
+            with self.subTest(path="dword", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_dwords("D0", [value])  # type: ignore[list-item]
+        self.assertEqual(client.requests, [])
+
+    def test_random_and_block_writes_reject_duplicate_or_overlapping_destinations(self) -> None:
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "duplicate destination"):
+            client.write_random_words(word_values=[("D0", 1), ("D0", 2)])
+        with self.assertRaisesRegex(ValueError, "overlapping word/dword"):
+            client.write_random_words(word_values=[("D1", 1)], dword_values=[("D0", 2)])
+        with self.assertRaisesRegex(ValueError, "duplicate bit"):
+            client.write_random_bits([("M0", True), ("M0", False)])
+        with self.assertRaisesRegex(ValueError, "overlapping word destination range"):
+            client.write_block(word_blocks=[("D0", [1, 2]), ("D1", [3])])
+        with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
+            client.write_block(word_blocks=[("M0", [1])], bit_blocks=[("M0", [0])])
+        self.assertEqual(client.requests, [])
+
     def test_block_access_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
         client = FakeClient()
 
@@ -461,6 +526,24 @@ class TestReceiveHelpers(unittest.TestCase):
                 with self.assertRaises((TypeError, ValueError)):
                     client.write_block(word_blocks=invalid)  # type: ignore[arg-type]
         self.assertEqual(len(client.requests), request_count)
+
+    def test_write_block_snapshots_raise_policy_before_exchange(self) -> None:
+        client = FakeClient()
+        client.raise_on_error = True
+
+        def response(*args: object, **kwargs: object) -> SlmpResponse:
+            client.raise_on_error = False
+            return SlmpResponse(
+                serial=0,
+                target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+                end_code=0xC051,
+                data=b"",
+                raw=b"",
+            )
+
+        with patch.object(client, "_request", side_effect=response):
+            with self.assertRaises(SlmpError):
+                client.write_block(word_blocks=[("D0", [1])])
 
     def test_recv_exact_prefers_recv_into(self) -> None:
         sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
@@ -1212,6 +1295,18 @@ class TestCodec(unittest.TestCase):
 
 class TestCli(unittest.TestCase):
     """TestCli class."""
+
+    def test_internal_cli_probe_uses_explicit_maintainer_profile_bypass(self) -> None:
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        client = cli.SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            plc_series=PLCSeries.QL,
+            default_target=target,
+        )
+        self.assertEqual(client.plc_profile, "melsec:qnu")
+        self.assertFalse(client._strict_profile)  # type: ignore[attr-defined]
 
     def test_internal_cli_client_requires_explicit_transport(self) -> None:
         """The CLI probe client must not infer TCP when transport is omitted."""
@@ -2346,6 +2441,9 @@ class TestDeviceApi(unittest.TestCase):
             SlmpIndexZ(True)  # type: ignore[arg-type]
         with self.assertRaisesRegex(ValueError, "must be an integer"):
             SlmpIndexLz(1.5)  # type: ignore[arg-type]
+        self.assertEqual(SlmpIndexLz(1).index, 1)
+        with self.assertRaisesRegex(ValueError, r"0\.\.1"):
+            SlmpIndexLz(2)
         self.assertEqual(client.last_request[2][:2], b"\x04\x40")
 
         client.read_devices_ext(
@@ -2357,7 +2455,7 @@ class TestDeviceApi(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "LZ register mode"):
             client.read_devices_ext(
-                SlmpExtendedDevice(r"U1\D100", SlmpIndexLz(2)),
+                SlmpExtendedDevice(r"U1\D100", SlmpIndexLz(1)),
                 1,
                 bit_unit=False,
             )
@@ -2837,6 +2935,40 @@ class TestDeviceApi(unittest.TestCase):
             client.remote_reset(expect_response=True)  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
             client.remote_reset(subcommand=0x0001)  # type: ignore[call-arg]
+
+    def test_remote_reset_send_only_closes_transport_before_next_request(self) -> None:
+        sock = _SendRecvSocket([])
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        client.remote_reset()
+
+        self.assertEqual(len(sock.sent), 1)
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
+
+    def test_udp_timeout_discards_socket_generation(self) -> None:
+        sock = _TimeoutUdpSocket()
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="udp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaises(socket.timeout):
+            client.read_devices("D0", 1, bit_unit=False)
+
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_read_devices_ext(self) -> None:
         """Test test_read_devices_ext."""

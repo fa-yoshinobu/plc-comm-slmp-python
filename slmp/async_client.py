@@ -239,11 +239,7 @@ class AsyncSlmpClient:
             if self.transport_type == "tcp":
                 await self._close_tcp_unlocked()
             else:
-                if self._udp_transport is None:
-                    return
-                self._udp_transport.close()
-                self._udp_transport = None
-                self._udp_protocol = None
+                self._close_udp_unlocked()
 
     async def _close_tcp_unlocked(self) -> None:
         writer = self._writer
@@ -256,6 +252,13 @@ class AsyncSlmpClient:
             await writer.wait_closed()
         except Exception:
             pass
+
+    def _close_udp_unlocked(self) -> None:
+        transport = self._udp_transport
+        self._udp_transport = None
+        self._udp_protocol = None
+        if transport is not None:
+            transport.close()
 
     async def __aenter__(self) -> AsyncSlmpClient:
         """Enter the async context manager."""
@@ -753,6 +756,7 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
+        effective_raise_on_error = self.raise_on_error
         resp = await self._request(
             request.command,
             subcommand=request.subcommand,
@@ -761,7 +765,7 @@ class AsyncSlmpClient:
         )
         if resp.end_code == 0:
             return
-        if self.raise_on_error:
+        if effective_raise_on_error:
             _raise_response_error(resp, command=request.command, subcommand=request.subcommand)
 
     # --------------------
@@ -1089,9 +1093,11 @@ class AsyncSlmpClient:
                 assert self._writer is not None
                 self._writer.write(frame)
                 await self._writer.drain()
+                await self._close_tcp_unlocked()
             else:
                 assert self._udp_transport is not None
                 self._udp_transport.sendto(frame)
+                self._close_udp_unlocked()
 
         await self._emit_trace(
             _SlmpTraceFrame(
@@ -1106,6 +1112,9 @@ class AsyncSlmpClient:
                 monitoring_timer=monitor,
             )
         )
+        # A send-only command can still produce an NG response. 3E has no
+        # serial field, so retaining this transport could assign that response
+        # to the next request. Reconnection is therefore mandatory.
 
     async def _send_and_receive(self, frame: bytes) -> bytes:
         """Send a frame and receive the response."""
@@ -1137,6 +1146,8 @@ class AsyncSlmpClient:
             except BaseException:
                 if self.transport_type == "tcp":
                     await self._close_tcp_unlocked()
+                else:
+                    self._close_udp_unlocked()
                 raise
 
     async def _receive_frame(self) -> bytes:

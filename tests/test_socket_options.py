@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from slmp._socket_options import configure_tcp_keepalive
@@ -59,3 +60,15 @@ def test_tcp_connect_closes_socket_when_required_keepalive_setup_fails() -> None
     raw_socket.close.assert_called_once_with()
     raw_socket.connect.assert_not_called()
     assert client._sock is None
+
+
+def test_keepalive_without_idle_configuration_support_fails_closed() -> None:
+    captured = _CaptureSocket()
+    unsupported_socket_module = SimpleNamespace(SOL_SOCKET=socket.SOL_SOCKET, SO_KEEPALIVE=socket.SO_KEEPALIVE)
+    with patch("slmp._socket_options.socket", unsupported_socket_module):
+        try:
+            configure_tcp_keepalive(captured, idle_seconds=30)
+        except OSError as error:
+            assert "cannot configure" in str(error)
+        else:  # pragma: no cover - protects the fail-closed contract
+            raise AssertionError("missing keepalive idle support was accepted")

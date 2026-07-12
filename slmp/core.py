@@ -571,8 +571,9 @@ class SlmpIndexLz:
 
     def __post_init__(self) -> None:
         if isinstance(self.index, bool) or not isinstance(self.index, int):
-            raise ValueError("SlmpIndexLz.index must be an integer in range 0..255")
-        _check_u8(self.index, "SlmpIndexLz.index")
+            raise ValueError("SlmpIndexLz.index must be an integer in range 0..1")
+        if not 0 <= self.index <= 1:
+            raise ValueError(f"SlmpIndexLz.index out of range (0..1): {self.index}")
 
 
 @dataclass(frozen=True)
@@ -1187,7 +1188,7 @@ def pack_bit_values(values: Iterable[bool | int]) -> bytes:
     Returns:
         Packed binary data.
     """
-    bits = [1 if bool(v) else 0 for v in values]
+    bits = [_require_write_bit(value, "bit value") for value in values]
     out = bytearray()
     for i in range(0, len(bits), 2):
         hi = bits[i] & 0x1
@@ -1235,6 +1236,29 @@ def _check_u16(value: int, name: str) -> None:
 def _check_u32(value: int, name: str) -> None:
     if value < 0 or value > 0xFFFFFFFF:
         raise ValueError(f"{name} out of range (0..4294967295): {value}")
+
+
+def _require_write_u16(value: object, name: str = "value") -> int:
+    """Return one exact unsigned word value or reject before frame creation."""
+    if type(value) is not int or not 0 <= value <= 0xFFFF:
+        raise ValueError(f"{name} must be an integer in range 0..65535: {value!r}")
+    return value
+
+
+def _require_write_u32(value: object, name: str = "value") -> int:
+    """Return one exact unsigned double-word value or reject before frame creation."""
+    if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError(f"{name} must be an integer in range 0..4294967295: {value!r}")
+    return value
+
+
+def _require_write_bit(value: object, name: str = "value") -> int:
+    """Return 0/1 for an explicit boolean or exact integer bit value."""
+    if type(value) is bool:
+        return 1 if value else 0
+    if type(value) is int and value in (0, 1):
+        return value
+    raise ValueError(f"{name} must be bool or the integer 0 or 1: {value!r}")
 
 
 def _check_points_u16(points: int, name: str) -> None:
@@ -1495,6 +1519,8 @@ def _validate_random_write_word_devices(
     dword_refs: Sequence[DeviceRef] = (),
     *,
     plc_profile: object | None = None,
+    word_namespaces: Sequence[object] | None = None,
+    dword_namespaces: Sequence[object] | None = None,
 ) -> None:
     read_only = next((ref for ref in (*word_refs, *dword_refs) if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
@@ -1506,12 +1532,28 @@ def _validate_random_write_word_devices(
             "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
             "Use dword entries or write_typed/write_named with ':D' or ':L' instead."
         )
+    word_scopes = tuple(word_namespaces) if word_namespaces is not None else (None,) * len(word_refs)
+    dword_scopes = tuple(dword_namespaces) if dword_namespaces is not None else (None,) * len(dword_refs)
+    if len(word_scopes) != len(word_refs) or len(dword_scopes) != len(dword_refs):
+        raise ValueError("random write destination namespace count mismatch")
+    occupied: set[tuple[object, str, int]] = set()
+    for ref, scope in zip(word_refs, word_scopes, strict=True):
+        slot = (scope, ref.code, ref.number)
+        if slot in occupied:
+            raise ValueError(f"Write Random (0x1402) has a duplicate destination: {ref}")
+        occupied.add(slot)
+    for ref, scope in zip(dword_refs, dword_scopes, strict=True):
+        slots = ((scope, ref.code, ref.number), (scope, ref.code, ref.number + 1))
+        if any(slot in occupied for slot in slots):
+            raise ValueError(f"Write Random (0x1402) has overlapping word/dword destinations: {ref}")
+        occupied.update(slots)
 
 
 def _validate_random_write_bit_devices(
     bit_refs: Sequence[DeviceRef],
     *,
     plc_profile: object | None = None,
+    namespaces: Sequence[object] | None = None,
 ) -> None:
     read_only = next((ref for ref in bit_refs if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
@@ -1520,6 +1562,29 @@ def _validate_random_write_bit_devices(
         )
     if any(ref.code in _G_HG_CODES for ref in bit_refs):
         raise ValueError("Write Random (0x1402) does not support G/HG bit entries. Use U-qualified word access.")
+    scopes = tuple(namespaces) if namespaces is not None else (None,) * len(bit_refs)
+    if len(scopes) != len(bit_refs):
+        raise ValueError("random bit write destination namespace count mismatch")
+    seen: set[tuple[object, str, int]] = set()
+    for ref, scope in zip(bit_refs, scopes, strict=True):
+        key = (scope, ref.code, ref.number)
+        if key in seen:
+            raise ValueError(f"Write Random (0x1402) has a duplicate bit destination: {ref}")
+        seen.add(key)
+
+
+def _validate_block_write_ranges(
+    word_blocks: Sequence[tuple[DeviceRef, Sequence[object]]],
+    bit_blocks: Sequence[tuple[DeviceRef, Sequence[object]]],
+) -> None:
+    """Reject duplicate or overlapping block destinations before encoding."""
+    occupied: set[tuple[str, int]] = set()
+    for kind, blocks in (("word", word_blocks), ("bit", bit_blocks)):
+        for ref, values in blocks:
+            slots = {(ref.code, ref.number + offset) for offset in range(len(values))}
+            if occupied.intersection(slots):
+                raise ValueError(f"Write Block (0x1406) has overlapping {kind} destination range at {ref}")
+            occupied.update(slots)
 
 
 def _validate_block_read_devices(

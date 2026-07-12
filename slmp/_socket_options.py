@@ -17,3 +17,5 @@ def configure_tcp_keepalive(sock: Any, *, idle_seconds: int = 30) -> None:
         return
     if hasattr(socket, "SIO_KEEPALIVE_VALS") and hasattr(sock, "ioctl"):
         sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, idle_seconds * 1000, 1000))
+        return
+    raise OSError("platform cannot configure the required TCP keepalive idle threshold")
