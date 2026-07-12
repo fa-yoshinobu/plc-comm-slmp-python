@@ -20,11 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Added fixed semantic `clear_error` APIs to sync and async clients.
 - Library: Monitor cycle expected counts must total at least one and stay within the selected profile's monitor-registration limit.
 - Library: Self-test loopback now rejects declared-length, actual-length, trailing-data, and echo mismatches instead of returning unverified response bytes.
-- Library: Extended random-read result keys now retain the complete qualified route and typed modifier, preventing values from different CPUs, units, or networks from overwriting each other.
 - Docs: Clarified explicit monitor counts and that `U3En\HG` never changes or retries the user-selected request target.
 
 - Tests: Removed vendored cross-repository vector JSON and its dedicated runners. Cross-implementation comparison is executed independently of this library repository.
 ### BREAKING
+- Library: Extended random-read result keys now retain the complete qualified route and typed modifier, preventing values from different CPUs, units, or networks from overwriting each other. Applications must migrate qualified-result lookups such as `HG0` to `U3E0\HG0`; ordinary random-read output keys retain their existing spelling.
+- Library: Ordinary and Extended Device random reads now reject duplicate wire targets and overlapping Word/DWord targets before transport. Ordinary result-key spelling is unchanged, but previously accepted duplicate input lists must be corrected.
 - Library: Removed `CpuModule` and all `cpu_buffer_*` aliases. Live R120PCPU cross-writes proved that Extend Unit `0x0601/0x1601` and qualified `U3E0\HG` access different physical areas. Use `extend_unit_*` for Extend Unit commands and `read_devices_ext`/`write_devices_ext` with a qualified `U3En\HG` address for HG.
 - Library: `read_named` and `poll` now accept only one random-readable named batch, and reject routes that would require hidden follow-up requests. `write_named` likewise emits one random-write request or rejects the complete update set before transport.
 

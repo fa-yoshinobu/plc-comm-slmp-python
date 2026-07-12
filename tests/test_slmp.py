@@ -202,6 +202,11 @@ class _SendRecvSocket(_RecvIntoSocket):
         self.closed = True
 
 
+class _InterruptSocket(_SendRecvSocket):
+    def recv_into(self, view: memoryview) -> int:
+        raise KeyboardInterrupt
+
+
 class _TimeoutUdpSocket:
     def __init__(self) -> None:
         self.closed = False
@@ -562,7 +567,12 @@ class TestReceiveHelpers(unittest.TestCase):
             client.write_block(word_blocks=[("D0", [1, 2]), ("D1", [3])])
         with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
             client.write_block(word_blocks=[("M0", [1])], bit_blocks=[("M0", [0])])
+        with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
+            client.write_block(bit_blocks=[("M0", [1, 2]), ("M16", [3])])
         self.assertEqual(client.requests, [])
+        adjacent = FakeClient()
+        adjacent.write_block(bit_blocks=[("M0", [1]), ("M16", [2])])
+        self.assertEqual(len(adjacent.requests), 1)
 
     def test_block_access_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
         client = FakeClient()
@@ -612,6 +622,16 @@ class TestReceiveHelpers(unittest.TestCase):
             with self.assertRaises(SlmpError):
                 client.write_block(word_blocks=[("D0", [1])])
 
+    def test_random_read_rejects_duplicate_and_word_dword_overlap_before_transport(self) -> None:
+        client = FakeClient()
+
+        with self.assertRaises(ValueError):
+            client.read_random(word_devices=["D0", "D0"])
+        with self.assertRaises(ValueError):
+            client.read_random(word_devices=["D0"], dword_devices=["D0"])
+
+        self.assertEqual(client.requests, [])
+
     def test_recv_exact_prefers_recv_into(self) -> None:
         sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
         self.assertEqual(_recv_exact(sock, 3), b"\x01\x02\x03")
@@ -640,6 +660,23 @@ class TestReceiveHelpers(unittest.TestCase):
 
         self.assertEqual(client.read_devices("D0", 1, bit_unit=False), [0x2222])
         self.assertEqual(len(sock.sent), 1)
+
+    def test_sync_interrupt_after_send_closes_transport_generation(self) -> None:
+        sock = _InterruptSocket([])
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaises(KeyboardInterrupt):
+            client.read_devices("D0", 1, bit_unit=False)
+
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_slmp_error_exposes_structured_error_information(self) -> None:
         error_data = bytes.fromhex("00 FF FF 03 00 01 04 01 00")
@@ -867,6 +904,19 @@ class TestCodec(unittest.TestCase):
             encode_device_spec("Y217", series=PLCSeries.IQR, plc_profile="melsec:iq-f"),
             b"\x8f\x00\x00\x00\x9d\x00",
         )
+        for series, address, expected in (
+            (PLCSeries.QL, "RD0", b"\x00\x00\x00\x2c"),
+            (PLCSeries.QL, "RD524287", b"\xff\xff\x07\x2c"),
+            (PLCSeries.IQR, "RD0", b"\x00\x00\x00\x00\x2c\x00"),
+            (PLCSeries.IQR, "RD524287", b"\xff\xff\x07\x00\x2c\x00"),
+        ):
+            with self.subTest(series=series, address=address):
+                self.assertEqual(encode_device_spec(address, series=series, plc_profile="melsec:iq-r"), expected)
+
+        boundary_client = FakeClient()
+        boundary_client.next_response_data = b"\x00\x00\x00\x00"
+        boundary_client.read_devices("RD524286", 2, bit_unit=False)
+        self.assertEqual(boundary_client.last_request[2], b"\xfe\xff\x07\x00\x2c\x00\x02\x00")
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             parse_device("Y220", plc_profile="iqf")
         with self.assertRaisesRegex(ValueError, "device code 'D'"):
@@ -2979,10 +3029,13 @@ class TestDeviceApi(unittest.TestCase):
             client.self_test_loopback("HELLO")
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
             client.self_test_loopback(b"\x00\xff")
+        with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
+            client.self_test_loopback(b"ab12")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"A" * 961)
+        self.assertEqual(client.requests, [])
 
     def test_self_test_loopback_rejects_malformed_echo_responses(self) -> None:
         client = FakeClient()
@@ -3731,7 +3784,7 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_run_monitor_cycle_rejects_invalid_expected_counts_before_transport(self) -> None:
         client = FakeClient()
-        for word_points, dword_points in ((0, 0), (97, 0), (True, 0), (1.0, 0)):
+        for word_points, dword_points in ((0, 0), (97, 0), (-1, 2), (2, -1), (-2, 3), (True, 0), (1.0, 0)):
             with self.assertRaises(ValueError):
                 client.run_monitor_cycle(word_points=word_points, dword_points=dword_points)  # type: ignore[arg-type]
         self.assertEqual(client.requests, [])

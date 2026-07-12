@@ -116,7 +116,9 @@ Always confirm the explicit target against the PLC routing setup.
 
 For iQ-R multi-CPU `U3En\HG...` access, the qualified device never changes the
 SLMP request target automatically. Select the destination CPU explicitly when
-a write must be reflected there. Cross-CPU reads remain valid. See the shared
+a write must be reflected there. A write can return a normal end code without
+changing the intended CPU buffer when the selected request target identifies a
+different CPU or Own Station. Cross-CPU reads remain valid. See the shared
 [iQ-R target guidance](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/iq-r/#multi-cpu-cpu-buffer-target).
 
 ## Extended device access

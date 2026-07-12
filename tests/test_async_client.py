@@ -387,6 +387,44 @@ async def test_async_self_test_loopback_rejects_malformed_echo_responses() -> No
             await client.self_test_loopback("ABCDE")
 
 
+@pytest.mark.asyncio
+async def test_async_self_test_loopback_rejects_lowercase_before_transport() -> None:
+    client = FakeAsyncClient()
+
+    with pytest.raises(ValueError, match="only ASCII 0-9/A-F"):
+        await client.self_test_loopback(b"ab12")
+
+    assert client.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_self_test_loopback_snapshots_mutable_input_before_waiting() -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    class PendingClient(FakeAsyncClient):
+        async def _request(self, command, subcommand=0, data=b"", **kwargs):  # type: ignore[no-untyped-def]
+            request_data = bytes(data)
+            entered.set()
+            await release.wait()
+            return SlmpResponse(
+                serial=0,
+                target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+                end_code=0,
+                data=request_data,
+                raw=b"",
+            )
+
+    client = PendingClient()
+    caller_data = bytearray(b"A1B2")
+    pending = asyncio.create_task(client.self_test_loopback(caller_data))  # type: ignore[arg-type]
+    await entered.wait()
+    caller_data[:] = b"FFFF"
+    release.set()
+
+    assert await pending == b"A1B2"
+
+
 def test_async_cpu_buffer_aliases_are_not_public() -> None:
     for name in (
         "cpu_buffer_read_bytes",
@@ -823,7 +861,7 @@ async def test_async_monitor_cycle_propagates_plc_error_and_rejects_size_mismatc
 @pytest.mark.asyncio
 async def test_async_monitor_cycle_rejects_invalid_expected_counts_before_transport() -> None:
     cli = FakeAsyncClient()
-    for word_points, dword_points in ((0, 0), (97, 0), (True, 0), (1.0, 0)):
+    for word_points, dword_points in ((0, 0), (97, 0), (-1, 2), (2, -1), (-2, 3), (True, 0), (1.0, 0)):
         with pytest.raises(ValueError):
             await cli.run_monitor_cycle(word_points=word_points, dword_points=dword_points)  # type: ignore[arg-type]
     assert cli.last_request is None

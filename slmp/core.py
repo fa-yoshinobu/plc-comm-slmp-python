@@ -1332,6 +1332,10 @@ def _check_random_read_like_counts(
     plc_profile: object | None = None,
     limit_key: str = "random_read_word",
 ) -> None:
+    if word_points < 0 or dword_points < 0:
+        raise ValueError(
+            f"{name} word_points and dword_points must be non-negative: word={word_points}, dword={dword_points}"
+        )
     total = word_points + dword_points
     effective_limit_key = f"{limit_key}_ext" if extension else limit_key
     limit_info = profile_limit(plc_profile, effective_limit_key)
@@ -1608,7 +1612,8 @@ def _validate_block_write_ranges(
     occupied: set[tuple[str, int]] = set()
     for kind, blocks in (("word", word_blocks), ("bit", bit_blocks)):
         for ref, values in blocks:
-            slots = {(ref.code, ref.number + offset) for offset in range(len(values))}
+            span = len(values) * (16 if kind == "bit" else 1)
+            slots = {(ref.code, ref.number + offset) for offset in range(span)}
             if occupied.intersection(slots):
                 raise ValueError(f"Write Block (0x1406) has overlapping {kind} destination range at {ref}")
             occupied.update(slots)

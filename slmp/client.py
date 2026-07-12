@@ -1444,7 +1444,7 @@ class SlmpClient:
                     raw = self._receive_frame()
                     if _response_matches_serial(raw, expected_serial):
                         return raw
-            except (OSError, SlmpError):
+            except BaseException:
                 self.close()
                 raise
 
@@ -1454,7 +1454,7 @@ class SlmpClient:
                 raw = self._receive_frame()
                 if _response_matches_serial(raw, expected_serial):
                     return raw
-        except (OSError, SlmpError):
+        except BaseException:
             self.close()
             raise
 
