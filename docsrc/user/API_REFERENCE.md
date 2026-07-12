@@ -29,15 +29,21 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 Raw extension fields are not part of the public semantic API. Use
 `SlmpExtendedDevice` with `SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect` only
 when a typed modification is required; otherwise pass the qualified string.
+`read_random_ext` result keys preserve the canonical complete route and typed
+modifier, for example `U3E1\HG0`, `J2\W10`, or `U3E0\D100+Z4`. Only the
+Extended Device result-key contract changed; ordinary `read_random` keys remain
+plain canonical device addresses.
 
 ## Specialized Operations
 
 | Operation | Public API |
 | --- | --- |
 | Monitor registration/cycle | `register_monitor_devices`, `register_monitor_devices_ext`, `run_monitor_cycle` |
+| Self-test loopback | `self_test_loopback` |
+| Clear PLC error | `clear_error` |
 | Memory command words | `memory_read_words`, `memory_write_words` |
 | Extend-unit command words | `extend_unit_read_words`, `extend_unit_write_words` |
-| CPU-buffer convenience words | `cpu_buffer_read_words`, `cpu_buffer_write_words`; require `module=CpuModule.CPU1` through `CPU4` |
+| HG CPU-buffer words | `read_devices_ext`, `write_devices_ext` with a qualified `U3E0\HG` through `U3E3\HG` address |
 | Label array access | `read_array_labels`, `write_array_labels` |
 | Label random access | `read_random_labels`, `write_random_labels` |
 | Remote CPU control | `remote_run`, `remote_stop`, `remote_pause`, `remote_latch_clear`, `remote_reset` |

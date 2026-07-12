@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from . import _operations
 from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
-from .constants import Command, CpuModule, FrameType, PLCSeries, RemoteClearMode
+from .constants import Command, FrameType, PLCSeries, RemoteClearMode
 from .core import (
     BlockReadResult,
     CpuOperationState,
@@ -32,6 +32,7 @@ from .core import (
     _apply_semantic_device_modification,
     _build_device_modification_flags,
     _ExtensionSpec,
+    _format_semantic_extended_device_key,
     _parse_extended_device,
     _raise_response_error,
     _require_explicit_plc_profile_for_xy,
@@ -691,12 +692,12 @@ class SlmpClient:
         """
         self._ensure_profile_feature_allowed("random")
         resolved_words = [
-            (address, extension)
+            (address, extension, _format_semantic_extended_device_key(device, plc_profile=self.plc_profile))
             for device in word_devices
             for address, _, extension in (self._resolve_semantic_extended_device(device),)
         ]
         resolved_dwords = [
-            (address, extension)
+            (address, extension, _format_semantic_extended_device_key(device, plc_profile=self.plc_profile))
             for device in dword_devices
             for address, _, extension in (self._resolve_semantic_extended_device(device),)
         ]
@@ -873,15 +874,22 @@ class SlmpClient:
         """Execute a monitoring cycle for previously registered devices.
 
         Args:
-            word_points: Number of registered word points.
-            dword_points: Number of registered double-word points.
+            word_points: Number of registered word points. Combined count must
+                be within the active profile's monitor-registration limit.
+            dword_points: Number of registered double-word points. Both counts
+                cannot be zero.
 
         Returns:
             MonitorResult containing the read values.
 
         """
         self._ensure_profile_feature_allowed("monitor")
-        request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
+        request = _operations.build_run_monitor_cycle_request(
+            word_points=word_points,
+            dword_points=dword_points,
+            default_series=self.plc_series,
+            address_profile=self.plc_profile,
+        )
         resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
 
@@ -1137,54 +1145,6 @@ class SlmpClient:
         request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
         self._request(request.command, request.subcommand, request.payload)
 
-    def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module: CpuModule) -> bytes:
-        """Read CPU buffer memory by extend-unit command using the CPU start I/O number."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return self.extend_unit_read_bytes(head_address, byte_length, module_no)
-
-    def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module: CpuModule) -> list[int]:
-        """Read CPU buffer memory words by extend-unit command using the CPU start I/O number."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return self.extend_unit_read_words(head_address, word_length, module_no)
-
-    def cpu_buffer_read_word(self, head_address: int, *, module: CpuModule) -> int:
-        """Read one 16-bit CPU buffer word via the verified extend-unit path."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return self.extend_unit_read_word(head_address, module_no)
-
-    def cpu_buffer_read_dword(self, head_address: int, *, module: CpuModule) -> int:
-        """Read one 32-bit CPU buffer value via the verified extend-unit path."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return self.extend_unit_read_dword(head_address, module_no)
-
-    def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module: CpuModule) -> None:
-        """Write CPU buffer memory by extend-unit command using the CPU start I/O number."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        self.extend_unit_write_bytes(head_address, module_no, data)
-
-    def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module: CpuModule) -> None:
-        """Write CPU buffer memory words by extend-unit command using the CPU start I/O number."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        self.extend_unit_write_words(head_address, module_no, values)
-
-    def cpu_buffer_write_word(self, head_address: int, value: int, *, module: CpuModule) -> None:
-        """Write one 16-bit CPU buffer word via the verified extend-unit path."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        self.extend_unit_write_word(head_address, module_no, value)
-
-    def cpu_buffer_write_dword(self, head_address: int, value: int, *, module: CpuModule) -> None:
-        """Write one 32-bit CPU buffer value via the verified extend-unit path."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        self.extend_unit_write_dword(head_address, module_no, value)
-
     def remote_run(self, *, force: bool, clear_mode: RemoteClearMode) -> None:
         """Remote RUN.
 
@@ -1220,6 +1180,11 @@ class SlmpClient:
     def remote_latch_clear(self) -> None:
         """Remote latch clear."""
         request = _operations.build_remote_latch_clear_request()
+        self._request(request.command, request.subcommand, request.payload)
+
+    def clear_error(self) -> None:
+        """Clear the current PLC error using the fixed semantic command."""
+        request = _operations.build_clear_error_request()
         self._request(request.command, request.subcommand, request.payload)
 
     def remote_reset(self) -> None:
@@ -1267,7 +1232,7 @@ class SlmpClient:
         """
         request = _operations.build_self_test_loopback_request(data)
         resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_self_test_loopback_response(resp)
+        return _operations.decode_self_test_loopback_response(resp, expected=request.payload[2:])
 
     # --------------------
     # Label command helpers (typed)

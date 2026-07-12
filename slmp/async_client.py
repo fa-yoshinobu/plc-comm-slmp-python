@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from . import _operations
 from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
-from .constants import Command, CpuModule, FrameType, RemoteClearMode
+from .constants import Command, FrameType, RemoteClearMode
 from .core import (
     BlockReadResult,
     CpuOperationState,
@@ -31,6 +31,7 @@ from .core import (
     TypeNameInfo,
     _apply_semantic_device_modification,
     _ExtensionSpec,
+    _format_semantic_extended_device_key,
     _parse_extended_device,
     _raise_response_error,
     _require_explicit_plc_profile_for_xy,
@@ -566,12 +567,12 @@ class AsyncSlmpClient:
         """Read multiple word and double-word devices using Extended Device extension."""
         self._ensure_profile_feature_allowed("random")
         resolved_words = [
-            (address, extension)
+            (address, extension, _format_semantic_extended_device_key(device, plc_profile=self.plc_profile))
             for device in word_devices
             for address, _, extension in (self._resolve_semantic_extended_device(device),)
         ]
         resolved_dwords = [
-            (address, extension)
+            (address, extension, _format_semantic_extended_device_key(device, plc_profile=self.plc_profile))
             for device in dword_devices
             for address, _, extension in (self._resolve_semantic_extended_device(device),)
         ]
@@ -708,9 +709,14 @@ class AsyncSlmpClient:
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
     async def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
-        """Execute one cycle of monitoring and return the results."""
+        """Execute one cycle with a nonzero count within the profile monitor limit."""
         self._ensure_profile_feature_allowed("monitor")
-        request = _operations.build_run_monitor_cycle_request(word_points=word_points, dword_points=dword_points)
+        request = _operations.build_run_monitor_cycle_request(
+            word_points=word_points,
+            dword_points=dword_points,
+            default_series=self.plc_series,
+            address_profile=self.plc_profile,
+        )
         resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
         return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
 
@@ -824,6 +830,11 @@ class AsyncSlmpClient:
         request = _operations.build_remote_latch_clear_request()
         await self._request(request.command, request.subcommand, request.payload)
 
+    async def clear_error(self) -> None:
+        """Clear the current PLC error using the fixed semantic command."""
+        request = _operations.build_clear_error_request()
+        await self._request(request.command, request.subcommand, request.payload)
+
     async def remote_reset(self) -> None:
         """Remote reset the PLC without waiting for a response."""
         request = _operations.build_remote_reset_request(subcommand=0x0000)
@@ -851,7 +862,7 @@ class AsyncSlmpClient:
         """Execute a self-test loopback."""
         request = _operations.build_self_test_loopback_request(data)
         resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_self_test_loopback_response(resp)
+        return _operations.decode_self_test_loopback_response(resp, expected=request.payload[2:])
 
     # --------------------
     # Label commands
@@ -912,18 +923,6 @@ class AsyncSlmpClient:
         """Write words to an extend unit."""
         request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
         await self._request(request.command, request.subcommand, request.payload)
-
-    async def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module: CpuModule) -> list[int]:
-        """Read words from the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return await self.extend_unit_read_words(head_address, word_length, module_no)
-
-    async def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module: CpuModule) -> None:
-        """Write words to the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        await self.extend_unit_write_words(head_address, module_no, values)
 
     async def read_long_timer(self, *, head_no: int, points: int) -> list[LongTimerResult]:
         """Read long timers from the PLC."""
@@ -1013,42 +1012,6 @@ class AsyncSlmpClient:
         """Write a double word to an extend unit."""
         request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
         await self._request(request.command, request.subcommand, request.payload)
-
-    async def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module: CpuModule) -> bytes:
-        """Read bytes from the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return await self.extend_unit_read_bytes(head_address, byte_length, module_no)
-
-    async def cpu_buffer_read_word(self, head_address: int, *, module: CpuModule) -> int:
-        """Read a single word from the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return await self.extend_unit_read_word(head_address, module_no)
-
-    async def cpu_buffer_read_dword(self, head_address: int, *, module: CpuModule) -> int:
-        """Read a double word from the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        return await self.extend_unit_read_dword(head_address, module_no)
-
-    async def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module: CpuModule) -> None:
-        """Write bytes to the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        await self.extend_unit_write_bytes(head_address, module_no, data)
-
-    async def cpu_buffer_write_word(self, head_address: int, value: int, *, module: CpuModule) -> None:
-        """Write a single word to the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        await self.extend_unit_write_word(head_address, module_no, value)
-
-    async def cpu_buffer_write_dword(self, head_address: int, value: int, *, module: CpuModule) -> None:
-        """Write a double word to the CPU buffer."""
-        module_no = _operations._require_cpu_module(module)
-        self._ensure_profile_feature_allowed("hg_cpu_buffer")
-        await self.extend_unit_write_dword(head_address, module_no, value)
 
     def _next_serial(self) -> int:
         """Get the next serial number for the request."""

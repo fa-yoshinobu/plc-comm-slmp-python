@@ -7,7 +7,7 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, CpuModule, PLCSeries
+from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, PLCSeries
 from .core import (
     BlockReadResult,
     DeviceBlockResult,
@@ -82,6 +82,8 @@ class RandomReadOperation:
     request: OperationRequest
     word_refs: tuple[DeviceRef, ...]
     dword_refs: tuple[DeviceRef, ...]
+    word_keys: tuple[str, ...]
+    dword_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -97,16 +99,21 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
+def _validate_random_result_keys(word_keys: Sequence[str], dword_keys: Sequence[str]) -> None:
+    """Reject collisions before a dict-shaped random-read result can lose values."""
+    if len(set(word_keys)) != len(word_keys):
+        raise ValueError("word_devices must not contain duplicate wire targets")
+    if len(set(dword_keys)) != len(dword_keys):
+        raise ValueError("dword_devices must not contain duplicate wire targets")
+    overlap = set(word_keys).intersection(dword_keys)
+    if overlap:
+        raise ValueError(f"word_devices and dword_devices must not overlap: {sorted(overlap)!r}")
+
+
 def _require_bit_unit(bit_unit: object, operation: str) -> bool:
     if type(bit_unit) is not bool:
         raise ValueError(f"{operation} bit_unit is required and must be a boolean")
     return bit_unit
-
-
-def _require_cpu_module(module: object) -> int:
-    if type(module) is not CpuModule:
-        raise ValueError("module is required and must be CpuModule.CPU1 through CpuModule.CPU4")
-    return int(module)
 
 
 def _validate_long_timer_range(head_no: object, points: object, plc_profile: object) -> tuple[int, int]:
@@ -492,11 +499,25 @@ def build_register_monitor_devices_ext_request(
     return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, bytes(payload))
 
 
-def build_run_monitor_cycle_request(*, word_points: int, dword_points: int) -> OperationRequest:
+def build_run_monitor_cycle_request(
+    *,
+    word_points: int,
+    dword_points: int,
+    default_series: PLCSeries,
+    address_profile: object | None,
+) -> OperationRequest:
     """Build a monitor execution request for registered monitor points."""
 
-    if word_points < 0 or dword_points < 0:
-        raise ValueError("word_points and dword_points must be >= 0")
+    if type(word_points) is not int or type(dword_points) is not int:
+        raise ValueError("word_points and dword_points must be integers")
+    _check_random_read_like_counts(
+        word_points,
+        dword_points,
+        series=default_series,
+        name="run_monitor_cycle",
+        plc_profile=address_profile,
+        limit_key="monitor_register_word",
+    )
     return OperationRequest(Command.DEVICE_EXECUTE_MONITOR, 0x0000, b"")
 
 
@@ -566,6 +587,12 @@ def build_remote_latch_clear_request() -> OperationRequest:
     return OperationRequest(Command.REMOTE_LATCH_CLEAR, 0x0000, b"\x01\x00")
 
 
+def build_clear_error_request() -> OperationRequest:
+    """Build the fixed Clear Error request."""
+
+    return OperationRequest(Command.CLEAR_ERROR, 0x0000, b"")
+
+
 def build_remote_reset_request(*, subcommand: int) -> OperationRequest:
     """Build a remote RESET request."""
 
@@ -627,6 +654,9 @@ def build_read_random_request(
     words = [_parse_device_for_address_profile(device, address_profile) for device in word_devices]
     dwords = [_parse_device_for_address_profile(device, address_profile) for device in dword_devices]
     _validate_random_read_devices(words, dwords)
+    word_keys = tuple(str(device) for device in words)
+    dword_keys = tuple(str(device) for device in dwords)
+    _validate_random_result_keys(word_keys, dword_keys)
     _check_temporarily_unsupported_devices(words)
     _check_temporarily_unsupported_devices(dwords)
 
@@ -639,13 +669,15 @@ def build_read_random_request(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
         word_refs=tuple(words),
         dword_refs=tuple(dwords),
+        word_keys=word_keys,
+        dword_keys=dword_keys,
     )
 
 
 def build_read_random_ext_request(
     *,
-    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
-    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
+    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec, str]],
+    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec, str]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -670,21 +702,28 @@ def build_read_random_ext_request(
     payload = bytearray([len(word_devices), len(dword_devices)])
     words: list[DeviceRef] = []
     dwords: list[DeviceRef] = []
-    for device, extension in word_devices:
+    word_keys: list[str] = []
+    dword_keys: list[str] = []
+    for device, extension, result_key in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         words.append(ref)
+        word_keys.append(result_key)
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-    for device, extension in dword_devices:
+    for device, extension, result_key in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dwords.append(ref)
+        dword_keys.append(result_key)
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_random_read_devices(words, dwords)
+    _validate_random_result_keys(word_keys, dword_keys)
     return RandomReadOperation(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
         word_refs=tuple(words),
         dword_refs=tuple(dwords),
+        word_keys=tuple(word_keys),
+        dword_keys=tuple(dword_keys),
     )
 
 
@@ -700,8 +739,8 @@ def decode_read_random_response(response: SlmpResponse, operation: RandomReadOpe
     offset += len(operation.word_refs) * 2
     dword_values = decode_device_dwords(response.data[offset:])
     return RandomReadResult(
-        word={str(device): value for device, value in zip(operation.word_refs, word_values, strict=True)},
-        dword={str(device): value for device, value in zip(operation.dword_refs, dword_values, strict=True)},
+        word={key: value for key, value in zip(operation.word_keys, word_values, strict=True)},
+        dword={key: value for key, value in zip(operation.dword_keys, dword_values, strict=True)},
     )
 
 
@@ -1028,7 +1067,7 @@ def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
     return OperationRequest(Command.SELF_TEST, 0x0000, payload)
 
 
-def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
+def decode_self_test_loopback_response(response: SlmpResponse, *, expected: bytes) -> bytes:
     """Decode a self-test loopback response body."""
 
     data = response.data
@@ -1038,6 +1077,10 @@ def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
     body = data[2:]
     if size != len(body):
         raise SlmpError(f"self test response size mismatch: size={size}, actual={len(body)}")
+    if size != len(expected):
+        raise SlmpError(f"self test response length mismatch: expected={len(expected)}, actual={size}")
+    if body != expected:
+        raise SlmpError("self test response payload mismatch")
     return body
 
 

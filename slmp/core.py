@@ -602,6 +602,33 @@ class SlmpExtendedDevice:
             raise ValueError("SlmpExtendedDevice.modification must be SlmpIndexZ, SlmpIndexLz, SlmpIndirect, or None")
 
 
+def _format_semantic_extended_device_key(
+    device: str | SlmpExtendedDevice,
+    *,
+    plc_profile: object,
+) -> str:
+    """Return a canonical result key that preserves the complete Extended Device route."""
+    address = device.address if isinstance(device, SlmpExtendedDevice) else device
+    parsed = _parse_extended_device(address, plc_profile=plc_profile)
+    if parsed.qualifier == "J":
+        assert parsed.extension_specification is not None
+        key = f"J{parsed.extension_specification}\\{parsed.ref}"
+    elif parsed.qualifier == "U":
+        assert parsed.extension_specification is not None
+        key = f"U{parsed.extension_specification:X}\\{parsed.ref}"
+    else:
+        key = str(parsed.ref)
+
+    modification = device.modification if isinstance(device, SlmpExtendedDevice) else None
+    if isinstance(modification, SlmpIndexZ):
+        return f"{key}+Z{modification.index}"
+    if isinstance(modification, SlmpIndexLz):
+        return f"{key}+LZ{modification.index}"
+    if isinstance(modification, SlmpIndirect):
+        return f"{key}+INDIRECT"
+    return key
+
+
 @dataclass(frozen=True)
 class _ExtendedDevice:
     """Extended Device text plus optional qualified extension-specification override."""
@@ -1440,7 +1467,7 @@ def _check_temporarily_unsupported_device(ref: DeviceRef, *, access_kind: str = 
     if ref.code in _G_HG_CODES:
         raise SlmpUnsupportedDeviceError(
             f"{ref.code} is temporarily unsupported in direct typed device APIs on this project; "
-            "use the Extended Device _ext APIs or the verified cpu_buffer_*/extend_unit_* helpers instead"
+            "use the explicitly qualified Extended Device route supported by the selected profile"
         )
     raise SlmpUnsupportedDeviceError(
         f"{ref.code} is temporarily unsupported in typed device APIs on this project; "
@@ -1664,17 +1691,8 @@ def _warn_practical_device_path(ref: DeviceRef, *, series: PLCSeries, access_kin
         if access_kind == "direct":
             warnings.warn(
                 (
-                    f"direct access to {ref.code} is known to fail on the validated iQ-R target; "
-                    "use cpu_buffer_* or extend_unit_* helpers instead"
-                ),
-                SlmpPracticalPathWarning,
-                stacklevel=3,
-            )
-        elif access_kind == "extended_device":
-            warnings.warn(
-                (
-                    f"Extended Device access to {ref.code} uses a capture-aligned builder; "
-                    "revalidate it on the actual PLC and keep cpu_buffer_* or extend_unit_* helpers as the fallback"
+                    f"standalone direct access to {ref.code} is not a valid route; "
+                    "use the explicitly qualified Extended Device route supported by the selected profile"
                 ),
                 SlmpPracticalPathWarning,
                 stacklevel=3,

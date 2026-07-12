@@ -114,6 +114,11 @@ target = SlmpTarget(network=0, station=0xFF, module_io=ModuleIONo.MULTIPLE_CPU_2
 
 Always confirm the explicit target against the PLC routing setup.
 
+For iQ-R multi-CPU `U3En\HG...` access, the qualified device never changes the
+SLMP request target automatically. Select the destination CPU explicitly when
+a write must be reflected there. Cross-CPU reads remain valid. See the shared
+[iQ-R target guidance](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/iq-r/#multi-cpu-cpu-buffer-target).
+
 ## Extended device access
 
 Use the extended-device APIs for routed device forms such as `Un\G...`,
@@ -162,6 +167,35 @@ from slmp import SlmpExtendedDevice, SlmpIndexZ
 device = SlmpExtendedDevice("U3\\D100", SlmpIndexZ(2))
 values = client.read_devices_ext(device, 1, bit_unit=False)
 ```
+
+Extended random-read results retain the full route:
+
+```python
+result = client.read_random_ext(word_devices=[r"U3E0\HG0", r"U3E1\HG0"])
+print(result.word[r"U3E0\HG0"])
+print(result.word[r"U3E1\HG0"])
+```
+
+## Monitor, self-test, and Clear Error
+
+Monitor registration and each monitor cycle are separate one-request
+operations. Supply the registered Word and DWord counts on every cycle; the
+client does not auto-register, retry, or infer counts. Running a cycle before
+the PLC has monitor registration sends the cycle request and returns the PLC
+response or error unchanged. The combined expected count must be nonzero and
+cannot exceed the selected profile's monitor-registration limit.
+
+```python
+client.register_monitor_devices(word_devices=["D120"], dword_devices=["D200"])
+result = client.run_monitor_cycle(word_points=1, dword_points=1)
+
+echo = client.self_test_loopback(b"A1B2C3D4")
+client.clear_error()
+```
+
+Self-test accepts only 1–960 ASCII `0-9/A-F` bytes and requires the returned
+declared length, actual length, and echo bytes to match exactly. `clear_error`
+always sends the fixed command with an empty payload.
 
 ### Link direct device access
 

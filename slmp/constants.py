@@ -60,15 +60,6 @@ class ModuleIONo(IntEnum):
     STANDBY_SYSTEM_REMOTE_HEAD = 0x03D1
 
 
-class CpuModule(IntEnum):
-    """Explicit CPU-buffer target for multi-CPU systems."""
-
-    CPU1 = 0x03E0
-    CPU2 = 0x03E1
-    CPU3 = 0x03E2
-    CPU4 = 0x03E3
-
-
 class Command(IntEnum):
     """Command list from SH080956ENGN 5.1."""
 

@@ -60,7 +60,7 @@ All three raw command fields are required. The client owns 4E serial allocation 
 
 ## Required operation choices
 
-Specify choices that change the command meaning or destination: `bit_unit`, CPU-buffer `module=CpuModule.CPU1` through `CPU4`, remote run/pause mode arguments, and long-timer `head_no`/`points`. The four sync/async generic Direct and Extended Device read/write methods require an actual Boolean `bit_unit`; omission is a signature error and null, numbers, strings, and containers fail in the shared operation builder before framing. CPU-buffer helpers require the typed `CpuModule`; raw integers and `ModuleIONo` values are rejected so the selected CPU remains discoverable and explicit. Long-timer and long-retentive-timer multi-point helpers require exact integer `head_no` and `points`; heads must fit `0..0xFFFFFFFF`, points must fit the active profile's one-request direct-word limit after multiplication by four, and no missing, null, Boolean, string, zero, negative, overflow, or wrapped value reaches transport. Unit-specific helpers select their unit internally. Remote RUN requires an actual Boolean `force` plus `RemoteClearMode`; Remote PAUSE requires the Boolean `force`. Missing, false-like aliases, raw numeric clear modes, and undefined choices fail before request creation. The clear-mode enum maps NoClear, ClearExceptLatch, and ClearAll to wire values 0, 1, and 2.
+Specify choices that change the command meaning or destination: `bit_unit`, remote run/pause mode arguments, and long-timer `head_no`/`points`. The four sync/async generic Direct and Extended Device read/write methods require an actual Boolean `bit_unit`; omission is a signature error and null, numbers, strings, and containers fail in the shared operation builder before framing. Long-timer and long-retentive-timer multi-point helpers require exact integer `head_no` and `points`; heads must fit `0..0xFFFFFFFF`, points must fit the active profile's one-request direct-word limit after multiplication by four, and no missing, null, Boolean, string, zero, negative, overflow, or wrapped value reaches transport. Unit-specific helpers select their unit internally. Remote RUN requires an actual Boolean `force` plus `RemoteClearMode`; Remote PAUSE requires the Boolean `force`. Missing, false-like aliases, raw numeric clear modes, and undefined choices fail before request creation. The clear-mode enum maps NoClear, ClearExceptLatch, and ClearAll to wire values 0, 1, and 2.
 
 ## Multiple-request behavior
 
@@ -95,3 +95,48 @@ generation. These are response-ownership requirements: a possible residual
 ## Extended Device access
 
 Use qualified device text such as `U3E0\G10`. For supported index/indirect modification, wrap it in `SlmpExtendedDevice` with `SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect`. Raw extension bitfields are no longer a public contract.
+
+## 2026-07-12 D-128 through D-132 delta
+
+### D-128 — Monitor contract
+
+- Scope: sync/async monitor registration and cycle APIs.
+- Target: registration and every cycle are separate single requests; cycle counts are explicit, nonzero, and within the active profile limit, and no registration, split, retry, or fallback is hidden.
+- Compatibility: calling a cycle before PLC registration still sends one cycle request and returns the PLC result.
+- Acceptance: Word/DWord typing, empty/count/profile/device checks, PLC NG, exact response length, and three-cycle behavior are covered.
+
+### D-129 — Exact self-test echo
+
+- Scope: sync/async `self_test_loopback`.
+- Target: accept only 1–960 ASCII `0-9/A-F` bytes and require declared length, actual length, and byte-for-byte echo equality.
+- Compatibility: trailing, short, wrong-length, and mismatched echoes now fail instead of returning bytes.
+- Acceptance: valid and every malformed response class are covered for sync and async clients.
+
+### D-130 — Qualified Extended Device result keys
+
+- Scope: sync/async `read_random_ext` result mappings.
+- Target: canonical keys retain CPU/unit/network route and typed modifier.
+- Compatibility: keys such as `HG0` become `U3E0\HG0`; applications must migrate lookups. Ordinary `read_random` keys do not change.
+- Acceptance: distinct `U3E0/U3E1`, `U1/U2`, and `J1/J2` routes coexist; only an identical canonical wire target is rejected before transport.
+
+### D-131 — Clear Error semantic API
+
+- Scope: sync/async `clear_error`.
+- Target: one fixed `0x1617/0x0000` request with empty payload and no retry or fallback.
+- Compatibility: callers no longer need maintainer raw command access.
+- Acceptance: exact request and PLC-error propagation are covered.
+
+### D-132 — HG target ownership
+
+- Scope: qualified `U3En\HG` operations, Extend Unit operations, public aliases, and target documentation.
+- Target: `0x0601/0x1601` remain available only as `extend_unit_*`; HG remains available only through qualified Extended Device APIs. The qualified device never changes the user-selected request target. Cross-CPU reads remain allowed; applications explicitly select the destination CPU for writes.
+- Compatibility: `CpuModule` and all sync/async `cpu_buffer_*` aliases are removed. Migrate those calls to `extend_unit_*`; do not rename them mechanically to an HG address because live evidence proves the physical areas differ. No automatic target match, other-CPU fallback, resend, readback, or retry will be added.
+- Acceptance: public-surface tests reject the removed names, Extend Unit exact-frame tests remain, qualified HG exact-frame tests remain, and frames retain `0x03FF` for an Own Station client while using `0x03E1` only for an explicitly CPU No.2-targeted client.
+
+- [x] Local implementation and regression tests completed.
+- [x] Ruff, formatting, Mypy, full unit suite, CLI checks, docs coverage, and release check passed.
+- [x] User API, migration, changelog, and shared target guidance updated.
+- [ ] Claude review of this delta completed — pending a separately authorized batch.
+- [ ] New public-API live verification completed — deferred until after Claude review.
+- [x] D-132 Extend Unit versus HG physical-area classification completed: independent values remained stable through immediate, 50 ms, 250 ms, and 1 s cross-reads.
+- [x] Removed the misleading CPU-buffer aliases and typed alias-only enum; retained distinct Extend Unit and qualified HG surfaces.

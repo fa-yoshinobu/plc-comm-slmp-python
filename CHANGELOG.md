@@ -17,8 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added fixed semantic `clear_error` APIs to sync and async clients.
+- Library: Monitor cycle expected counts must total at least one and stay within the selected profile's monitor-registration limit.
+- Library: Self-test loopback now rejects declared-length, actual-length, trailing-data, and echo mismatches instead of returning unverified response bytes.
+- Library: Extended random-read result keys now retain the complete qualified route and typed modifier, preventing values from different CPUs, units, or networks from overwriting each other.
+- Docs: Clarified explicit monitor counts and that `U3En\HG` never changes or retries the user-selected request target.
+
 - Tests: Removed vendored cross-repository vector JSON and its dedicated runners. Cross-implementation comparison is executed independently of this library repository.
 ### BREAKING
+- Library: Removed `CpuModule` and all `cpu_buffer_*` aliases. Live R120PCPU cross-writes proved that Extend Unit `0x0601/0x1601` and qualified `U3E0\HG` access different physical areas. Use `extend_unit_*` for Extend Unit commands and `read_devices_ext`/`write_devices_ext` with a qualified `U3En\HG` address for HG.
 - Library: `read_named` and `poll` now accept only one random-readable named batch, and reject routes that would require hidden follow-up requests. `write_named` likewise emits one random-write request or rejects the complete update set before transport.
 
 - Tooling: Removed legacy library-local discovery, monitor, mixed-block split,
@@ -30,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Removed the public low-level `request()` method and caller-selected 4E serial numbers. `raw_command(command, subcommand, payload)` remains the single maintainer raw entry point and allocates serials internally.
 - Library: Removed command-specific raw-payload wrappers and public label payload builder/parser methods. Use the semantic typed APIs, or the single maintainer `raw_command` entry point for investigation.
 - Library: Removed public chunked read/write helpers and mixed-block request splitting. One standard API call now produces one protocol request and rejects profile-limit overflow before transport.
-- Library: Made generic device access unit (`bit_unit`), typed CPU-buffer target (`module=CpuModule.CPU1` through `CPU4`), remote run/pause modes, and long-timer head/count values explicit where their omission could select a different operation or address. CPU-buffer helpers reject raw integers and unrelated module enums; Direct and Extended Device generic APIs reject every non-Boolean unit value before framing instead of treating false-like values as word access.
+- Library: Made generic device access unit (`bit_unit`), remote run/pause modes, and long-timer head/count values explicit where their omission could select a different operation or address. Direct and Extended Device generic APIs reject every non-Boolean unit value before framing instead of treating false-like values as word access.
 - Library: Long-timer and long-retentive-timer helpers now reject non-integer heads/counts, negative or 32-bit-overflow heads, zero counts, and counts above the one-request direct-word limit before transport in both sync and async clients.
 - Library: Replaced public raw Extended Device field controls with qualified addresses and typed `SlmpExtendedDevice` modifiers.
 - Library: Removed public error-code message/language lookup and public trace/strict-profile controls; structured end codes remain available without embedding manual wording.

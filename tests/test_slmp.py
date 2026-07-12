@@ -31,7 +31,7 @@ from slmp.client import (
     _recv_exact,
     _recv_tcp_frame,
 )
-from slmp.constants import Command, CpuModule, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
+from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from slmp.core import (
     DeviceRef,
     SlmpBoundaryBehaviorWarning,
@@ -313,6 +313,34 @@ class TestReceiveHelpers(unittest.TestCase):
             response = client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
             self.assertEqual(response.end_code, 0xC051)
 
+    def test_hg_qualified_device_never_changes_user_selected_request_target(self) -> None:
+        sent_frames: list[bytes] = []
+
+        def exercise(target: SlmpTarget) -> None:
+            client = SlmpClient(
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                default_target=target,
+                plc_profile="melsec:iq-r",
+            )
+
+            def respond(frame: bytes) -> bytes:
+                sent_frames.append(frame)
+                return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+
+            with patch.object(client, "_send_and_receive", side_effect=respond):
+                client.write_devices_ext(r"U3E1\HG100", [0x1234], bit_unit=False)
+
+        exercise(SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+        exercise(SlmpTarget(network=0, station=0xFF, module_io=0x03E1, multidrop=0))
+
+        self.assertEqual(len(sent_frames), 2)
+        self.assertEqual(int.from_bytes(sent_frames[0][8:10], "little"), 0x03FF)
+        self.assertEqual(int.from_bytes(sent_frames[1][8:10], "little"), 0x03E1)
+        self.assertEqual(int.from_bytes(sent_frames[0][15:17], "little"), int(Command.DEVICE_WRITE))
+        self.assertEqual(int.from_bytes(sent_frames[1][15:17], "little"), int(Command.DEVICE_WRITE))
+
     def test_request_monitoring_timer_inherits_or_requires_exact_u16(self) -> None:
         client = SlmpClient(
             "127.0.0.1",
@@ -430,6 +458,45 @@ class TestReceiveHelpers(unittest.TestCase):
                     client.read_random(word_devices=invalid)  # type: ignore[arg-type]
                 with self.assertRaises((TypeError, ValueError)):
                     client.read_random_ext(word_devices=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_random_read_ext_preserves_complete_routes_and_rejects_result_key_collisions(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"".join(value.to_bytes(2, "little") for value in range(1, 7))
+        result = client.read_random_ext(
+            word_devices=[
+                r"U3E0\HG100",
+                r"U3E1\HG100",
+                r"U1\G0",
+                r"U2\G0",
+                r"J1\W0",
+                r"J2\W0",
+            ]
+        )
+        self.assertEqual(
+            result.word,
+            {
+                r"U3E0\HG100": 1,
+                r"U3E1\HG100": 2,
+                r"U1\G0": 3,
+                r"U2\G0": 4,
+                r"J1\W0": 5,
+                r"J2\W0": 6,
+            },
+        )
+
+        client.next_response_data = b"\x33\x33"
+        modified = client.read_random_ext(word_devices=[SlmpExtendedDevice(r"U3E0\D100", SlmpIndexZ(4))])
+        self.assertEqual(modified.word, {r"U3E0\D100+Z4": 0x3333})
+
+        request_count = len(client.requests)
+        with self.assertRaisesRegex(ValueError, "duplicate wire targets"):
+            client.read_random_ext(word_devices=[r"U3E0\HG100", r"U3E0\HG100"])
+        with self.assertRaisesRegex(ValueError, "duplicate wire targets"):
+            client.read_random_ext(word_devices=[r"U01\G0", r"U1\G0"])
+        with self.assertRaisesRegex(ValueError, "must not overlap"):
+            client.read_random_ext(word_devices=[r"J1\W0"], dword_devices=[r"J1\W0"])
         self.assertEqual(len(client.requests), request_count)
 
     def test_random_word_write_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
@@ -2297,7 +2364,6 @@ class TestDeviceApi(unittest.TestCase):
             "remote_password_lock_raw",
             "remote_password_unlock_raw",
             "self_test",
-            "clear_error",
             "build_array_label_read_payload",
             "build_array_label_write_payload",
             "build_label_read_random_payload",
@@ -2396,8 +2462,11 @@ class TestDeviceApi(unittest.TestCase):
         """Test test_temporarily_unsupported_device_error_for_g_direct_only."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11"
-        with self.assertRaises(SlmpUnsupportedDeviceError):
+        with self.assertRaises(SlmpUnsupportedDeviceError) as raised:
             client.read_devices("G0", 1, bit_unit=False)
+        self.assertIn("explicitly qualified Extended Device route", str(raised.exception))
+        self.assertNotIn("cpu_buffer", str(raised.exception))
+        self.assertNotIn("extend_unit", str(raised.exception))
 
     def test_extended_device_g_read_payload_matches_capture_shape(self) -> None:
         """Test test_extended_device_g_read_payload_matches_capture_shape."""
@@ -2499,8 +2568,11 @@ class TestDeviceApi(unittest.TestCase):
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_hg."""
         client = FakeClient()
-        with self.assertRaises(SlmpUnsupportedDeviceError):
+        with self.assertRaises(SlmpUnsupportedDeviceError) as raised:
             client.read_devices("HG0", 1, bit_unit=False)
+        self.assertIn("explicitly qualified Extended Device route", str(raised.exception))
+        self.assertNotIn("cpu_buffer", str(raised.exception))
+        self.assertNotIn("extend_unit", str(raised.exception))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
@@ -2804,57 +2876,25 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
         self.assertEqual(payload, b"\x34\x00\x00\x00\x04\x00\xe0\x03\x78\x56\x34\x12")
 
-    def test_cpu_buffer_helpers_require_explicit_typed_module(self) -> None:
-        """CPU-buffer helpers must not silently select or accept an arbitrary module number."""
-        client = FakeClient()
-        with self.assertRaises(TypeError):
-            client.cpu_buffer_read_words(0x04, 1)
-        with self.assertRaises(TypeError):
-            client.cpu_buffer_write_words(0x04, [0x4801])
-        for invalid in (None, 0x03E0, ModuleIONo.MULTIPLE_CPU_1, "CPU1", "", 0x03E4):
-            with self.subTest(invalid=invalid):
-                with self.assertRaisesRegex(ValueError, "CpuModule.CPU1"):
-                    client.cpu_buffer_read_words(0x04, 1, module=invalid)  # type: ignore[arg-type]
-                with self.assertRaisesRegex(ValueError, "CpuModule.CPU1"):
-                    client.cpu_buffer_write_words(0x04, [0x4801], module=invalid)  # type: ignore[arg-type]
-        self.assertIsNone(client.last_request)
+    def test_cpu_buffer_aliases_and_enum_are_not_public(self) -> None:
+        """Extend Unit commands must not be exposed under a CPU-buffer name."""
+        import slmp
+        import slmp.constants
 
-        for module in CpuModule:
-            client.next_response_data = b"\x01\x48"
-            out = client.cpu_buffer_read_words(0x04, 1, module=module)
-            self.assertEqual(out, [0x4801])
-            command, subcommand, payload, _ = client.last_request
-            self.assertEqual(command, Command.EXTEND_UNIT_READ)
-            self.assertEqual(subcommand, 0x0000)
-            self.assertEqual(int.from_bytes(payload[6:8], "little"), int(module))
-
-            client.cpu_buffer_write_words(0x04, [0x4801], module=module)
-            command, subcommand, payload, _ = client.last_request
-            self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-            self.assertEqual(subcommand, 0x0000)
-            self.assertEqual(int.from_bytes(payload[6:8], "little"), int(module))
-
-        client.next_response_data = b"\x01\x48"
-        self.assertEqual(client.cpu_buffer_read_word(0x04, module=CpuModule.CPU1), 0x4801)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03")
-
-        client.next_response_data = b"\xb1\xe9\xaf\x95"
-        self.assertEqual(client.cpu_buffer_read_dword(0x00, module=CpuModule.CPU1), 0x95AFE9B1)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03")
-
-        client.cpu_buffer_write_word(0x04, 0x4801, module=CpuModule.CPU1)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03\x01\x48")
-
-        client.cpu_buffer_write_dword(0x00, 0x95AFE9B1, module=CpuModule.CPU1)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03\xb1\xe9\xaf\x95")
+        self.assertFalse(hasattr(slmp, "CpuModule"))
+        self.assertFalse(hasattr(slmp.constants, "CpuModule"))
+        for client_type in (SlmpClient,):
+            for name in (
+                "cpu_buffer_read_bytes",
+                "cpu_buffer_read_words",
+                "cpu_buffer_read_word",
+                "cpu_buffer_read_dword",
+                "cpu_buffer_write_bytes",
+                "cpu_buffer_write_words",
+                "cpu_buffer_write_word",
+                "cpu_buffer_write_dword",
+            ):
+                self.assertFalse(hasattr(client_type, name), name)
 
     def test_remote_run_and_pause_require_explicit_typed_intent(self) -> None:
         client = FakeClient()
@@ -2913,6 +2953,26 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x05\x00ABCDE")
 
+    def test_clear_error_uses_fixed_empty_command(self) -> None:
+        client = FakeClient()
+
+        client.clear_error()
+
+        assert client.last_request is not None
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.CLEAR_ERROR)
+        self.assertEqual(subcommand, 0x0000)
+        self.assertEqual(payload, b"")
+
+    def test_clear_error_propagates_one_plc_error_without_fallback(self) -> None:
+        client = FakeClient()
+        client.next_response_end_code = 0xC051
+
+        with self.assertRaises(SlmpError):
+            client.clear_error()
+
+        self.assertEqual(len(client.requests), 1)
+
     def test_self_test_loopback_rejects_manual_invalid_payloads(self) -> None:
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
@@ -2923,6 +2983,19 @@ class TestDeviceApi(unittest.TestCase):
             client.self_test_loopback(b"")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"A" * 961)
+
+    def test_self_test_loopback_rejects_malformed_echo_responses(self) -> None:
+        client = FakeClient()
+
+        for response, message in (
+            (b"\x04\x00ABCDE", "size mismatch"),
+            (b"\x04\x00ABCD", "length mismatch"),
+            (b"\x05\x00ABCDF", "payload mismatch"),
+        ):
+            with self.subTest(response=response):
+                client.next_response_data = response
+                with self.assertRaisesRegex(SlmpError, message):
+                    client.self_test_loopback("ABCDE")
 
     def test_remote_reset_uses_no_response_mode_by_default(self) -> None:
         """Test test_remote_reset_uses_no_response_mode_by_default."""
@@ -3649,10 +3722,32 @@ class TestDeviceApi(unittest.TestCase):
         """Test test_run_monitor_cycle_returns_typed_result."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11\x22\x22\x33\x33\x44\x44"
-        out = client.run_monitor_cycle(word_points=2, dword_points=1)
-        self.assertIsInstance(out, MonitorResult)
-        self.assertEqual(out.word, [0x1111, 0x2222])
-        self.assertEqual(out.dword, [0x44443333])
+        for _ in range(3):
+            out = client.run_monitor_cycle(word_points=2, dword_points=1)
+            self.assertIsInstance(out, MonitorResult)
+            self.assertEqual(out.word, [0x1111, 0x2222])
+            self.assertEqual(out.dword, [0x44443333])
+        self.assertEqual(len(client.requests), 3)
+
+    def test_run_monitor_cycle_rejects_invalid_expected_counts_before_transport(self) -> None:
+        client = FakeClient()
+        for word_points, dword_points in ((0, 0), (97, 0), (True, 0), (1.0, 0)):
+            with self.assertRaises(ValueError):
+                client.run_monitor_cycle(word_points=word_points, dword_points=dword_points)  # type: ignore[arg-type]
+        self.assertEqual(client.requests, [])
+
+    def test_run_monitor_cycle_propagates_plc_error_and_rejects_size_mismatch(self) -> None:
+        client = FakeClient()
+        client.next_response_end_code = 0xC051
+        with self.assertRaises(SlmpError):
+            client.run_monitor_cycle(word_points=1, dword_points=0)
+        self.assertEqual(len(client.requests), 1)
+
+        client.next_response_end_code = 0
+        client.next_response_data = b"\x11"
+        with self.assertRaisesRegex(SlmpError, "monitor response size mismatch"):
+            client.run_monitor_cycle(word_points=1, dword_points=0)
+        self.assertEqual(len(client.requests), 2)
 
     def test_read_block_returns_typed_result(self) -> None:
         """Test test_read_block_returns_typed_result."""

@@ -36,7 +36,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
     pytest = _PytestFallback()
 
 from slmp.async_client import AsyncSlmpClient
-from slmp.constants import Command, CpuModule, PLCSeries, RemoteClearMode
+from slmp.constants import Command, PLCSeries, RemoteClearMode
 from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
 from slmp.errors import SlmpProfileFeatureError
 
@@ -374,23 +374,31 @@ class FakeAsyncClient(AsyncSlmpClient):
 
 
 @pytest.mark.asyncio
-async def test_async_cpu_buffer_helpers_require_explicit_typed_module() -> None:
+async def test_async_self_test_loopback_rejects_malformed_echo_responses() -> None:
     client = FakeAsyncClient()
-    with pytest.raises(TypeError):
-        await client.cpu_buffer_read_words(0, 1)  # type: ignore[call-arg]
-    with pytest.raises(TypeError):
-        await client.cpu_buffer_write_words(0, [1])  # type: ignore[call-arg]
-    for invalid in (None, 0x03E0, "CPU1", "", 0x03E4):
-        with pytest.raises(ValueError, match="CpuModule.CPU1"):
-            await client.cpu_buffer_read_words(0, 1, module=invalid)  # type: ignore[arg-type]
-    assert client.last_request is None
 
-    for module in CpuModule:
-        client.next_response_data = b"\x34\x12"
-        assert await client.cpu_buffer_read_words(0, 1, module=module) == [0x1234]
-        assert int.from_bytes(client.last_request[2][6:8], "little") == int(module)
-        await client.cpu_buffer_write_words(0, [0x1234], module=module)
-        assert int.from_bytes(client.last_request[2][6:8], "little") == int(module)
+    for response, message in (
+        (b"\x04\x00ABCDE", "size mismatch"),
+        (b"\x04\x00ABCD", "length mismatch"),
+        (b"\x05\x00ABCDF", "payload mismatch"),
+    ):
+        client.next_response_data = response
+        with pytest.raises(SlmpError, match=message):
+            await client.self_test_loopback("ABCDE")
+
+
+def test_async_cpu_buffer_aliases_are_not_public() -> None:
+    for name in (
+        "cpu_buffer_read_bytes",
+        "cpu_buffer_read_words",
+        "cpu_buffer_read_word",
+        "cpu_buffer_read_dword",
+        "cpu_buffer_write_bytes",
+        "cpu_buffer_write_words",
+        "cpu_buffer_write_word",
+        "cpu_buffer_write_dword",
+    ):
+        assert not hasattr(AsyncSlmpClient, name)
 
 
 @pytest.mark.asyncio
@@ -797,3 +805,49 @@ async def test_async_monitor_alias_uses_entry_monitor_command() -> None:
 
     assert cli.last_request is not None
     assert cli.last_request[0] == int(Command.DEVICE_ENTRY_MONITOR)
+
+
+@pytest.mark.asyncio
+async def test_async_monitor_cycle_propagates_plc_error_and_rejects_size_mismatch() -> None:
+    cli = FakeAsyncClient()
+    cli.next_response_end_code = 0xC051
+    with pytest.raises(SlmpError):
+        await cli.run_monitor_cycle(word_points=1, dword_points=0)
+
+    cli.next_response_end_code = 0
+    cli.next_response_data = b"\x11"
+    with pytest.raises(SlmpError, match="monitor response size mismatch"):
+        await cli.run_monitor_cycle(word_points=1, dword_points=0)
+
+
+@pytest.mark.asyncio
+async def test_async_monitor_cycle_rejects_invalid_expected_counts_before_transport() -> None:
+    cli = FakeAsyncClient()
+    for word_points, dword_points in ((0, 0), (97, 0), (True, 0), (1.0, 0)):
+        with pytest.raises(ValueError):
+            await cli.run_monitor_cycle(word_points=word_points, dword_points=dword_points)  # type: ignore[arg-type]
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_clear_error_uses_fixed_empty_command() -> None:
+    cli = FakeAsyncClient()
+
+    await cli.clear_error()
+
+    assert cli.last_request is not None
+    assert cli.last_request[0] == int(Command.CLEAR_ERROR)
+    assert cli.last_request[1] == 0x0000
+    assert cli.last_request[2] == b""
+
+
+@pytest.mark.asyncio
+async def test_async_clear_error_propagates_plc_error_without_fallback() -> None:
+    cli = FakeAsyncClient()
+    cli.next_response_end_code = 0xC051
+
+    with pytest.raises(SlmpError):
+        await cli.clear_error()
+
+    assert cli.last_request is not None
+    assert cli.last_request[0] == int(Command.CLEAR_ERROR)
