@@ -18,15 +18,22 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from slmp.async_client import AsyncSlmpClient
+from slmp.core import SlmpTarget
 
 
 async def read_one_plc(host: str, port: int) -> dict[str, object]:
     """Connect to a single PLC and return a snapshot of several devices."""
     # The standard client route requires plc_profile so frame and address rules
     # are derived from one explicit PLC profile.
-    async with AsyncSlmpClient(host, port, plc_profile="melsec:iq-r") as cli:
+    async with AsyncSlmpClient(
+        host,
+        port,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    ) as cli:
         info = await cli.read_type_name()
-        d100 = await cli.read_devices("D100", 1)
+        d100 = await cli.read_devices("D100", 1, bit_unit=False)
         m0 = await cli.read_devices("M0", 1, bit_unit=True)
         return {"host": host, "model": info.model, "D100": d100[0], "M0": bool(m0[0])}
 
@@ -34,18 +41,18 @@ async def read_one_plc(host: str, port: int) -> dict[str, object]:
 async def main() -> None:
     """Demonstrate reading from multiple PLCs concurrently."""
     # --- Target configuration ------------------------------------------------
-    # Edit these to match your environment. The script accepts an optional
-    # list of HOST:PORT pairs on the command line:
+    # Supply one or more explicit HOST:PORT pairs on the command line:
     #   python samples/07_async_sample.py 192.168.250.100:1025 192.168.1.11:1025
     targets: list[tuple[str, int]] = []
 
     for arg in sys.argv[1:]:
         host, _, port_str = arg.partition(":")
-        targets.append((host.strip(), int(port_str) if port_str else 1025))
+        if not host.strip() or not port_str:
+            raise SystemExit(f"target must be HOST:PORT with an explicit port: {arg!r}")
+        targets.append((host.strip(), int(port_str)))
 
     if not targets:
-        # Default: one standard TCP example target.
-        targets = [("192.168.250.100", 1025)]
+        raise SystemExit("usage: python samples/07_async_sample.py HOST:PORT [HOST:PORT ...]")
 
     # --- Read all PLCs concurrently ------------------------------------------
     # Each read_one_plc() call opens its OWN connection.  asyncio.gather lets

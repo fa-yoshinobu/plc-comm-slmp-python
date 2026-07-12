@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from _common import add_connection_args, create_client_from_args
+from _common import add_connection_args, create_client_from_args, own_station_target
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,7 +18,7 @@ def main() -> int:
     """Run the sample to read the PLC type name."""
     args = build_parser().parse_args()
 
-    with create_client_from_args(args) as cli:
+    with create_client_from_args(args, default_target=own_station_target()) as cli:
         info = cli.read_type_name()
         print(f"model: {info.model or '<empty>'}")
         if info.model_code is None:

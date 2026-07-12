@@ -35,11 +35,9 @@ Run focused live scripts only when the change touches that area:
 - `scripts/slmp_device_range_probe.py`
 - `scripts/slmp_register_boundary_probe.py`
 - `scripts/slmp_other_station_check.py`
-- `scripts/slmp_special_device_probe.py`
 - `scripts/slmp_g_hg_extended_device_recheck.py`
 - `scripts/slmp_extended_device_device_recheck.py`
 - `scripts/slmp_g_hg_extended_device_coverage.py`
-- `scripts/slmp_mixed_block_compare.py`
 - `scripts/slmp_read_soak.py`
 - `scripts/slmp_mixed_read_load.py`
 - `scripts/slmp_tcp_concurrency.py`
@@ -61,7 +59,6 @@ python scripts/slmp_other_station_check.py --help
 python scripts/slmp_open_items_recheck.py --help
 python scripts/slmp_pending_live_verification.py --help
 python scripts/slmp_manual_label_verification.py --help
-python scripts/slmp_special_device_probe.py --help
 python scripts/slmp_read_soak.py --help
 python scripts/slmp_mixed_read_load.py --help
 python scripts/slmp_tcp_concurrency.py --help
@@ -76,6 +73,10 @@ Before a release or a merge that changes behavior, run at least:
 1. `python -m unittest discover -s tests -v`
 2. `python -m ruff check slmp tests scripts`
 3. `python -m mypy slmp scripts`
-4. one approved live smoke check against the current test PLC
+4. any live check explicitly required by the change, using the canonical
+   profile probe after the user approves that specific PLC test
 
-Also run focused live scripts when the change touches that area.
+Do not use library-local discovery scripts to guess frame, compatibility, or
+route combinations. Profile evidence collection belongs in
+`plc-comm-slmp-profiles/tools/live_profile_probe.py`, driven by the canonical
+profile JSON.

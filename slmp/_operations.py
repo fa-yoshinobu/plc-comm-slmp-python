@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -11,7 +12,6 @@ from .core import (
     BlockReadResult,
     DeviceBlockResult,
     DeviceRef,
-    ExtensionSpec,
     LabelArrayReadPoint,
     LabelArrayReadResult,
     LabelArrayWritePoint,
@@ -34,11 +34,18 @@ from .core import (
     _check_u32,
     _encode_label_name,
     _encode_remote_password_payload,
+    _encode_resolved_extended_device_spec,
+    _ExtensionSpec,
     _label_array_data_bytes,
     _normalize_items,
     _require_explicit_plc_profile_for_xy,
+    _require_write_bit,
+    _require_write_u16,
+    _require_write_u32,
+    _resolve_extended_device_and_extension,
     _validate_block_read_devices,
     _validate_block_write_devices,
+    _validate_block_write_ranges,
     _validate_direct_dword_read_device,
     _validate_direct_read_device,
     _validate_direct_write_device,
@@ -51,11 +58,9 @@ from .core import (
     decode_device_dwords,
     decode_device_words,
     encode_device_spec,
-    encode_resolved_extended_device_spec,
     pack_bit_values,
     parse_device,
     resolve_device_subcommand,
-    resolve_extended_device_and_extension,
     unpack_bit_values,
 )
 from .errors import SlmpError
@@ -77,6 +82,8 @@ class RandomReadOperation:
     request: OperationRequest
     word_refs: tuple[DeviceRef, ...]
     dword_refs: tuple[DeviceRef, ...]
+    word_keys: tuple[str, ...]
+    dword_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -92,6 +99,39 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
+def _validate_random_result_keys(word_keys: Sequence[str], dword_keys: Sequence[str]) -> None:
+    """Reject collisions before a dict-shaped random-read result can lose values."""
+    if len(set(word_keys)) != len(word_keys):
+        raise ValueError("word_devices must not contain duplicate wire targets")
+    if len(set(dword_keys)) != len(dword_keys):
+        raise ValueError("dword_devices must not contain duplicate wire targets")
+    overlap = set(word_keys).intersection(dword_keys)
+    if overlap:
+        raise ValueError(f"word_devices and dword_devices must not overlap: {sorted(overlap)!r}")
+
+
+def _require_bit_unit(bit_unit: object, operation: str) -> bool:
+    if type(bit_unit) is not bool:
+        raise ValueError(f"{operation} bit_unit is required and must be a boolean")
+    return bit_unit
+
+
+def _validate_long_timer_range(head_no: object, points: object, plc_profile: object) -> tuple[int, int]:
+    if type(head_no) is not int:
+        raise TypeError("head_no is required and must be an integer")
+    _check_u32(head_no, "head_no")
+    if type(points) is not int:
+        raise TypeError("points is required and must be an integer")
+    word_points = points * 4
+    _check_direct_device_points(
+        word_points,
+        bit_unit=False,
+        name="long timer",
+        plc_profile=plc_profile,
+    )
+    return head_no, word_points
+
+
 def _parse_device_for_address_profile(device: str | DeviceRef, address_profile: object | None) -> DeviceRef:
     ref = parse_device(device, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
@@ -99,10 +139,10 @@ def _parse_device_for_address_profile(device: str | DeviceRef, address_profile: 
 
 def _resolve_extended_device_for_family(
     device: str | DeviceRef,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     address_profile: object | None,
-) -> tuple[DeviceRef, ExtensionSpec]:
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=address_profile)
+) -> tuple[DeviceRef, _ExtensionSpec]:
+    ref, effective_extension = _resolve_extended_device_and_extension(device, extension, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref), effective_extension
 
 
@@ -117,6 +157,7 @@ def build_read_devices_request(
 ) -> OperationRequest:
     """Build a direct device read request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "read_devices")
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -168,6 +209,7 @@ def build_write_devices_request(
 ) -> OperationRequest:
     """Build a direct device write request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "write_devices")
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -197,8 +239,8 @@ def build_write_devices_request(
     if bit_unit:
         payload += pack_bit_values(values)
     else:
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
+        for index, value in enumerate(values):
+            payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
     return OperationRequest(Command.DEVICE_WRITE, subcommand, bytes(payload))
 
 
@@ -249,8 +291,8 @@ def build_write_dwords_request(
     if not values:
         raise ValueError("values must not be empty")
     words: list[int] = []
-    for value in values:
-        bits = int(value) & 0xFFFFFFFF
+    for index, value in enumerate(values):
+        bits = _require_write_u32(value, f"values[{index}]")
         words.append(bits & 0xFFFF)
         words.append((bits >> 16) & 0xFFFF)
     return build_write_devices_request(
@@ -283,8 +325,13 @@ def build_write_float32s_request(
     """Build a direct float32 write request using dword transfer."""
 
     dwords: list[int] = []
-    for value in values:
-        dwords.append(struct.unpack("<I", struct.pack("<f", float(value)))[0])
+    for index, value in enumerate(values):
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError(f"values[{index}] must be a finite int or float: {value!r}")
+        try:
+            dwords.append(struct.unpack("<I", struct.pack("<f", value))[0])
+        except (OverflowError, struct.error) as error:
+            raise ValueError(f"values[{index}] is outside the finite float32 range: {value!r}") from error
     return build_write_dwords_request(
         device,
         dwords,
@@ -298,7 +345,7 @@ def build_read_devices_ext_request(
     device: str | DeviceRef,
     points: int,
     *,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -306,6 +353,7 @@ def build_read_devices_ext_request(
 ) -> OperationRequest:
     """Build an extended-device direct read request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "read_devices_ext")
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -321,7 +369,7 @@ def build_read_devices_ext_request(
         effective_series = PLCSeries.QL
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
-    payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+    payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     payload += points.to_bytes(2, "little")
     return OperationRequest(Command.DEVICE_READ, subcommand, bytes(payload))
 
@@ -330,7 +378,7 @@ def build_write_devices_ext_request(
     device: str | DeviceRef,
     values: Sequence[int | bool],
     *,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     bit_unit: bool,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -338,6 +386,7 @@ def build_write_devices_ext_request(
 ) -> OperationRequest:
     """Build an extended-device direct write request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "write_devices_ext")
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -356,13 +405,13 @@ def build_write_devices_ext_request(
         effective_series = PLCSeries.QL
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
-    payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+    payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
         payload += pack_bit_values(values)
     else:
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
+        for index, value in enumerate(values):
+            payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
     return OperationRequest(Command.DEVICE_WRITE, subcommand, bytes(payload))
 
 
@@ -410,8 +459,8 @@ def build_register_monitor_devices_request(
 
 def build_register_monitor_devices_ext_request(
     *,
-    word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
-    dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
+    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
+    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -440,21 +489,35 @@ def build_register_monitor_devices_ext_request(
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for dev, ext in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_monitor_register_devices(word_refs, dword_refs)
     return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, bytes(payload))
 
 
-def build_run_monitor_cycle_request(*, word_points: int, dword_points: int) -> OperationRequest:
+def build_run_monitor_cycle_request(
+    *,
+    word_points: int,
+    dword_points: int,
+    default_series: PLCSeries,
+    address_profile: object | None,
+) -> OperationRequest:
     """Build a monitor execution request for registered monitor points."""
 
-    if word_points < 0 or dword_points < 0:
-        raise ValueError("word_points and dword_points must be >= 0")
+    if type(word_points) is not int or type(dword_points) is not int:
+        raise ValueError("word_points and dword_points must be integers")
+    _check_random_read_like_counts(
+        word_points,
+        dword_points,
+        series=default_series,
+        name="run_monitor_cycle",
+        plc_profile=address_profile,
+        limit_key="monitor_register_word",
+    )
     return OperationRequest(Command.DEVICE_EXECUTE_MONITOR, 0x0000, b"")
 
 
@@ -524,6 +587,12 @@ def build_remote_latch_clear_request() -> OperationRequest:
     return OperationRequest(Command.REMOTE_LATCH_CLEAR, 0x0000, b"\x01\x00")
 
 
+def build_clear_error_request() -> OperationRequest:
+    """Build the fixed Clear Error request."""
+
+    return OperationRequest(Command.CLEAR_ERROR, 0x0000, b"")
+
+
 def build_remote_reset_request(*, subcommand: int) -> OperationRequest:
     """Build a remote RESET request."""
 
@@ -585,6 +654,9 @@ def build_read_random_request(
     words = [_parse_device_for_address_profile(device, address_profile) for device in word_devices]
     dwords = [_parse_device_for_address_profile(device, address_profile) for device in dword_devices]
     _validate_random_read_devices(words, dwords)
+    word_keys = tuple(str(device) for device in words)
+    dword_keys = tuple(str(device) for device in dwords)
+    _validate_random_result_keys(word_keys, dword_keys)
     _check_temporarily_unsupported_devices(words)
     _check_temporarily_unsupported_devices(dwords)
 
@@ -597,13 +669,15 @@ def build_read_random_request(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
         word_refs=tuple(words),
         dword_refs=tuple(dwords),
+        word_keys=word_keys,
+        dword_keys=dword_keys,
     )
 
 
 def build_read_random_ext_request(
     *,
-    word_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
-    dword_devices: Sequence[tuple[str | DeviceRef, ExtensionSpec]],
+    word_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec, str]],
+    dword_devices: Sequence[tuple[str | DeviceRef, _ExtensionSpec, str]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -628,21 +702,28 @@ def build_read_random_ext_request(
     payload = bytearray([len(word_devices), len(dword_devices)])
     words: list[DeviceRef] = []
     dwords: list[DeviceRef] = []
-    for device, extension in word_devices:
+    word_keys: list[str] = []
+    dword_keys: list[str] = []
+    for device, extension, result_key in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         words.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-    for device, extension in dword_devices:
+        word_keys.append(result_key)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+    for device, extension, result_key in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dwords.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        dword_keys.append(result_key)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_random_read_devices(words, dwords)
+    _validate_random_result_keys(word_keys, dword_keys)
     return RandomReadOperation(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
         word_refs=tuple(words),
         dword_refs=tuple(dwords),
+        word_keys=tuple(word_keys),
+        dword_keys=tuple(dword_keys),
     )
 
 
@@ -658,8 +739,8 @@ def decode_read_random_response(response: SlmpResponse, operation: RandomReadOpe
     offset += len(operation.word_refs) * 2
     dword_values = decode_device_dwords(response.data[offset:])
     return RandomReadResult(
-        word={str(device): value for device, value in zip(operation.word_refs, word_values, strict=True)},
-        dword={str(device): value for device, value in zip(operation.dword_refs, dword_values, strict=True)},
+        word={key: value for key, value in zip(operation.word_keys, word_values, strict=True)},
+        dword={key: value for key, value in zip(operation.dword_keys, dword_values, strict=True)},
     )
 
 
@@ -695,21 +776,21 @@ def build_write_random_words_request(
     )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
     payload = bytearray([len(word_items), len(dword_items)])
-    for device, value in word_items:
+    for index, (device, value) in enumerate(word_items):
         _check_temporarily_unsupported_device(device)
         payload += encode_device_spec(device, series=effective_series)
-        payload += int(value).to_bytes(2, "little", signed=False)
-    for device, value in dword_items:
+        payload += _require_write_u16(value, f"word_values[{index}]").to_bytes(2, "little", signed=False)
+    for index, (device, value) in enumerate(dword_items):
         _check_temporarily_unsupported_device(device)
         payload += encode_device_spec(device, series=effective_series)
-        payload += int(value).to_bytes(4, "little", signed=False)
+        payload += _require_write_u32(value, f"dword_values[{index}]").to_bytes(4, "little", signed=False)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
 def build_write_random_words_ext_request(
     *,
-    word_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]],
-    dword_values: Sequence[tuple[str | DeviceRef, int, ExtensionSpec]],
+    word_values: Sequence[tuple[str | DeviceRef, int, _ExtensionSpec]],
+    dword_values: Sequence[tuple[str | DeviceRef, int, _ExtensionSpec]],
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
@@ -733,19 +814,29 @@ def build_write_random_words_ext_request(
     payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
-    for device, value, extension in word_values:
+    word_extensions: list[_ExtensionSpec] = []
+    dword_extensions: list[_ExtensionSpec] = []
+    for index, (device, value, extension) in enumerate(word_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-        payload += int(value).to_bytes(2, "little", signed=False)
-    for device, value, extension in dword_values:
+        word_extensions.append(effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _require_write_u16(value, f"word_values[{index}]").to_bytes(2, "little", signed=False)
+    for index, (device, value, extension) in enumerate(dword_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-        payload += int(value).to_bytes(4, "little", signed=False)
-    _validate_random_write_word_devices(word_refs, dword_refs, plc_profile=address_profile)
+        dword_extensions.append(effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload += _require_write_u32(value, f"dword_values[{index}]").to_bytes(4, "little", signed=False)
+    _validate_random_write_word_devices(
+        word_refs,
+        dword_refs,
+        plc_profile=address_profile,
+        word_namespaces=word_extensions,
+        dword_namespaces=dword_extensions,
+    )
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
@@ -773,18 +864,19 @@ def build_write_random_bits_request(
     _validate_random_write_bit_devices([device for device, _ in items], plc_profile=address_profile)
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=False)
     payload = bytearray([len(items)])
-    for device, state in items:
+    for index, (device, state) in enumerate(items):
         _check_temporarily_unsupported_device(device)
         payload += encode_device_spec(device, series=effective_series)
+        encoded_state = _require_write_bit(state, f"bit_values[{index}]")
         if effective_series == PLCSeries.IQR:
-            payload += b"\x01\x00" if bool(state) else b"\x00\x00"
+            payload += b"\x01\x00" if encoded_state else b"\x00\x00"
         else:
-            payload += b"\x01" if bool(state) else b"\x00"
+            payload += b"\x01" if encoded_state else b"\x00"
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
 def build_write_random_bits_ext_request(
-    bit_values: Sequence[tuple[str | DeviceRef, bool | int, ExtensionSpec]],
+    bit_values: Sequence[tuple[str | DeviceRef, bool | int, _ExtensionSpec]],
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -807,16 +899,19 @@ def build_write_random_bits_ext_request(
     subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
     refs: list[DeviceRef] = []
-    for device, state, extension in bit_values:
+    extensions: list[_ExtensionSpec] = []
+    for index, (device, state, extension) in enumerate(bit_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         refs.append(ref)
-        payload += encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        extensions.append(effective_extension)
+        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        encoded_state = _require_write_bit(state, f"bit_values[{index}]")
         if effective_series == PLCSeries.IQR:
-            payload += b"\x01\x00" if bool(state) else b"\x00\x00"
+            payload += b"\x01\x00" if encoded_state else b"\x00\x00"
         else:
-            payload += b"\x01" if bool(state) else b"\x00"
-    _validate_random_write_bit_devices(refs, plc_profile=address_profile)
+            payload += b"\x01" if encoded_state else b"\x00"
+    _validate_random_write_bit_devices(refs, plc_profile=address_profile, namespaces=extensions)
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 
@@ -938,6 +1033,10 @@ def build_write_block_request(
         _check_points_u16(len(values), "bit block size")
         bit_refs.append(ref)
     _validate_block_write_devices(word_refs, bit_refs, plc_profile=address_profile)
+    _validate_block_write_ranges(
+        [(ref, values) for ref, (_, values) in zip(word_refs, word_blocks, strict=True)],
+        [(ref, values) for ref, (_, values) in zip(bit_refs, bit_blocks, strict=True)],
+    )
 
     # Each block's write data follows that block's own spec (SLMP reference
     # manual Write Block request format); data must not be batched after the
@@ -946,13 +1045,13 @@ def build_write_block_request(
     for ref, (_, values) in zip(word_refs, word_blocks, strict=True):
         payload += encode_device_spec(ref, series=effective_series)
         payload += len(values).to_bytes(2, "little")
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
+        for index, value in enumerate(values):
+            payload += _require_write_u16(value, f"word block value[{index}]").to_bytes(2, "little", signed=False)
     for ref, (_, values) in zip(bit_refs, bit_blocks, strict=True):
         payload += encode_device_spec(ref, series=effective_series)
         payload += len(values).to_bytes(2, "little")
-        for value in values:
-            payload += int(value).to_bytes(2, "little", signed=False)
+        for index, value in enumerate(values):
+            payload += _require_write_u16(value, f"bit block value[{index}]").to_bytes(2, "little", signed=False)
     return OperationRequest(Command.DEVICE_WRITE_BLOCK, subcommand, bytes(payload))
 
 
@@ -968,7 +1067,7 @@ def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
     return OperationRequest(Command.SELF_TEST, 0x0000, payload)
 
 
-def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
+def decode_self_test_loopback_response(response: SlmpResponse, *, expected: bytes) -> bytes:
     """Decode a self-test loopback response body."""
 
     data = response.data
@@ -978,6 +1077,10 @@ def decode_self_test_loopback_response(response: SlmpResponse) -> bytes:
     body = data[2:]
     if size != len(body):
         raise SlmpError(f"self test response size mismatch: size={size}, actual={len(body)}")
+    if size != len(expected):
+        raise SlmpError(f"self test response length mismatch: expected={len(expected)}, actual={size}")
+    if body != expected:
+        raise SlmpError("self test response payload mismatch")
     return body
 
 
@@ -1011,8 +1114,8 @@ def build_memory_write_words_request(head_address: int, values: Sequence[int]) -
     payload = bytearray()
     payload += head_address.to_bytes(4, "little")
     payload += len(values).to_bytes(2, "little")
-    for value in values:
-        payload += int(value).to_bytes(2, "little", signed=False)
+    for index, value in enumerate(values):
+        payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
     return OperationRequest(Command.MEMORY_WRITE, 0x0000, bytes(payload))
 
 
@@ -1081,27 +1184,59 @@ def build_extend_unit_write_words_request(
     if len(values) > 0x03C0:
         raise ValueError(f"word_length out of range (1..960): {len(values)}")
     payload = bytearray()
-    for value in values:
-        payload += int(value).to_bytes(2, "little", signed=False)
+    for index, value in enumerate(values):
+        payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
     return build_extend_unit_write_bytes_request(head_address, module_no, bytes(payload))
 
 
 def build_extend_unit_write_word_request(head_address: int, module_no: int, value: int) -> OperationRequest:
     """Build an extension-unit single-word write request."""
 
-    _check_u16(value, "value")
+    _require_write_u16(value, "value")
     return build_extend_unit_write_words_request(head_address, module_no, [value])
 
 
 def build_extend_unit_write_dword_request(head_address: int, module_no: int, value: int) -> OperationRequest:
     """Build an extension-unit single-dword write request."""
 
-    _check_u32(value, "value")
+    _require_write_u32(value, "value")
     return build_extend_unit_write_bytes_request(
         head_address,
         module_no,
         int(value).to_bytes(4, "little", signed=False),
     )
+
+
+def _normalize_abbreviation_labels(labels: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(labels, (str, bytes, bytearray)) or not isinstance(labels, Sequence):
+        raise TypeError("abbreviation_labels must be a sequence of strings")
+    _check_u16(len(labels), "number of abbreviation points")
+    normalized: list[str] = []
+    for label in labels:
+        if not isinstance(label, str):
+            raise TypeError("abbreviation label must be a string")
+        _encode_label_name(label)
+        normalized.append(label)
+    return tuple(normalized)
+
+
+def _validate_abbreviation_references(label: str, abbreviation_count: int) -> None:
+    _encode_label_name(label)
+    index = 0
+    while index < len(label):
+        if label[index] != "%":
+            index += 1
+            continue
+        digit_start = index + 1
+        digit_end = digit_start
+        while digit_end < len(label) and "0" <= label[digit_end] <= "9":
+            digit_end += 1
+        if digit_end == digit_start:
+            raise ValueError(f"label contains an invalid abbreviation reference; use %1 through %{abbreviation_count}")
+        reference = int(label[digit_start:digit_end])
+        if reference < 1 or reference > abbreviation_count:
+            raise ValueError(f"label contains an invalid abbreviation reference; use %1 through %{abbreviation_count}")
+        index = digit_end
 
 
 def build_array_label_read_payload(
@@ -1114,13 +1249,14 @@ def build_array_label_read_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         _check_label_unit_specification(point.unit_specification, "unit_specification")
         _check_u16(point.array_data_length, "array_data_length")
         payload += _encode_label_name(point.label)
@@ -1140,13 +1276,14 @@ def build_array_label_write_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         _check_label_unit_specification(point.unit_specification, "unit_specification")
         _check_u16(point.array_data_length, "array_data_length")
         raw = bytes(point.data)
@@ -1175,13 +1312,14 @@ def build_label_read_random_payload(
     if not labels:
         raise ValueError("labels must not be empty")
     _check_u16(len(labels), "number of read data points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(labels).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for label in labels:
+        _validate_abbreviation_references(label, len(abbreviations))
         payload += _encode_label_name(label)
     return bytes(payload)
 
@@ -1196,13 +1334,14 @@ def build_label_write_random_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of write data points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         raw = bytes(point.data)
         _check_u16(len(raw), "write data length")
         payload += _encode_label_name(point.label)

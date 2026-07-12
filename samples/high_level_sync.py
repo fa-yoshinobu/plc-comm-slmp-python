@@ -7,13 +7,13 @@ Run against a real PLC or the GX Works3 simulator.
 
 Usage
 -----
-    python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
+    python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --transport tcp --plc-profile melsec:iq-r
     python samples/high_level_sync.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
-    python samples/high_level_sync.py --host 127.0.0.1 --port 5511 --plc-profile melsec:iq-r
+    python samples/high_level_sync.py --host 127.0.0.1 --port 5511 --transport tcp --plc-profile melsec:iq-r
 
 Common port values
 ------------------
-  1025  iQ-R / iQ-F built-in Ethernet SLMP port, TCP (default)
+  1025  iQ-R / iQ-F built-in Ethernet SLMP port, TCP
   1035  iQ-R / iQ-F built-in Ethernet SLMP port, UDP
   5511  GX Works3 simulator on 127.0.0.1
   5007  Q/L series built-in Ethernet SLMP port
@@ -31,16 +31,15 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     SlmpConnectionOptions,
+    SlmpTarget,
     format_address,
     normalize_address,
     open_and_connect_sync,
     parse_address,
     poll_sync,
-    read_dwords_chunked_sync,
     read_dwords_single_request_sync,
     read_named_sync,
     read_typed_sync,
-    read_words_chunked_sync,
     read_words_single_request_sync,
     write_bit_in_word_sync,
     write_named_sync,
@@ -62,10 +61,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--port",
         type=int,
-        default=1025,
+        required=True,
         help=(
             "SLMP port number\n"
-            "  1025  iQ-R/iQ-F built-in Ethernet SLMP (default)\n"
+            "  1025  iQ-R/iQ-F built-in Ethernet SLMP\n"
             "  1035  iQ-R/iQ-F built-in Ethernet SLMP over UDP\n"
             "  5511  GX Works3 simulator on 127.0.0.1\n"
             "  5007  Q/L series built-in Ethernet"
@@ -74,8 +73,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--transport",
         choices=("tcp", "udp"),
-        default="tcp",
-        help="Transport protocol (default tcp)",
+        required=True,
+        help="Transport protocol",
     )
     p.add_argument(
         "--plc-profile",
@@ -128,22 +127,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    parsed = parse_address("d200:f")
+    parsed = parse_address("d200:f", plc_profile=args.plc_profile)
     print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
-    print(f"[format_address] parsed -> {format_address(parsed)}")
+    print(f"[format_address] parsed -> {format_address(parsed, plc_profile=args.plc_profile)}")
 
     # SlmpConnectionOptions:
     #   host             - PLC IP / hostname
     #   plc_profile      - canonical high-level PLC profile; derives frame,
     #                      access profile, and X/Y/range handling
     #   port             - SLMP port; depends on PLC hardware and firmware settings
-    #   transport        - "tcp" (default) or "udp"; use port 1035 for the
+    #   transport        - required "tcp" or "udp"; use port 1035 for the
     #                      standard UDP example target in this repository
     #   timeout          - socket timeout in seconds; increase on slow networks
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
-    #   trace_hook       - optional callback(SlmpTraceFrame) for protocol tracing
     options = SlmpConnectionOptions(
         host=args.host,
         plc_profile=args.plc_profile,
@@ -151,6 +149,7 @@ def main() -> None:
         transport=args.transport,
         timeout=args.timeout,
         monitoring_timer=args.monitoring_timer,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
 
     with open_and_connect_sync(options) as client:
@@ -186,7 +185,6 @@ def main() -> None:
         # 2. explicit contiguous helpers
         #
         # Use *_single_request_sync when one logical request must stay one PLC request.
-        # Use *_chunked_sync only when multi-request chunking is explicitly acceptable.
         #
         # Use case: reading a recipe table of 200 words in one call.
         # ---------------------------------------------------------------
@@ -195,11 +193,6 @@ def main() -> None:
 
         dwords = read_dwords_single_request_sync(client, "D0", 4)
         print(f"[read_dwords_single_request_sync] D0-D7 (as 4 x uint32) = {dwords}")
-
-        large_words = read_words_chunked_sync(client, "D0", 1000)
-        large_dwords = read_dwords_chunked_sync(client, "D200", 120)
-        print(f"[read_words_chunked_sync] D0-D999: {len(large_words)} words read")
-        print(f"[read_dwords_chunked_sync] D200-D439: {len(large_dwords)} dwords read")
 
         # ---------------------------------------------------------------
         # 3. write_bit_in_word_sync

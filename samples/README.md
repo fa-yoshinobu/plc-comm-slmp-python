@@ -34,7 +34,6 @@ python samples/07_async_sample.py 192.168.250.100:1025
 | `03_random_and_block.py` | Read random devices and block groups. | Sync client |
 | `04_target_header.py` | Use an explicit SLMP target header. | Sync client |
 | `05_label_reads.py` | Read random labels and array labels. | Sync client |
-| `06_verify_3e_4e.py` | Compare manually selected 3E and 4E frames with trace output. | Low-level client |
 
 ## Recommended first sample
 
@@ -48,7 +47,6 @@ Start with `high_level_async.py` against `D100`, then use `high_level_sync.py` i
 - `open_and_connect`
 - `read_typed` / `write_typed`
 - `read_words_single_request` / `read_dwords_single_request`
-- `read_words_chunked` / `read_dwords_chunked`
 - `write_bit_in_word`
 - `read_named` / `write_named`
 - `poll`
@@ -59,7 +57,6 @@ Start with `high_level_async.py` against `D100`, then use `high_level_sync.py` i
 - `open_and_connect_sync`
 - `read_typed_sync` / `write_typed_sync`
 - `read_words_single_request_sync` / `read_dwords_single_request_sync`
-- `read_words_chunked_sync` / `read_dwords_chunked_sync`
 - `write_bit_in_word_sync`
 - `read_named_sync` / `write_named_sync`
 - `poll_sync`

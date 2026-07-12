@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from slmp import SlmpConnectionOptions, open_and_connect, read_typed
+from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, read_typed
 from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
@@ -35,8 +35,8 @@ def positive_float(value: str) -> float:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read one SLMP value forever and reconnect after transport loss.")
     parser.add_argument("--host", required=True, help="PLC IP address or hostname")
-    parser.add_argument("--port", type=int, default=1025, help="SLMP port number (default 1025)")
-    parser.add_argument("--transport", choices=("tcp", "udp"), default="tcp", help="Transport protocol")
+    parser.add_argument("--port", type=int, required=True, help="SLMP port number")
+    parser.add_argument("--transport", choices=("tcp", "udp"), required=True, help="Transport protocol")
     parser.add_argument(
         "--plc-profile",
         choices=(
@@ -103,6 +103,7 @@ async def poll_forever(args: argparse.Namespace) -> None:
         transport=args.transport,
         timeout=args.timeout,
         plc_profile=args.plc_profile,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
 
     client: Any | None = None

@@ -177,9 +177,10 @@ def build_plan(config_path: Path, args: argparse.Namespace) -> PollingPlan:
     defaults = as_mapping(data.get("defaults", {}), field_name="defaults")
     output = as_mapping(data.get("output", {}), field_name="output")
 
-    default_transport = str(defaults.get("transport", "tcp"))
-    if default_transport not in {"tcp", "udp"}:
+    default_transport_raw = defaults.get("transport")
+    if default_transport_raw is not None and not isinstance(default_transport_raw, str):
         raise SystemExit("defaults.transport must be tcp or udp")
+    default_transport = default_transport_raw
     default_port_raw = defaults.get("port")
     if default_port_raw is not None and not isinstance(default_port_raw, int):
         raise SystemExit("defaults.port must be an integer")
@@ -200,12 +201,12 @@ def build_plan(config_path: Path, args: argparse.Namespace) -> PollingPlan:
         if not isinstance(name, str) or not isinstance(host, str) or not isinstance(profile, str):
             raise SystemExit(f"plcs[{index}] requires string name, host, and plc_profile")
 
-        transport = str(plc.get("transport", default_transport))
+        transport = plc.get("transport", default_transport)
         if transport not in {"tcp", "udp"}:
-            raise SystemExit(f"plcs[{index}].transport must be tcp or udp")
+            raise SystemExit(f"plcs[{index}].transport is required and must be tcp or udp")
         port = plc.get("port", default_port)
-        if port is not None and not isinstance(port, int):
-            raise SystemExit(f"plcs[{index}].port must be an integer")
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise SystemExit(f"plcs[{index}].port is required and must be an integer in range 1..65535")
 
         endpoint = PlcEndpoint(
             name=name,
@@ -246,7 +247,7 @@ async def run(args: argparse.Namespace) -> None:
     if args.dry_run:
         for endpoint in plan.endpoints:
             print(
-                f"{endpoint.name}: {endpoint.transport} {endpoint.host}:{endpoint.port or 'default'} "
+                f"{endpoint.name}: {endpoint.transport} {endpoint.host}:{endpoint.port} "
                 f"profile={endpoint.plc_profile} interval={endpoint.interval}s"
             )
             tags = ", ".join(f"{tag.name}={tag.address}" for tag in plan.tags_by_plc[endpoint.name])

@@ -6,12 +6,18 @@ import unittest
 
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
-from slmp.core import CpuOperationStatus
+from slmp.core import CpuOperationStatus, SlmpTarget
 
 
 class _FakeSyncClient(SlmpClient):
     def __init__(self) -> None:
-        super().__init__("127.0.0.1", plc_profile="melsec:iq-r")
+        super().__init__(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
         self.calls: list[tuple[str, int, bool]] = []
         self.next_words: list[int] = [0]
 
@@ -23,7 +29,13 @@ class _FakeSyncClient(SlmpClient):
 
 class _FakeAsyncClient(AsyncSlmpClient):
     def __init__(self) -> None:
-        super().__init__("127.0.0.1", plc_profile="melsec:iq-r")
+        super().__init__(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
         self.calls: list[tuple[str, int, bool]] = []
         self.next_words: list[int] = [0]
 

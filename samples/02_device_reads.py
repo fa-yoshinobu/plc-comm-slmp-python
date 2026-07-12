@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from _common import add_connection_args, create_client_from_args
+from _common import add_connection_args, create_client_from_args, own_station_target
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,7 +24,7 @@ def main() -> int:
     if args.word_points < 0 or args.bit_points < 0:
         raise SystemExit("word-points and bit-points must be >= 0")
 
-    with create_client_from_args(args) as cli:
+    with create_client_from_args(args, default_target=own_station_target()) as cli:
         if args.word_points:
             words = cli.read_devices(args.word_device, args.word_points, bit_unit=False)
             print(f"{args.word_device} words: {words}")

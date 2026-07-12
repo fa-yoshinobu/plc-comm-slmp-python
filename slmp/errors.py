@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .error_codes import get_end_code_message, get_end_code_name, is_remote_password_end_code
+from .error_codes import get_end_code_name, is_remote_password_end_code
 
 
 @dataclass(frozen=True)
@@ -59,11 +59,6 @@ class SlmpError(Exception):
         return get_end_code_name(self.end_code) if self.end_code is not None else None
 
     @property
-    def end_code_message(self) -> str | None:
-        """Return the English SLMP end-code message, if present."""
-        return get_end_code_message(self.end_code) if self.end_code is not None else None
-
-    @property
     def is_remote_password_error(self) -> bool:
         """Return True when this error is related to remote password protection."""
         return self.end_code is not None and is_remote_password_end_code(self.end_code)
@@ -82,11 +77,8 @@ class SlmpProfileFeatureError(ValueError):
         self.feature_key = feature_key
         self.state = state
         self.evidence = evidence
-        self.disable_hint = "Set strict_profile=False to send the request anyway."
         evidence_text = "" if not evidence else f" Evidence: {evidence}."
-        super().__init__(
-            f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}.{evidence_text} {self.disable_hint}"
-        )
+        super().__init__(f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}.{evidence_text}")
 
 
 class SlmpPracticalPathWarning(UserWarning):

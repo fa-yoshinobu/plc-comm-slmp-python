@@ -11,13 +11,11 @@ from typing import Any
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import (
-    DIRECT_MEMORY_LINK_DIRECT,
     Command,
     FrameType,
-    PLCSeries,
+    RemoteClearMode,
 )
 from slmp.core import (
-    ExtensionSpec,
     LabelArrayReadPoint,
     LabelArrayWritePoint,
     LabelRandomWritePoint,
@@ -59,6 +57,9 @@ def _build_response(frame: bytes, *, frame_type: FrameType, response_data: bytes
 
 class _SyncCaptureClient(SlmpClient):
     def __init__(self, responses: Sequence[bytes], **kwargs: Any) -> None:
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.frames: list[bytes] = []
         self._responses = list(responses)
@@ -97,6 +98,9 @@ class _SyncCaptureClient(SlmpClient):
 
 class _AsyncCaptureClient(AsyncSlmpClient):
     def __init__(self, responses: Sequence[bytes], **kwargs: Any) -> None:
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.frames: list[bytes] = []
         self._responses = list(responses)
@@ -145,14 +149,6 @@ class _ParityCase:
     responses: Sequence[bytes]
 
 
-def _extension_for(client: SlmpClient | AsyncSlmpClient) -> ExtensionSpec:
-    return client.make_extension_spec(
-        extension_specification=0x03E0,
-        direct_memory_specification=DIRECT_MEMORY_LINK_DIRECT,
-        series=client.plc_series,
-    )
-
-
 def _label_array_read_response() -> bytes:
     return b"\x01\x00" + b"\x02\x01" + (4).to_bytes(2, "little") + b"DATA"
 
@@ -165,14 +161,14 @@ def _parity_cases() -> list[_ParityCase]:
     return [
         _ParityCase(
             "raw_command",
-            lambda c: c.raw_command(Command.CLEAR_ERROR, payload=b"\x01\x02"),
-            lambda c: c.raw_command(Command.CLEAR_ERROR, payload=b"\x01\x02"),
+            lambda c: c.raw_command(Command.CLEAR_ERROR, subcommand=0x0000, payload=b"\x01\x02"),
+            lambda c: c.raw_command(Command.CLEAR_ERROR, subcommand=0x0000, payload=b"\x01\x02"),
             [b""],
         ),
         _ParityCase(
             "read_devices_word",
-            lambda c: c.read_devices("D100", 2),
-            lambda c: c.read_devices("D100", 2),
+            lambda c: c.read_devices("D100", 2, bit_unit=False),
+            lambda c: c.read_devices("D100", 2, bit_unit=False),
             [_words(0x1111, 0x2222)],
         ),
         _ParityCase(
@@ -183,8 +179,8 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "write_devices_word",
-            lambda c: c.write_devices("D120", [0x1234, 0x5678]),
-            lambda c: c.write_devices("D120", [0x1234, 0x5678]),
+            lambda c: c.write_devices("D120", [0x1234, 0x5678], bit_unit=False),
+            lambda c: c.write_devices("D120", [0x1234, 0x5678], bit_unit=False),
             [b""],
         ),
         _ParityCase(
@@ -219,14 +215,14 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "read_devices_ext",
-            lambda c: c.read_devices_ext("D300", 2, extension=_extension_for(c)),
-            lambda c: c.read_devices_ext("D300", 2, extension=_extension_for(c)),
+            lambda c: c.read_devices_ext(r"U3E0\D300", 2, bit_unit=False),
+            lambda c: c.read_devices_ext(r"U3E0\D300", 2, bit_unit=False),
             [_words(0x1111, 0x2222)],
         ),
         _ParityCase(
             "write_devices_ext",
-            lambda c: c.write_devices_ext("D310", [0x1111, 0x2222], extension=_extension_for(c)),
-            lambda c: c.write_devices_ext("D310", [0x1111, 0x2222], extension=_extension_for(c)),
+            lambda c: c.write_devices_ext(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
+            lambda c: c.write_devices_ext(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
             [b""],
         ),
         _ParityCase(
@@ -238,12 +234,12 @@ def _parity_cases() -> list[_ParityCase]:
         _ParityCase(
             "read_random_ext",
             lambda c: c.read_random_ext(
-                word_devices=[("D410", _extension_for(c))],
-                dword_devices=[("D510", _extension_for(c))],
+                word_devices=[r"U3E0\D410"],
+                dword_devices=[r"U3E0\D510"],
             ),
             lambda c: c.read_random_ext(
-                word_devices=[("D410", _extension_for(c))],
-                dword_devices=[("D510", _extension_for(c))],
+                word_devices=[r"U3E0\D410"],
+                dword_devices=[r"U3E0\D510"],
             ),
             [_words(0x1111) + _dwords(0x12345678)],
         ),
@@ -256,12 +252,12 @@ def _parity_cases() -> list[_ParityCase]:
         _ParityCase(
             "write_random_words_ext",
             lambda c: c.write_random_words_ext(
-                word_values=[("D430", 0x1111, _extension_for(c))],
-                dword_values=[("D530", 0x12345678, _extension_for(c))],
+                word_values=[(r"U3E0\D430", 0x1111)],
+                dword_values=[(r"U3E0\D530", 0x12345678)],
             ),
             lambda c: c.write_random_words_ext(
-                word_values=[("D430", 0x1111, _extension_for(c))],
-                dword_values=[("D530", 0x12345678, _extension_for(c))],
+                word_values=[(r"U3E0\D430", 0x1111)],
+                dword_values=[(r"U3E0\D530", 0x12345678)],
             ),
             [b""],
         ),
@@ -273,8 +269,8 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "write_random_bits_ext",
-            lambda c: c.write_random_bits_ext([("M110", True, _extension_for(c)), ("M111", False, _extension_for(c))]),
-            lambda c: c.write_random_bits_ext([("M110", True, _extension_for(c)), ("M111", False, _extension_for(c))]),
+            lambda c: c.write_random_bits_ext([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
+            lambda c: c.write_random_bits_ext([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
             [b""],
         ),
         _ParityCase(
@@ -286,12 +282,12 @@ def _parity_cases() -> list[_ParityCase]:
         _ParityCase(
             "register_monitor_devices_ext",
             lambda c: c.register_monitor_devices_ext(
-                word_devices=[("D610", _extension_for(c))],
-                dword_devices=[("D710", _extension_for(c))],
+                word_devices=[r"U3E0\D610"],
+                dword_devices=[r"U3E0\D710"],
             ),
             lambda c: c.register_monitor_devices_ext(
-                word_devices=[("D610", _extension_for(c))],
-                dword_devices=[("D710", _extension_for(c))],
+                word_devices=[r"U3E0\D610"],
+                dword_devices=[r"U3E0\D710"],
             ),
             [b""],
         ),
@@ -315,8 +311,8 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "remote_run",
-            lambda c: c.remote_run(force=True, clear_mode=1),
-            lambda c: c.remote_run(force=True, clear_mode=1),
+            lambda c: c.remote_run(force=True, clear_mode=RemoteClearMode.CLEAR_EXCEPT_LATCH),
+            lambda c: c.remote_run(force=True, clear_mode=RemoteClearMode.CLEAR_EXCEPT_LATCH),
             [b""],
         ),
         _ParityCase(
@@ -338,39 +334,33 @@ def _parity_cases() -> list[_ParityCase]:
             [b""],
         ),
         _ParityCase(
-            "remote_reset_with_response",
-            lambda c: c.remote_reset(expect_response=True),
-            lambda c: c.remote_reset(expect_response=True),
-            [b""],
-        ),
-        _ParityCase(
             "remote_reset_no_response",
-            lambda c: c.remote_reset(expect_response=False),
-            lambda c: c.remote_reset(expect_response=False),
+            lambda c: c.remote_reset(),
+            lambda c: c.remote_reset(),
             [],
         ),
         _ParityCase(
             "remote_password_lock_iqr",
-            lambda c: c.remote_password_lock("secret1", series=PLCSeries.IQR),
-            lambda c: c.remote_password_lock("secret1", series=PLCSeries.IQR),
+            lambda c: c.remote_password_lock("secret1"),
+            lambda c: c.remote_password_lock("secret1"),
             [b""],
         ),
         _ParityCase(
             "remote_password_unlock_iqr",
-            lambda c: c.remote_password_unlock("secret1", series=PLCSeries.IQR),
-            lambda c: c.remote_password_unlock("secret1", series=PLCSeries.IQR),
+            lambda c: c.remote_password_unlock("secret1"),
+            lambda c: c.remote_password_unlock("secret1"),
             [b""],
         ),
         _ParityCase(
             "remote_password_lock_ql",
-            lambda c: c.remote_password_lock("ABCD", series=PLCSeries.QL),
-            lambda c: c.remote_password_lock("ABCD", series=PLCSeries.QL),
+            lambda c: c.remote_password_lock("ABCD"),
+            lambda c: c.remote_password_lock("ABCD"),
             [b""],
         ),
         _ParityCase(
             "remote_password_unlock_ql",
-            lambda c: c.remote_password_unlock("ABCD", series=PLCSeries.QL),
-            lambda c: c.remote_password_unlock("ABCD", series=PLCSeries.QL),
+            lambda c: c.remote_password_unlock("ABCD"),
+            lambda c: c.remote_password_unlock("ABCD"),
             [b""],
         ),
         _ParityCase(
@@ -413,18 +403,6 @@ def _parity_cases() -> list[_ParityCase]:
             "extend_unit_write_bytes",
             lambda c: c.extend_unit_write_bytes(0x2000, 0x03E0, b"\x01\x02\x03\x04"),
             lambda c: c.extend_unit_write_bytes(0x2000, 0x03E0, b"\x01\x02\x03\x04"),
-            [b""],
-        ),
-        _ParityCase(
-            "cpu_buffer_read_bytes",
-            lambda c: c.cpu_buffer_read_bytes(0x3000, 4),
-            lambda c: c.cpu_buffer_read_bytes(0x3000, 4),
-            [b"\x05\x06\x07\x08"],
-        ),
-        _ParityCase(
-            "cpu_buffer_write_bytes",
-            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08"),
-            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08"),
             [b""],
         ),
         _ParityCase(
@@ -473,14 +451,17 @@ class TestSyncAsyncRequestFrameParity(unittest.IsolatedAsyncioTestCase):
             (
                 "ql_3e",
                 {
-                    "_allow_manual_profile": True,
-                    "plc_series": PLCSeries.QL,
-                    "frame_type": FrameType.FRAME_3E,
+                    "plc_profile": "melsec:qnu",
+                    "_maintainer_strict_profile": False,
                 },
             ),
         )
         for profile_name, profile_kwargs in profiles:
             for case in _parity_cases():
+                if profile_name == "iqr_4e" and case.name.endswith("_ql"):
+                    continue
+                if profile_name == "ql_3e" and case.name.endswith("_iqr"):
+                    continue
                 with self.subTest(profile=profile_name, command=case.name):
                     sync_client = _SyncCaptureClient(case.responses, **profile_kwargs)
                     async_client = _AsyncCaptureClient(case.responses, **profile_kwargs)

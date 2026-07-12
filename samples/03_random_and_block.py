@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from _common import add_connection_args, create_client_from_args, parse_device_points
+from _common import add_connection_args, create_client_from_args, own_station_target, parse_device_points
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +36,7 @@ def main() -> int:
     word_blocks = [parse_device_points(spec) for spec in args.word_block]
     bit_blocks = [parse_device_points(spec) for spec in args.bit_block]
 
-    with create_client_from_args(args) as cli:
+    with create_client_from_args(args, default_target=own_station_target()) as cli:
         random_result = cli.read_random(word_devices=args.random_word, dword_devices=args.random_dword)
         print("random word values:")
         for device, value in random_result.word.items():

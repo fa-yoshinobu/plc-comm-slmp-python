@@ -608,10 +608,17 @@ def read_device_range_catalog_for_plc_profile_sync(
     """Read one canonical profile SD window in a single request and build a catalog."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
+    if client.plc_profile != normalized_profile.value:
+        raise ValueError(
+            f"Requested plc_profile {normalized_profile.value!r} does not match "
+            f"client plc_profile {client.plc_profile!r}."
+        )
     profile = _PROFILES[_RANGE_RULE_PROFILE.get(normalized_profile, normalized_profile)]
     words = cast(
         list[int],
-        client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
+        client.read_devices(
+            DeviceRef("SD", profile.register_start, normalized_profile.value), profile.register_count, bit_unit=False
+        ),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
     catalog = build_device_range_catalog_for_plc_profile(normalized_profile, registers)
@@ -625,10 +632,17 @@ async def read_device_range_catalog_for_plc_profile(
     """Async variant of the canonical explicit-profile device-range catalog read."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
+    if client.plc_profile != normalized_profile.value:
+        raise ValueError(
+            f"Requested plc_profile {normalized_profile.value!r} does not match "
+            f"client plc_profile {client.plc_profile!r}."
+        )
     profile = _PROFILES[_RANGE_RULE_PROFILE.get(normalized_profile, normalized_profile)]
     words = cast(
         list[int],
-        await client.read_devices(DeviceRef("SD", profile.register_start), profile.register_count, bit_unit=False),
+        await client.read_devices(
+            DeviceRef("SD", profile.register_start, normalized_profile.value), profile.register_count, bit_unit=False
+        ),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
     catalog = build_device_range_catalog_for_plc_profile(normalized_profile, registers)

@@ -12,7 +12,7 @@ This release publishes the first packaged version of `SLMP Connect Python`, a Py
 - TCP and UDP client support
 - typed APIs for normal device, random, block, monitor, memory, extend-unit, label, remote-control, password, self-test, and major file-command operations
 - Extended Specification typed extension builders and helper APIs
-- practical helper APIs for long timer / long retentive timer decoding and CPU buffer access through the verified `0601/1601` path
+- practical helper APIs for long timer / long retentive timer decoding and what was then described as CPU-buffer access through `0601/1601`. Historical correction: later live evidence established that these commands address Extend Unit memory, not qualified `U3En\HG` CPU-buffer memory.
 - CLI entry points for connection checks and focused live-verification workflows
 
 ## Packaging

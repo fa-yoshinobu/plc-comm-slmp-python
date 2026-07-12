@@ -63,7 +63,6 @@ Typical examples:
 - `scripts/slmp_pending_live_verification.py`
 - `scripts/slmp_device_range_probe.py`
 - `scripts/slmp_register_boundary_probe.py`
-- `scripts/slmp_special_device_probe.py`
 
 ## 4. Result Updates
 

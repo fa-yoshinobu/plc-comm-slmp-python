@@ -25,6 +25,14 @@ class PLCSeries(str, Enum):
     IQR = "iqr"  # MELSEC iQ-R/iQ-L (0002/0003)
 
 
+class RemoteClearMode(IntEnum):
+    """Explicit device-clear policy for remote RUN."""
+
+    NO_CLEAR = 0
+    CLEAR_EXCEPT_LATCH = 1
+    CLEAR_ALL = 2
+
+
 class DeviceUnit(IntEnum):
     """Device unit (bit or word)."""
 

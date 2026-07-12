@@ -7,13 +7,13 @@ including explicit `plc_profile` selection and QueuedAsyncSlmpClient for concurr
 
 Usage
 -----
-    python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
+    python samples/high_level_async.py --host 192.168.250.100 --port 1025 --transport tcp --plc-profile melsec:iq-r
     python samples/high_level_async.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
-    python samples/high_level_async.py --host 127.0.0.1 --port 5511 --plc-profile melsec:iq-r
+    python samples/high_level_async.py --host 127.0.0.1 --port 5511 --transport tcp --plc-profile melsec:iq-r
 
 Common port values
 ------------------
-  1025  iQ-R / iQ-F built-in Ethernet SLMP port (default)
+  1025  iQ-R / iQ-F built-in Ethernet SLMP port
   1035  iQ-R / iQ-F built-in Ethernet SLMP port, UDP
   5511  GX Works3 simulator on 127.0.0.1
   5007  Q/L series built-in Ethernet SLMP port
@@ -33,16 +33,15 @@ if str(REPO_ROOT) not in sys.path:
 
 from slmp import (
     SlmpConnectionOptions,
+    SlmpTarget,
     format_address,
     normalize_address,
     open_and_connect,
     parse_address,
     poll,
-    read_dwords_chunked,
     read_dwords_single_request,
     read_named,
     read_typed,
-    read_words_chunked,
     read_words_single_request,
     write_bit_in_word,
     write_named,
@@ -65,10 +64,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--port",
         type=int,
-        default=1025,
+        required=True,
         help=(
             "SLMP port number\n"
-            "  1025  iQ-R/iQ-F built-in Ethernet SLMP (default)\n"
+            "  1025  iQ-R/iQ-F built-in Ethernet SLMP\n"
             "  1035  iQ-R/iQ-F built-in Ethernet SLMP over UDP\n"
             "  5511  GX Works3 simulator on 127.0.0.1\n"
             "  5007  Q/L series built-in Ethernet"
@@ -77,8 +76,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--transport",
         choices=("tcp", "udp"),
-        default="tcp",
-        help="Transport protocol (default tcp)",
+        required=True,
+        help="Transport protocol",
     )
     p.add_argument(
         "--timeout",
@@ -127,6 +126,7 @@ def build_options(host: str, port: int, transport: str, timeout: float, plc_prof
         port=port,
         transport=transport,
         timeout=timeout,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
 
 
@@ -150,7 +150,7 @@ async def demo_explicit_connect(host: str, port: int, transport: str, timeout: f
     await client.close()
 
 
-async def demo_typed_rw(client) -> None:
+async def demo_typed_rw(client: AsyncSlmpClient) -> None:
     """
     read_typed / write_typed - single device with automatic type conversion.
 
@@ -181,15 +181,13 @@ async def demo_typed_rw(client) -> None:
         print("[write_typed] Restored D100, D200, D202")
 
 
-async def demo_contiguous_reads(client) -> None:
+async def demo_contiguous_reads(client: AsyncSlmpClient) -> None:
     """
     Explicit contiguous helpers.
 
     `*_single_request` keeps one logical read on one PLC request.
-    `*_chunked` is the explicit opt-in surface for large multi-request reads.
-
-    Use case: reading a recipe table of 1000 words that exceeds the 960-word
-              SLMP limit while keeping the call site explicit about chunking.
+    Requests larger than the protocol limit are rejected. Applications that
+    intentionally need multiple snapshots must issue and label those requests.
     """
     words = await read_words_single_request(client, "D0", 10)
     print(f"[read_words_single_request]  D0-D9 = {words}")
@@ -197,13 +195,8 @@ async def demo_contiguous_reads(client) -> None:
     dwords = await read_dwords_single_request(client, "D0", 4)
     print(f"[read_dwords_single_request] D0-D7 (as 4 x uint32) = {dwords}")
 
-    large_words = await read_words_chunked(client, "D0", 1000)
-    large_dwords = await read_dwords_chunked(client, "D200", 120)
-    print(f"[read_words_chunked] D0-D999: {len(large_words)} words")
-    print(f"[read_dwords_chunked] D200-D439: {len(large_dwords)} dwords")
 
-
-async def demo_bit_in_word(client) -> None:
+async def demo_bit_in_word(client: AsyncSlmpClient) -> None:
     """
     write_bit_in_word - set/clear one bit inside a word device.
 
@@ -225,7 +218,7 @@ async def demo_bit_in_word(client) -> None:
         print("[write_bit_in_word] Restored bit 3 of D50")
 
 
-async def demo_named_rw(client) -> None:
+async def demo_named_rw(client: AsyncSlmpClient) -> None:
     """
     read_named / write_named - multi-device mixed-type access by address string.
 
@@ -268,7 +261,7 @@ async def demo_named_rw(client) -> None:
         print("[write_named] Restored mixed-type values")
 
 
-async def demo_poll(client, count: int) -> None:
+async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
     """
     poll - async generator that yields a snapshot dict every *interval* seconds.
 
@@ -319,10 +312,10 @@ async def demo_queued_client(host: str, port: int, transport: str, timeout: floa
 
 
 async def run(args: argparse.Namespace) -> None:
-    parsed = parse_address("d200:f")
+    parsed = parse_address("d200:f", plc_profile=args.plc_profile)
     print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
-    print(f"[format_address] parsed -> {format_address(parsed)}")
+    print(f"[format_address] parsed -> {format_address(parsed, plc_profile=args.plc_profile)}")
 
     # 1. Connect once with explicit stable settings
     await demo_explicit_connect(args.host, args.port, args.transport, args.timeout, args.plc_profile)
@@ -331,11 +324,12 @@ async def run(args: argparse.Namespace) -> None:
     async with await open_and_connect(
         build_options(args.host, args.port, args.transport, args.timeout, args.plc_profile)
     ) as client:
-        await demo_typed_rw(client)
-        await demo_contiguous_reads(client)
-        await demo_bit_in_word(client)
-        await demo_named_rw(client)
-        await demo_poll(client, args.poll_count)
+        client_view = cast(AsyncSlmpClient, client)
+        await demo_typed_rw(client_view)
+        await demo_contiguous_reads(client_view)
+        await demo_bit_in_word(client_view)
+        await demo_named_rw(client_view)
+        await demo_poll(client_view, args.poll_count)
 
     # 6. QueuedAsyncSlmpClient
     await demo_queued_client(args.host, args.port, args.transport, args.timeout, args.plc_profile)

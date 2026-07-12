@@ -4,7 +4,7 @@ This page is a user-facing index of the public Python SLMP API surface.
 Use the usage guide for examples, and this page when you need to find the
 operation name for a specific SLMP command family.
 
-The sync `SlmpClient` and async `AsyncSlmpClient` expose the same low-level
+The sync `SlmpClient` and async `AsyncSlmpClient` expose the same semantic
 operation names unless noted otherwise.
 
 ## Direct And Random Device Operations
@@ -26,15 +26,24 @@ operation names unless noted otherwise.
 
 Extended random APIs use the 008x subcommands. Use qualified device notation
 such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
+Raw extension fields are not part of the public semantic API. Use
+`SlmpExtendedDevice` with `SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect` only
+when a typed modification is required; otherwise pass the qualified string.
+`read_random_ext` result keys preserve the canonical complete route and typed
+modifier, for example `U3E1\HG0`, `J2\W10`, or `U3E0\D100+Z4`. Only the
+Extended Device result-key contract changed; ordinary `read_random` keys remain
+plain canonical device addresses.
 
 ## Specialized Operations
 
 | Operation | Public API |
 | --- | --- |
 | Monitor registration/cycle | `register_monitor_devices`, `register_monitor_devices_ext`, `run_monitor_cycle` |
+| Self-test loopback | `self_test_loopback` |
+| Clear PLC error | `clear_error` |
 | Memory command words | `memory_read_words`, `memory_write_words` |
 | Extend-unit command words | `extend_unit_read_words`, `extend_unit_write_words` |
-| CPU-buffer convenience words | `cpu_buffer_read_words`, `cpu_buffer_write_words` |
+| HG CPU-buffer words | `read_devices_ext`, `write_devices_ext` with a qualified `U3E0\HG` through `U3E3\HG` address |
 | Label array access | `read_array_labels`, `write_array_labels` |
 | Label random access | `read_random_labels`, `write_random_labels` |
 | Remote CPU control | `remote_run`, `remote_stop`, `remote_pause`, `remote_latch_clear`, `remote_reset` |
@@ -48,15 +57,28 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
 | Typed values | `read_typed`, `write_typed` |
 | Named mixed snapshots | `read_named`, `write_named`, `poll` |
-| Chunked word/dword reads | `read_words_single_request`, `read_words_chunked`, `read_dwords_single_request`, `read_dwords_chunked` |
-| Address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
+| Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
+| Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
+| Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word` |
+
+`write_named` emits exactly one random-write request. It rejects mixed
+bit/word command families and bit-in-word read-modify-write entries. The
+dedicated `write_bit_in_word` helper visibly performs the required read and
+write requests.
+
+The contiguous helpers, `read_named`, and `write_named` never split one call
+into multiple protocol requests. Named entries that require another command
+family are rejected before transport. Counts above the applicable
+single-request limit are rejected before transport. Applications that need
+larger logical ranges must issue explicit requests and define their own
+snapshot/version and partial-write handling.
 
 ## Target Module I/O Constants
 
 `ModuleIONo` provides named request-header module I/O numbers for multi-CPU
-and routed CPU targets. Pass these values to `SlmpTarget(module_io=...)`;
-the default `SlmpTarget()` remains the own-station route `0x03FF`.
+and routed CPU targets. Construct `SlmpTarget` with all four route fields;
+there is no implicit own-station route in the public connection API.
 
 | Constant | Value |
 | --- | --- |

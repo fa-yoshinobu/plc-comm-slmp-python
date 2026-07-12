@@ -15,7 +15,7 @@ This library is part of the plc-comm family. See the [package matrix](https://fa
 
 The maintained profile table is in [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/PROFILES/). Choose one exact canonical PLC profile from that table.
 
-Sync and async clients use `strict_profile=True` by default. With a selected profile, operations known to be unavailable for that PLC are rejected before sending. Set `strict_profile=False` only for deliberate verification where you want the PLC to answer directly. Point limits and read-only write policies are always enforced.
+Sync and async public clients always enforce the selected PLC profile. Point limits and read-only write policies are also enforced before transport.
 
 ## Supported device types
 
@@ -31,10 +31,16 @@ pip install plc-comm-slmp
 
 ```python
 import asyncio
-from slmp import SlmpConnectionOptions, open_and_connect, read_typed
+from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, read_typed
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, plc_profile="melsec:iq-r")
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         value = await read_typed(client, "D100", "U")
         print(f"D100={value}")

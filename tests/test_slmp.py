@@ -1,10 +1,12 @@
 """Tests for SLMP client and core functions."""
 
+import ast
 import json
 import socket
 import threading
 import unittest
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
@@ -13,7 +15,7 @@ from typing import Any, NoReturn
 from unittest.mock import patch
 
 import slmp.core
-from slmp import cli
+from slmp import _operations, cli
 from slmp.client import (
     BlockReadResult,
     LabelArrayReadPoint,
@@ -29,27 +31,42 @@ from slmp.client import (
     _recv_exact,
     _recv_tcp_frame,
 )
-from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries
+from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from slmp.core import (
     DeviceRef,
-    ExtensionSpec,
     SlmpBoundaryBehaviorWarning,
     SlmpError,
+    SlmpExtendedDevice,
+    SlmpIndexLz,
+    SlmpIndexZ,
+    SlmpIndirect,
     SlmpPracticalPathWarning,
     SlmpResponse,
     SlmpTarget,
     SlmpUnsupportedDeviceError,
-    build_device_modification_flags,
+    _build_device_modification_flags,
+    _encode_extended_device_spec,
+    _ExtensionSpec,
+    _parse_extended_device,
     decode_4e_response,
     encode_4e_request,
     encode_device_spec,
-    encode_extended_device_spec,
     pack_bit_values,
     parse_device,
-    parse_extended_device,
     unpack_bit_values,
 )
 from slmp.errors import SlmpProfileFeatureError
+
+_SELF_ROUTE_ARGS = [
+    "--network",
+    "0x00",
+    "--station",
+    "0xFF",
+    "--module-io",
+    "0x03FF",
+    "--multidrop",
+    "0x00",
+]
 
 print(f"DEBUG: core file = {slmp.core.__file__}")
 
@@ -63,7 +80,11 @@ class FakeClient(SlmpClient):
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize FakeClient."""
-        kwargs.setdefault("_allow_manual_profile", True)
+        if not any(name in kwargs for name in ("plc_profile", "plc_series", "frame_type", "address_profile")):
+            kwargs["plc_profile"] = "melsec:iq-r"
+        kwargs.setdefault("port", 1025)
+        kwargs.setdefault("transport", "tcp")
+        kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes, dict[str, Any]] | None = None
         self.requests: list[tuple[int, int, bytes, dict[str, Any]]] = []
@@ -72,7 +93,7 @@ class FakeClient(SlmpClient):
         self.response_queue: list[tuple[int, bytes]] = []
         self.last_no_response: tuple[int, int, bytes, dict[str, Any]] | None = None
 
-    def request(
+    def _request(
         self,
         command: int | Command,
         subcommand: int = 0x0000,
@@ -107,7 +128,7 @@ class FakeClient(SlmpClient):
             )
         return SlmpResponse(
             serial=0,
-            target=SlmpTarget(),
+            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
             end_code=end_code,
             data=response_data,
             raw=b"",
@@ -166,6 +187,7 @@ class _SendRecvSocket(_RecvIntoSocket):
         super().__init__(chunks)
         self.sent: list[bytes] = []
         self.timeout: float | None = None
+        self.closed = False
 
     def sendall(self, data: bytes) -> None:
         self.sent.append(bytes(data))
@@ -175,6 +197,35 @@ class _SendRecvSocket(_RecvIntoSocket):
 
     def settimeout(self, timeout: float | None) -> None:
         self.timeout = timeout
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _InterruptSocket(_SendRecvSocket):
+    def recv_into(self, view: memoryview) -> int:
+        raise KeyboardInterrupt
+
+
+class _TimeoutUdpSocket:
+    def __init__(self) -> None:
+        self.closed = False
+        self.timeout: float | None = None
+
+    def send(self, data: bytes) -> int:
+        return len(data)
+
+    def recv(self, size: int) -> bytes:
+        raise TimeoutError("timed out")
+
+    def gettimeout(self) -> float | None:
+        return self.timeout
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def _build_3e_response(data: bytes, *, end_code: int = 0) -> bytes:
@@ -195,6 +246,392 @@ def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
 
 
 class TestReceiveHelpers(unittest.TestCase):
+    def test_maintainer_trace_hook_defaults_off_and_requires_callable(self) -> None:
+        """Normal clients emit no trace and invalid internal hooks fail early."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+        )
+        self.assertIsNone(client._trace_hook)
+        with self.assertRaisesRegex(ValueError, "_maintainer_trace_hook must be callable or None"):
+            SlmpClient(  # type: ignore[arg-type]
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                default_target=target,
+                plc_profile="melsec:iq-r",
+                _maintainer_trace_hook="stdout",
+            )
+
+    def test_raise_on_error_requires_real_booleans_before_transport(self) -> None:
+        """Error-policy aliases must not silently enable or disable PLC errors."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        for invalid in (None, 0, 1, "false", "true", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "raise_on_error must be a boolean"):
+                    SlmpClient(  # type: ignore[arg-type]
+                        "127.0.0.1",
+                        1025,
+                        transport="tcp",
+                        default_target=target,
+                        plc_profile="melsec:iq-r",
+                        raise_on_error=invalid,
+                    )
+
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+        )
+        with self.assertRaisesRegex(ValueError, "raise_on_error must be a boolean"):
+            client._request(  # type: ignore[arg-type]
+                Command.SELF_TEST,
+                0,
+                b"",
+                raise_on_error="false",
+            )
+        self.assertIsNone(client._sock)
+
+        def respond(frame: bytes) -> bytes:
+            client.raise_on_error = False
+            return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"ng", end_code=0xC051)
+
+        client.raise_on_error = True
+        with patch.object(client, "_send_and_receive", side_effect=respond):
+            with self.assertRaises(SlmpError):
+                client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            client.raise_on_error = True
+            response = client.raw_command(
+                Command.CLEAR_ERROR,
+                subcommand=0,
+                payload=b"",
+                raise_on_error=False,
+            )
+            self.assertEqual(response.end_code, 0xC051)
+            client.raise_on_error = False
+            response = client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            self.assertEqual(response.end_code, 0xC051)
+
+    def test_hg_qualified_device_never_changes_user_selected_request_target(self) -> None:
+        sent_frames: list[bytes] = []
+
+        def exercise(target: SlmpTarget) -> None:
+            client = SlmpClient(
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                default_target=target,
+                plc_profile="melsec:iq-r",
+            )
+
+            def respond(frame: bytes) -> bytes:
+                sent_frames.append(frame)
+                return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+
+            with patch.object(client, "_send_and_receive", side_effect=respond):
+                client.write_devices_ext(r"U3E1\HG100", [0x1234], bit_unit=False)
+
+        exercise(SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+        exercise(SlmpTarget(network=0, station=0xFF, module_io=0x03E1, multidrop=0))
+
+        self.assertEqual(len(sent_frames), 2)
+        self.assertEqual(int.from_bytes(sent_frames[0][8:10], "little"), 0x03FF)
+        self.assertEqual(int.from_bytes(sent_frames[1][8:10], "little"), 0x03E1)
+        self.assertEqual(int.from_bytes(sent_frames[0][15:17], "little"), int(Command.DEVICE_WRITE))
+        self.assertEqual(int.from_bytes(sent_frames[1][15:17], "little"), int(Command.DEVICE_WRITE))
+
+    def test_request_monitoring_timer_inherits_or_requires_exact_u16(self) -> None:
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            plc_profile="melsec:iq-r",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            monitoring_timer=0x0020,
+        )
+        sent_frames: list[bytes] = []
+
+        def respond(frame: bytes) -> bytes:
+            sent_frames.append(frame)
+            return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+
+        with patch.object(client, "_send_and_receive", side_effect=respond):
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", monitoring_timer=0)
+
+        self.assertEqual(int.from_bytes(sent_frames[0][13:15], "little"), 0x0020)
+        self.assertEqual(int.from_bytes(sent_frames[1][13:15], "little"), 0)
+        for invalid in (False, True, -1, 0x10000, 1.5, "16", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "monitoring_timer must be an integer"):
+                    client.raw_command(  # type: ignore[arg-type]
+                        Command.CLEAR_ERROR,
+                        subcommand=0,
+                        payload=b"",
+                        monitoring_timer=invalid,
+                    )
+        self.assertEqual(len(sent_frames), 2)
+
+    def test_sync_client_serializes_parallel_requests_and_allocates_unique_serials(self) -> None:
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            plc_profile="melsec:iq-r",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        )
+        serials: list[int] = []
+        active = 0
+        max_active = 0
+        guard = threading.Lock()
+
+        def respond(frame: bytes) -> bytes:
+            nonlocal active, max_active
+            serial = int.from_bytes(frame[2:4], "little")
+            with guard:
+                active += 1
+                max_active = max(max_active, active)
+            threading.Event().wait(0.001)
+            serials.append(serial)
+            with guard:
+                active -= 1
+            return _build_4e_response(serial, b"")
+
+        with patch.object(client, "_send_and_receive", side_effect=respond):
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                responses = list(
+                    executor.map(
+                        lambda _: client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b""),
+                        range(32),
+                    )
+                )
+
+        self.assertEqual(max_active, 1)
+        self.assertEqual(sorted(serials), list(range(32)))
+        self.assertEqual(sorted(response.serial for response in responses), list(range(32)))
+
+    def test_generic_device_bit_unit_is_required_and_must_be_boolean(self) -> None:
+        client = FakeClient()
+        with self.assertRaises(TypeError):
+            client.read_devices("D0", 1)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.write_devices("D0", [1])  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.read_devices_ext(r"U3E0\G0", 1)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.write_devices_ext(r"U3E0\G0", [1])  # type: ignore[call-arg]
+
+        for invalid in (None, 0, 1, "false", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.read_devices("D0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.write_devices("D0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.read_devices_ext(r"U3E0\G0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.write_devices_ext(r"U3E0\G0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+        self.assertEqual(client.requests, [])
+
+    def test_random_read_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"\x34\x12"
+        word_only = client.read_random(word_devices=["D0"])
+        self.assertEqual(word_only.word, {"D0": 0x1234})
+        self.assertEqual(word_only.dword, {})
+
+        client.next_response_data = b"\x78\x56\x34\x12"
+        dword_only = client.read_random(dword_devices=["D2"])
+        self.assertEqual(dword_only.word, {})
+        self.assertEqual(dword_only.dword, {"D2": 0x12345678})
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.read_random()
+        with self.assertRaises(ValueError):
+            client.read_random_ext()
+        for invalid in (None, 1, {}, "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_random(word_devices=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_random_ext(word_devices=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_random_read_ext_preserves_complete_routes_and_rejects_result_key_collisions(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"".join(value.to_bytes(2, "little") for value in range(1, 7))
+        result = client.read_random_ext(
+            word_devices=[
+                r"U3E0\HG100",
+                r"U3E1\HG100",
+                r"U1\G0",
+                r"U2\G0",
+                r"J1\W0",
+                r"J2\W0",
+            ]
+        )
+        self.assertEqual(
+            result.word,
+            {
+                r"U3E0\HG100": 1,
+                r"U3E1\HG100": 2,
+                r"U1\G0": 3,
+                r"U2\G0": 4,
+                r"J1\W0": 5,
+                r"J2\W0": 6,
+            },
+        )
+
+        client.next_response_data = b"\x33\x33"
+        modified = client.read_random_ext(word_devices=[SlmpExtendedDevice(r"U3E0\D100", SlmpIndexZ(4))])
+        self.assertEqual(modified.word, {r"U3E0\D100+Z4": 0x3333})
+
+        request_count = len(client.requests)
+        with self.assertRaisesRegex(ValueError, "duplicate wire targets"):
+            client.read_random_ext(word_devices=[r"U3E0\HG100", r"U3E0\HG100"])
+        with self.assertRaisesRegex(ValueError, "duplicate wire targets"):
+            client.read_random_ext(word_devices=[r"U01\G0", r"U1\G0"])
+        with self.assertRaisesRegex(ValueError, "must not overlap"):
+            client.read_random_ext(word_devices=[r"J1\W0"], dword_devices=[r"J1\W0"])
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_random_word_write_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.write_random_words(word_values=[("D0", 0x1234)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_random_words(dword_values=[("D2", 0x12345678)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+        client.write_random_words_ext(word_values=[(r"U3E0\D0", 0x1234)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_random_words_ext(dword_values=[(r"U3E0\D2", 0x12345678)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.write_random_words()
+        with self.assertRaises(ValueError):
+            client.write_random_words_ext()
+        for invalid in (None, 1, object(), "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_random_words(word_values=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_random_words_ext(word_values=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_write_values_reject_coercion_and_wrapping_before_transport(self) -> None:
+        client = FakeClient()
+        invalid_words = (-1, 0x10000, 1.5, "1", True, object())
+        for value in invalid_words:
+            with self.subTest(path="direct-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_devices("D0", [value], bit_unit=False)  # type: ignore[list-item]
+            with self.subTest(path="random-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_random_words(word_values=[("D0", value)])  # type: ignore[list-item]
+            with self.subTest(path="block-word", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_block(word_blocks=[("D0", [value])])  # type: ignore[list-item]
+        for value in ("false", "0", 2, -1, 0.5, object()):
+            with self.subTest(path="direct-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_devices("M0", [value], bit_unit=True)  # type: ignore[list-item]
+            with self.subTest(path="random-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_random_bits([("M0", value)])  # type: ignore[list-item]
+        for value in (-1, 0x1_0000_0000, 1.5, "1", True):
+            with self.subTest(path="dword", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_dwords("D0", [value])  # type: ignore[list-item]
+        self.assertEqual(client.requests, [])
+
+    def test_random_and_block_writes_reject_duplicate_or_overlapping_destinations(self) -> None:
+        client = FakeClient()
+        with self.assertRaisesRegex(ValueError, "duplicate destination"):
+            client.write_random_words(word_values=[("D0", 1), ("D0", 2)])
+        with self.assertRaisesRegex(ValueError, "overlapping word/dword"):
+            client.write_random_words(word_values=[("D1", 1)], dword_values=[("D0", 2)])
+        with self.assertRaisesRegex(ValueError, "duplicate bit"):
+            client.write_random_bits([("M0", True), ("M0", False)])
+        with self.assertRaisesRegex(ValueError, "overlapping word destination range"):
+            client.write_block(word_blocks=[("D0", [1, 2]), ("D1", [3])])
+        with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
+            client.write_block(word_blocks=[("M0", [1])], bit_blocks=[("M0", [0])])
+        with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
+            client.write_block(bit_blocks=[("M0", [1, 2]), ("M16", [3])])
+        self.assertEqual(client.requests, [])
+        adjacent = FakeClient()
+        adjacent.write_block(bit_blocks=[("M0", [1]), ("M16", [2])])
+        self.assertEqual(len(adjacent.requests), 1)
+
+    def test_block_access_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"\x34\x12"
+        word_only = client.read_block(word_blocks=[("D0", 1)])
+        self.assertEqual(word_only.word_blocks[0].values, [0x1234])
+        self.assertEqual(word_only.bit_blocks, [])
+        client.next_response_data = b"\x10\x00"
+        bit_only = client.read_block(bit_blocks=[("M0", 1)])
+        self.assertEqual(bit_only.word_blocks, [])
+        self.assertEqual(bit_only.bit_blocks[0].values, [0x0010])
+
+        client.write_block(word_blocks=[("D0", [0x1234])])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_block(bit_blocks=[("M0", [0x0001])])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.read_block()
+        with self.assertRaises(ValueError):
+            client.write_block()
+        for invalid in (None, 1, object(), "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_block(word_blocks=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_block(word_blocks=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_write_block_snapshots_raise_policy_before_exchange(self) -> None:
+        client = FakeClient()
+        client.raise_on_error = True
+
+        def response(*args: object, **kwargs: object) -> SlmpResponse:
+            client.raise_on_error = False
+            return SlmpResponse(
+                serial=0,
+                target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+                end_code=0xC051,
+                data=b"",
+                raw=b"",
+            )
+
+        with patch.object(client, "_request", side_effect=response):
+            with self.assertRaises(SlmpError):
+                client.write_block(word_blocks=[("D0", [1])])
+
+    def test_random_read_rejects_duplicate_and_word_dword_overlap_before_transport(self) -> None:
+        client = FakeClient()
+
+        with self.assertRaises(ValueError):
+            client.read_random(word_devices=["D0", "D0"])
+        with self.assertRaises(ValueError):
+            client.read_random(word_devices=["D0"], dword_devices=["D0"])
+
+        self.assertEqual(client.requests, [])
+
     def test_recv_exact_prefers_recv_into(self) -> None:
         sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
         self.assertEqual(_recv_exact(sock, 3), b"\x01\x02\x03")
@@ -212,16 +649,45 @@ class TestReceiveHelpers(unittest.TestCase):
         stale = _build_4e_response(1, b"\x11\x11")
         matching = _build_4e_response(0, b"\x22\x22")
         sock = _SendRecvSocket([stale + matching])
-        client = SlmpClient("127.0.0.1", plc_profile="melsec:iq-r")
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
         client._sock = sock  # type: ignore[attr-defined]
 
-        self.assertEqual(client.read_devices("D0", 1), [0x2222])
+        self.assertEqual(client.read_devices("D0", 1, bit_unit=False), [0x2222])
         self.assertEqual(len(sock.sent), 1)
+
+    def test_sync_interrupt_after_send_closes_transport_generation(self) -> None:
+        sock = _InterruptSocket([])
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaises(KeyboardInterrupt):
+            client.read_devices("D0", 1, bit_unit=False)
+
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_slmp_error_exposes_structured_error_information(self) -> None:
         error_data = bytes.fromhex("00 FF FF 03 00 01 04 01 00")
         sock = _SendRecvSocket([_build_4e_response(0, error_data, end_code=0xC051)])
-        client = SlmpClient("127.0.0.1", plc_profile="melsec:iq-r")
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
         client._sock = sock  # type: ignore[attr-defined]
 
         with self.assertRaises(SlmpError) as ctx:
@@ -260,9 +726,16 @@ class TestReceiveHelpers(unittest.TestCase):
 
         thread = threading.Thread(target=serve)
         thread.start()
-        client = SlmpClient(host, port, plc_profile="melsec:qnu", transport="udp", timeout=1.0)
+        client = SlmpClient(
+            host,
+            port,
+            plc_profile="melsec:qnu",
+            transport="udp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            timeout=1.0,
+        )
         try:
-            self.assertEqual(client.read_devices("D0", 1), [0x2222])
+            self.assertEqual(client.read_devices("D0", 1, bit_unit=False), [0x2222])
         finally:
             client.close()
             thread.join(timeout=2.0)
@@ -336,7 +809,7 @@ class TestRemotePassword(unittest.TestCase):
         self.assertEqual(client.last_request[2], b"\x06\x00secret")
 
     def test_ql_password_requires_exactly_four_bytes(self) -> None:
-        client = FakeClient()
+        client = FakeClient(plc_profile="melsec:qnu")
 
         with self.assertRaisesRegex(ValueError, "exactly 4"):
             client.remote_password_unlock("123")
@@ -392,10 +865,10 @@ class TestCodec(unittest.TestCase):
 
     def test_device_and_bit_helpers(self) -> None:
         """Test test_device_and_bit_helpers."""
-        self.assertEqual(str(parse_device("D100")), "D100")
-        self.assertEqual(str(parse_device("X20")), "X20")
-        self.assertEqual(str(parse_device("XFF")), "XFF")
-        self.assertEqual(str(parse_device("SWFF")), "SWFF")
+        self.assertEqual(str(parse_device("D100", plc_profile="melsec:iq-r")), "D100")
+        self.assertEqual(str(parse_device("X20", plc_profile="melsec:iq-r")), "X20")
+        self.assertEqual(str(parse_device("XFF", plc_profile="melsec:iq-r")), "XFF")
+        self.assertEqual(str(parse_device("SWFF", plc_profile="melsec:iq-r")), "SWFF")
         self.assertEqual(str(parse_device("Y220", plc_profile="melsec:iq-f")), "Y220")
         self.assertEqual(
             parse_device("Y220", plc_profile="melsec:iq-f").number
@@ -418,71 +891,105 @@ class TestCodec(unittest.TestCase):
             parse_device("LZ0", plc_profile="melsec:qnu")
         with self.assertRaisesRegex(SlmpUnsupportedDeviceError, "melsec:lcpu"):
             parse_device("RD0", plc_profile="melsec:lcpu")
-        self.assertEqual(encode_device_spec("D100", series=PLCSeries.QL), b"\x64\x00\x00\xa8")
-        self.assertEqual(encode_device_spec("D100", series=PLCSeries.IQR), b"\x64\x00\x00\x00\xa8\x00")
-        self.assertEqual(encode_device_spec("R32767", series=PLCSeries.IQR), b"\xff\x7f\x00\x00\xaf\x00")
+        self.assertEqual(
+            encode_device_spec("D100", series=PLCSeries.QL, plc_profile="melsec:iq-r"), b"\x64\x00\x00\xa8"
+        )
+        self.assertEqual(
+            encode_device_spec("D100", series=PLCSeries.IQR, plc_profile="melsec:iq-r"), b"\x64\x00\x00\x00\xa8\x00"
+        )
+        self.assertEqual(
+            encode_device_spec("R32767", series=PLCSeries.IQR, plc_profile="melsec:iq-r"), b"\xff\x7f\x00\x00\xaf\x00"
+        )
         self.assertEqual(
             encode_device_spec("Y217", series=PLCSeries.IQR, plc_profile="melsec:iq-f"),
             b"\x8f\x00\x00\x00\x9d\x00",
         )
+        for series, address, expected in (
+            (PLCSeries.QL, "RD0", b"\x00\x00\x00\x2c"),
+            (PLCSeries.QL, "RD524287", b"\xff\xff\x07\x2c"),
+            (PLCSeries.IQR, "RD0", b"\x00\x00\x00\x00\x2c\x00"),
+            (PLCSeries.IQR, "RD524287", b"\xff\xff\x07\x00\x2c\x00"),
+        ):
+            with self.subTest(series=series, address=address):
+                self.assertEqual(encode_device_spec(address, series=series, plc_profile="melsec:iq-r"), expected)
+
+        boundary_client = FakeClient()
+        boundary_client.next_response_data = b"\x00\x00\x00\x00"
+        boundary_client.read_devices("RD524286", 2, bit_unit=False)
+        self.assertEqual(boundary_client.last_request[2], b"\xfe\xff\x07\x00\x2c\x00\x02\x00")
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             parse_device("Y220", plc_profile="iqf")
         with self.assertRaisesRegex(ValueError, "device code 'D'"):
-            parse_device("DFFFF")
+            parse_device("DFFFF", plc_profile="melsec:iq-r")
         with self.assertRaises(ValueError):
-            encode_device_spec("R32768", series=PLCSeries.QL)
+            encode_device_spec("R32768", series=PLCSeries.QL, plc_profile="melsec:iq-r")
         with self.assertRaises(ValueError):
-            encode_device_spec("R32768", series=PLCSeries.IQR)
+            encode_device_spec("R32768", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
 
         raw = pack_bit_values([1, 0, 1, 1, 0])
         self.assertEqual(raw, b"\x10\x11\x00")
         bits = unpack_bit_values(raw, 5)
         self.assertEqual(bits, [True, False, True, True, False])
-        extended_device = parse_extended_device(r"U3E0\G10")
+        extended_device = _parse_extended_device(r"U3E0\G10", plc_profile="melsec:iq-r")
         self.assertEqual(str(extended_device.ref), "G10")
         self.assertEqual(extended_device.extension_specification, 0x03E0)
-        extended_device_ql = parse_extended_device(r"U01\G22")
+        extended_device_ql = _parse_extended_device(r"U01\G22", plc_profile="melsec:qnu")
         self.assertEqual(str(extended_device_ql.ref), "G22")
         self.assertEqual(extended_device_ql.extension_specification, 0x0001)
         with self.assertRaisesRegex(ValueError, r"U3E0\\HG through U3E3\\HG"):
-            parse_extended_device(r"U1\HG0")
+            _parse_extended_device(r"U1\HG0", plc_profile="melsec:iq-r")
+
+    def test_device_ref_is_bound_to_one_exact_profile(self) -> None:
+        iqf = parse_device("X10", plc_profile="melsec:iq-f")
+        iqr = parse_device("X10", plc_profile="melsec:iq-r")
+
+        self.assertEqual(iqf.number, 0o10)
+        self.assertEqual(iqr.number, 0x10)
+        self.assertEqual(iqf.plc_profile, "melsec:iq-f")
+        self.assertEqual(iqr.plc_profile, "melsec:iq-r")
+        self.assertEqual(str(DeviceRef("X", 0x10, "melsec:iq-f")), "X20")
+
+        with self.assertRaises(TypeError):
+            DeviceRef("D", 0)  # type: ignore[call-arg]
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            parse_device(iqf, plc_profile="melsec:iq-r")
 
     def test_extension_helpers(self) -> None:
         """Test test_extension_helpers."""
-        flags_ql = build_device_modification_flags(
+        flags_ql = _build_device_modification_flags(
             series=PLCSeries.QL,
             use_indirect_specification=True,
             register_mode="z",
         )
         self.assertEqual(flags_ql, 0x48)
 
-        default_ext = ExtensionSpec()
+        default_ext = _ExtensionSpec()
         self.assertEqual(
-            encode_extended_device_spec("D100", series=PLCSeries.QL, extension=default_ext),
+            _encode_extended_device_spec("D100", series=PLCSeries.QL, extension=default_ext, plc_profile="melsec:qnu"),
             b"\x00\x00\x64\x00\x00\xa8\x00\x00\x00\x00\x00",
         )
-        indexed_ext = ExtensionSpec(
+        indexed_ext = _ExtensionSpec(
             device_modification_index=0x04,
-            device_modification_flags=build_device_modification_flags(
+            device_modification_flags=_build_device_modification_flags(
                 series=PLCSeries.QL,
                 register_mode="z",
             ),
         )
         self.assertEqual(
-            encode_extended_device_spec("D100", series=PLCSeries.QL, extension=indexed_ext),
+            _encode_extended_device_spec("D100", series=PLCSeries.QL, extension=indexed_ext, plc_profile="melsec:qnu"),
             b"\x04\x40\x64\x00\x00\xa8\x00\x00\x00\x00\x00",
         )
 
         # 0xF9 = LINK_DIRECT: uses GOT pcap-verified format (j_net from extension_specification)
         # J1\W100 (W hex 0x100=256): 00 00 | 00 01 00 | b4 | 00 00 | 01 | 00 | f9
-        ext = ExtensionSpec(
+        ext = _ExtensionSpec(
             extension_specification=0x0001,
             direct_memory_specification=0xF9,
         )
-        data = encode_extended_device_spec("W100", series=PLCSeries.QL, extension=ext)
+        data = _encode_extended_device_spec("W100", series=PLCSeries.QL, extension=ext, plc_profile="melsec:qnu")
         self.assertEqual(data, b"\x00\x00\x00\x01\x00\xb4\x00\x00\x01\x00\xf9")
 
-        cpu_ext = ExtensionSpec(
+        cpu_ext = _ExtensionSpec(
             extension_specification=0x03E0,
             extension_specification_modification=0x00,
             device_modification_index=0x00,
@@ -490,19 +997,24 @@ class TestCodec(unittest.TestCase):
             direct_memory_specification=0x00,
         )
         with self.assertRaisesRegex(ValueError, "G Extended Device access requires U-qualified"):
-            encode_extended_device_spec("G10", series=PLCSeries.IQR, extension=cpu_ext)
+            _encode_extended_device_spec("G10", series=PLCSeries.IQR, extension=cpu_ext, plc_profile="melsec:iq-r")
         with self.assertRaisesRegex(ValueError, "HG Extended Device access requires U-qualified"):
-            encode_extended_device_spec("HG20", series=PLCSeries.IQR, extension=cpu_ext)
-        g_data = encode_extended_device_spec(r"U3E0\G10", series=PLCSeries.IQR, extension=cpu_ext)
+            _encode_extended_device_spec("HG20", series=PLCSeries.IQR, extension=cpu_ext, plc_profile="melsec:iq-r")
+        g_data = _encode_extended_device_spec(
+            r"U3E0\G10", series=PLCSeries.IQR, extension=cpu_ext, plc_profile="melsec:iq-r"
+        )
         self.assertEqual(g_data, b"\x00\x00\x0a\x00\x00\x00\xab\x00\x00\x00\xe0\x03\xf8")
-        hg_data = encode_extended_device_spec(r"U3E0\HG20", series=PLCSeries.IQR, extension=cpu_ext)
+        hg_data = _encode_extended_device_spec(
+            r"U3E0\HG20", series=PLCSeries.IQR, extension=cpu_ext, plc_profile="melsec:iq-r"
+        )
         self.assertEqual(hg_data, b"\x00\x00\x14\x00\x00\x00\x2e\x00\x00\x00\xe0\x03\xfa")
         with self.assertRaisesRegex(ValueError, r"U3E0\\HG through U3E3\\HG"):
-            encode_extended_device_spec(r"U1\HG20", series=PLCSeries.IQR, extension=cpu_ext)
-        qualified_g_data = encode_extended_device_spec(
+            _encode_extended_device_spec(r"U1\HG20", series=PLCSeries.IQR, extension=cpu_ext, plc_profile="melsec:iq-r")
+        qualified_g_data = _encode_extended_device_spec(
             r"U3E0\G10",
             series=PLCSeries.IQR,
-            extension=ExtensionSpec(
+            plc_profile="melsec:iq-r",
+            extension=_ExtensionSpec(
                 extension_specification=0x0000,
                 extension_specification_modification=0x00,
                 device_modification_index=0x00,
@@ -511,7 +1023,7 @@ class TestCodec(unittest.TestCase):
             ),
         )
         self.assertEqual(qualified_g_data, g_data)
-        module_ext = ExtensionSpec(
+        module_ext = _ExtensionSpec(
             extension_specification=0x0001,
             extension_specification_modification=0x00,
             device_modification_index=0x00,
@@ -519,13 +1031,16 @@ class TestCodec(unittest.TestCase):
             direct_memory_specification=0xF8,
         )
         with self.assertRaisesRegex(ValueError, "G Extended Device access requires U-qualified"):
-            encode_extended_device_spec("G22", series=PLCSeries.QL, extension=module_ext)
-        ql_g_data = encode_extended_device_spec(r"U01\G22", series=PLCSeries.QL, extension=module_ext)
+            _encode_extended_device_spec("G22", series=PLCSeries.QL, extension=module_ext, plc_profile="melsec:qnu")
+        ql_g_data = _encode_extended_device_spec(
+            r"U01\G22", series=PLCSeries.QL, extension=module_ext, plc_profile="melsec:qnu"
+        )
         self.assertEqual(ql_g_data, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8")
-        qualified_ql_g_data = encode_extended_device_spec(
+        qualified_ql_g_data = _encode_extended_device_spec(
             r"U01\G22",
             series=PLCSeries.QL,
-            extension=ExtensionSpec(
+            plc_profile="melsec:qnu",
+            extension=_ExtensionSpec(
                 extension_specification=0x0000,
                 extension_specification_modification=0x00,
                 device_modification_index=0x00,
@@ -739,18 +1254,18 @@ class TestCodec(unittest.TestCase):
 
     def test_parse_boundary_spec(self) -> None:
         """Test test_parse_boundary_spec."""
-        parsed = cli._parse_boundary_spec("D,D10239,word")
+        parsed = cli._parse_boundary_spec("D,D10239,word", plc_profile="melsec:iq-r")
         self.assertEqual(parsed.label, "D")
         self.assertEqual(parsed.last_device, "D10239")
         self.assertFalse(parsed.bit_unit)
         self.assertEqual(parsed.span_points, 1)
 
-        parsed = cli._parse_boundary_spec("X,X2FFF,bit,1")
+        parsed = cli._parse_boundary_spec("X,X2FFF,bit,1", plc_profile="melsec:iq-r")
         self.assertEqual(parsed.last_device, "X2FFF")
         self.assertTrue(parsed.bit_unit)
         self.assertEqual(parsed.span_points, 1)
 
-        parsed = cli._parse_boundary_spec("LTN,LTN1023,word,4")
+        parsed = cli._parse_boundary_spec("LTN,LTN1023,word,4", plc_profile="melsec:iq-r")
         self.assertEqual(parsed.span_points, 4)
 
     def test_load_boundary_specs_from_file(self) -> None:
@@ -758,7 +1273,7 @@ class TestCodec(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "ranges.txt"
             path.write_text("# comment\nD,D10239,word\nLTN,LTN1023,word,4\n", encoding="utf-8")
-            loaded = cli._load_boundary_specs(None, str(path))
+            loaded = cli._load_boundary_specs(None, str(path), plc_profile="melsec:iq-r")
         self.assertEqual(len(loaded), 2)
         self.assertEqual(loaded[0].last_device, "D10239")
         self.assertEqual(loaded[1].last_device, "LTN1023")
@@ -767,15 +1282,18 @@ class TestCodec(unittest.TestCase):
 
     def test_increment_device_text_uses_device_radix(self) -> None:
         """Test test_increment_device_text_uses_device_radix."""
-        self.assertEqual(cli._increment_device_text("D10239"), "D10240")
-        self.assertEqual(cli._increment_device_text("X2FFF"), "X3000")
-        self.assertEqual(cli._increment_device_text("ZR163839"), "ZR163840")
-        self.assertEqual(cli._offset_device_text("D1000", 25), "D1025")
-        self.assertEqual(cli._offset_device_text("X20", 0x10), "X30")
+        self.assertEqual(cli._increment_device_text("D10239", plc_profile="melsec:iq-r"), "D10240")
+        self.assertEqual(cli._increment_device_text("X2FFF", plc_profile="melsec:iq-r"), "X3000")
+        self.assertEqual(cli._increment_device_text("ZR163839", plc_profile="melsec:iq-r"), "ZR163840")
+        self.assertEqual(cli._offset_device_text("D1000", 25, plc_profile="melsec:iq-r"), "D1025")
+        self.assertEqual(cli._offset_device_text("X20", 0x10, plc_profile="melsec:iq-r"), "X30")
 
     def test_parse_focused_boundary_spec(self) -> None:
         """Test test_parse_focused_boundary_spec."""
-        parsed = cli._parse_focused_boundary_spec("ZR,ZR163839,word,1/2/3/16/64,1/2")
+        parsed = cli._parse_focused_boundary_spec(
+            "ZR,ZR163839,word,1/2/3/16/64,1/2",
+            plc_profile="melsec:iq-r",
+        )
         self.assertEqual(parsed.label, "ZR")
         self.assertEqual(parsed.edge_device, "ZR163839")
         self.assertFalse(parsed.bit_unit)
@@ -784,7 +1302,7 @@ class TestCodec(unittest.TestCase):
 
     def test_load_focused_boundary_specs_defaults_when_unspecified(self) -> None:
         """Test test_load_focused_boundary_specs_defaults_when_unspecified."""
-        loaded = cli._load_focused_boundary_specs(None, None)
+        loaded = cli._load_focused_boundary_specs(None, None, plc_profile="melsec:iq-r")
         self.assertGreaterEqual(len(loaded), 1)
         self.assertEqual(loaded[0].label, "Z")
 
@@ -895,10 +1413,116 @@ class TestCodec(unittest.TestCase):
 class TestCli(unittest.TestCase):
     """TestCli class."""
 
+    def test_internal_cli_probe_uses_explicit_maintainer_profile_bypass(self) -> None:
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        client = cli.SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            plc_series=PLCSeries.QL,
+            default_target=target,
+        )
+        self.assertEqual(client.plc_profile, "melsec:qnu")
+        self.assertFalse(client._strict_profile)  # type: ignore[attr-defined]
+
+    def test_internal_cli_client_requires_explicit_transport(self) -> None:
+        """The CLI probe client must not infer TCP when transport is omitted."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        with self.assertRaises(TypeError):
+            cli.SlmpClient(  # type: ignore[call-arg]
+                "127.0.0.1",
+                1025,
+                plc_profile="melsec:iq-r",
+                default_target=target,
+            )
+
+    def test_internal_cli_client_requires_complete_target_argument(self) -> None:
+        """The CLI probe client must not construct an own-station route from omission."""
+        with self.assertRaises(TypeError):
+            cli.SlmpClient(  # type: ignore[call-arg]
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                plc_profile="melsec:iq-r",
+            )
+
+    def test_every_cli_route_component_is_explicitly_required(self) -> None:
+        """CLI tools and samples must not infer an own-station target route."""
+        route_flags = {"--network", "--station", "--module-io", "--multidrop"}
+        sources = (
+            Path(cli.__file__),
+            Path(__file__).parents[1] / "samples" / "_common.py",
+        )
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            found: list[str] = []
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr != "add_argument" or not node.args:
+                    continue
+                first = node.args[0]
+                if not isinstance(first, ast.Constant) or first.value not in route_flags:
+                    continue
+                found.append(str(first.value))
+                keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+                self.assertNotIn("default", keywords, f"{source}:{first.value}")
+                required = keywords.get("required")
+                self.assertIsInstance(required, ast.Constant, f"{source}:{first.value}")
+                assert isinstance(required, ast.Constant)
+                self.assertIs(required.value, True, f"{source}:{first.value}")
+            self.assertEqual(set(found), route_flags, str(source))
+
+    def test_every_cli_communication_timeout_defaults_to_three_seconds(self) -> None:
+        """All communicating CLI parsers share the approved three-second default."""
+        tree = ast.parse(Path(cli.__file__).read_text(encoding="utf-8"))
+        defaults: list[float] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "add_argument" or not node.args:
+                continue
+            first = node.args[0]
+            if not isinstance(first, ast.Constant) or first.value != "--timeout":
+                continue
+            default = next((keyword.value for keyword in node.keywords if keyword.arg == "default"), None)
+            self.assertIsInstance(default, ast.Constant)
+            assert isinstance(default, ast.Constant)
+            self.assertIsInstance(default.value, (int, float))
+            defaults.append(float(default.value))
+        self.assertGreater(len(defaults), 0)
+        self.assertEqual(set(defaults), {3.0})
+
+    def test_every_cli_monitoring_timer_defaults_to_four_seconds(self) -> None:
+        """All CLI and shared sample parsers use 16 quarter-seconds."""
+        sources = (
+            Path(cli.__file__),
+            Path(__file__).parents[1] / "samples" / "_common.py",
+            Path(__file__).parents[1] / "samples" / "high_level_sync.py",
+        )
+        defaults: list[int] = []
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr != "add_argument" or not node.args:
+                    continue
+                first = node.args[0]
+                if not isinstance(first, ast.Constant) or first.value != "--monitoring-timer":
+                    continue
+                default = next((keyword.value for keyword in node.keywords if keyword.arg == "default"), None)
+                self.assertIsInstance(default, ast.Constant, str(source))
+                assert isinstance(default, ast.Constant)
+                self.assertIsInstance(default.value, int, str(source))
+                defaults.append(int(default.value))
+        self.assertGreater(len(defaults), 0)
+        self.assertEqual(set(defaults), {0x0010})
+
     def test_connection_check_main_selects_frame_type(self) -> None:
         """Test test_connection_check_main_selects_frame_type."""
 
-        class ConnectionCheckClient(SlmpClient):
+        class ConnectionCheckClient(cli.SlmpClient):
             init_calls: list[tuple[str, str]] = []
             read_calls: list[tuple[str, int, bool, str | None]] = []
             type_name_calls: int = 0
@@ -939,11 +1563,8 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
+            def read_devices(self, device, points, *, bit_unit=False):  # type: ignore[override]
+                type(self).read_calls.append((str(device), int(points), bool(bit_unit), self.plc_series.value))
                 return [True]
 
             def read_type_name(self) -> TypeNameInfo:
@@ -954,9 +1575,33 @@ class TestCli(unittest.TestCase):
             patch.object(cli, "SlmpClient", ConnectionCheckClient),
             patch.object(cli, "_load_compatibility_policy", return_value=None),
         ):
-            rc_default = cli.connection_check_main(["--host", "192.168.250.100", "--series", "ql"])
+            rc_default = cli.connection_check_main(
+                [
+                    "--host",
+                    "192.168.250.100",
+                    "--port",
+                    "1025",
+                    "--transport",
+                    "tcp",
+                    *_SELF_ROUTE_ARGS,
+                    "--series",
+                    "ql",
+                ]
+            )
             rc_explicit = cli.connection_check_main(
-                ["--host", "192.168.250.100", "--series", "ql", "--frame-type", "4e"]
+                [
+                    "--host",
+                    "192.168.250.100",
+                    "--port",
+                    "1025",
+                    "--transport",
+                    "tcp",
+                    *_SELF_ROUTE_ARGS,
+                    "--series",
+                    "ql",
+                    "--frame-type",
+                    "4e",
+                ]
             )
 
         self.assertEqual(rc_default, 0)
@@ -976,7 +1621,7 @@ class TestCli(unittest.TestCase):
     def test_connection_check_main_uses_compatibility_policy_order(self) -> None:
         """Test test_connection_check_main_uses_compatibility_policy_order."""
 
-        class PolicyConnectionCheckClient(SlmpClient):
+        class PolicyConnectionCheckClient(cli.SlmpClient):
             init_calls: list[tuple[str, str]] = []
             read_calls: list[tuple[str, int, bool, str | None]] = []
 
@@ -1016,12 +1661,9 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
-                if self.frame_type.value != "4e" or resolved_series != "ql":
+            def read_devices(self, device, points, *, bit_unit=False):  # type: ignore[override]
+                type(self).read_calls.append((str(device), int(points), bool(bit_unit), self.plc_series.value))
+                if self.frame_type.value != "4e" or self.plc_series != PLCSeries.QL:
                     raise RuntimeError("policy should try 4e/ql first")
                 return [True]
 
@@ -1036,6 +1678,11 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--frame-type",
@@ -1071,7 +1718,7 @@ class TestCli(unittest.TestCase):
     def test_other_station_check_main_type_name_failure_is_nonfatal(self) -> None:
         """Test test_other_station_check_main_type_name_failure_is_nonfatal."""
 
-        class OtherStationTypeNameFailureClient(SlmpClient):
+        class OtherStationTypeNameFailureClient(cli.SlmpClient):
             read_calls: list[tuple[str, int, bool, str | None]] = []
             type_name_calls: list[tuple[str, str]] = []
 
@@ -1110,11 +1757,8 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
+            def read_devices(self, device, points, *, bit_unit=False):  # type: ignore[override]
+                type(self).read_calls.append((str(device), int(points), bool(bit_unit), self.plc_series.value))
                 return [0]
 
             def read_type_name(self) -> TypeNameInfo:
@@ -1131,6 +1775,10 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
                         "--series",
                         "ql",
                         "--frame-type",
@@ -1151,7 +1799,7 @@ class TestCli(unittest.TestCase):
     def test_other_station_check_main_adds_practical_note_for_ql_other_station_failures(self) -> None:
         """Test test_other_station_check_main_adds_practical_note_for_ql_other_station_failures."""
 
-        class OtherStationTimeoutClient(SlmpClient):
+        class OtherStationTimeoutClient(cli.SlmpClient):
             def __init__(
                 self,
                 host: str,
@@ -1200,6 +1848,10 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
                         "--series",
                         "ql",
                         "--frame-type",
@@ -1218,7 +1870,7 @@ class TestCli(unittest.TestCase):
     def test_other_station_check_main_uses_compatibility_policy_order(self) -> None:
         """Test test_other_station_check_main_uses_compatibility_policy_order."""
 
-        class PolicyOtherStationClient(SlmpClient):
+        class PolicyOtherStationClient(cli.SlmpClient):
             init_calls: list[tuple[str, str]] = []
             read_calls: list[tuple[str, int, bool, str | None]] = []
             type_name_calls: list[tuple[str, str]] = []
@@ -1259,12 +1911,9 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 return None
 
-            def read_devices(self, device, points, *, bit_unit=False, series=None):  # type: ignore[override]
-                resolved_series = (
-                    series.value if isinstance(series, PLCSeries) else (str(series) if series is not None else None)
-                )
-                type(self).read_calls.append((str(device), int(points), bool(bit_unit), resolved_series))
-                if self.frame_type.value != "4e" or resolved_series != "ql":
+            def read_devices(self, device, points, *, bit_unit=False):  # type: ignore[override]
+                type(self).read_calls.append((str(device), int(points), bool(bit_unit), self.plc_series.value))
+                if self.frame_type.value != "4e" or self.plc_series != PLCSeries.QL:
                     raise RuntimeError("policy should try 4e/ql first")
                 return [0]
 
@@ -1284,6 +1933,10 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
                         "--series",
                         "ql",
                         "--frame-type",
@@ -1313,7 +1966,7 @@ class TestCli(unittest.TestCase):
     def test_manual_label_verification_main_processes_random_and_array_labels(self) -> None:
         """Test test_manual_label_verification_main_processes_random_and_array_labels."""
 
-        class ManualLabelClient(SlmpClient):
+        class ManualLabelClient(cli.SlmpClient):
             init_monitoring_timers: list[int] = []
             random_read_calls: list[list[str]] = []
             random_write_calls: list[list[LabelRandomWritePoint]] = []
@@ -1392,6 +2045,11 @@ class TestCli(unittest.TestCase):
                         [
                             "--host",
                             "192.168.250.100",
+                            "--port",
+                            "1025",
+                            "--transport",
+                            "tcp",
+                            *_SELF_ROUTE_ARGS,
                             "--series",
                             "iqr",
                             "--monitoring-timer",
@@ -1446,7 +2104,7 @@ class TestCli(unittest.TestCase):
     def test_pending_live_verification_main_uses_monitoring_timer_and_skips_reset(self) -> None:
         """Test test_pending_live_verification_main_uses_monitoring_timer_and_skips_reset."""
 
-        class PendingCliClient(SlmpClient):
+        class PendingCliClient(cli.SlmpClient):
             init_monitoring_timers: list[int] = []
             array_read_calls: list[list[LabelArrayReadPoint]] = []
             array_write_calls: list[list[LabelArrayWritePoint]] = []
@@ -1487,10 +2145,10 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 self._sock = None
 
-            def request(self, command, subcommand=0x0000, data=b"", **kwargs):  # type: ignore[override]
+            def _request(self, command, subcommand=0x0000, data=b"", **kwargs):  # type: ignore[override]
                 return SlmpResponse(
                     serial=0,
-                    target=SlmpTarget(),
+                    target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
                     end_code=0,
                     data=b"",
                     raw=b"",
@@ -1566,6 +2224,11 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--monitoring-timer",
@@ -1590,7 +2253,7 @@ class TestCli(unittest.TestCase):
     def test_pending_live_verification_main_uses_custom_label_specs(self) -> None:
         """Test test_pending_live_verification_main_uses_custom_label_specs."""
 
-        class PendingLabelClient(SlmpClient):
+        class PendingLabelClient(cli.SlmpClient):
             array_read_calls: list[list[LabelArrayReadPoint]] = []
             random_read_calls: list[list[str]] = []
 
@@ -1600,10 +2263,10 @@ class TestCli(unittest.TestCase):
             def close(self) -> None:
                 self._sock = None
 
-            def request(self, command, subcommand=0x0000, data=b"", **kwargs):  # type: ignore[override]
+            def _request(self, command, subcommand=0x0000, data=b"", **kwargs):  # type: ignore[override]
                 return SlmpResponse(
                     serial=0,
-                    target=SlmpTarget(),
+                    target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
                     end_code=0,
                     data=b"",
                     raw=b"",
@@ -1630,6 +2293,11 @@ class TestCli(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--label-array",
@@ -1661,9 +2329,9 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_read_devices_word(self) -> None:
         """Test test_read_devices_word."""
-        client = FakeClient()
+        client = FakeClient(plc_profile="melsec:qnu", _maintainer_strict_profile=False)
         client.next_response_data = b"\x34\x12\x78\x56"
-        values = client.read_devices("D100", 2, bit_unit=False, series=PLCSeries.QL)
+        values = client.read_devices("D100", 2, bit_unit=False)
         self.assertEqual(values, [0x1234, 0x5678])
 
         assert client.last_request is not None
@@ -1672,41 +2340,28 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x64\x00\x00\xa8\x02\x00")
 
-    def test_read_devices_xy_requires_explicit_address_profile_for_string_addresses(self) -> None:
+    def test_read_devices_rejects_deviceref_from_different_profile(self) -> None:
         client = FakeClient()
-        with self.assertRaisesRegex(ValueError, "plc_profile"):
-            client.read_devices("X40", 8, bit_unit=True, series=PLCSeries.QL)
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            client.read_devices(DeviceRef("X", 0x10, "melsec:iq-f"), 8, bit_unit=True)
         self.assertIsNone(client.last_request)
-
-    def test_read_devices_xy_allows_numeric_deviceref_without_address_profile(self) -> None:
-        client = FakeClient()
-        client.next_response_data = pack_bit_values([1, 0, 1, 0, 1, 0, 1, 0])
-
-        values = client.read_devices(DeviceRef("X", 0x40), 8, bit_unit=True, series=PLCSeries.QL)
-
-        self.assertEqual(values, [True, False, True, False, True, False, True, False])
-        assert client.last_request is not None
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.DEVICE_READ)
-        self.assertEqual(subcommand, 0x0001)
-        self.assertEqual(payload, b"\x40\x00\x00\x9c\x08\x00")
 
     def test_read_devices_iqf_xy_uses_octal_start_address(self) -> None:
         """iQ-F X/Y direct reads must encode the octal device number, not hex text."""
         client = FakeClient(plc_profile="melsec:iq-f")
         client.next_response_data = b"\x10"
 
-        values = client.read_devices("Y217", 2, bit_unit=True, series=PLCSeries.IQR)
+        values = client.read_devices("Y217", 2, bit_unit=True)
 
         self.assertEqual(values, [True, False])
         assert client.last_request is not None
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
-        self.assertEqual(subcommand, 0x0003)
-        self.assertEqual(payload, b"\x8f\x00\x00\x00\x9d\x00\x02\x00")
+        self.assertEqual(subcommand, 0x0001)
+        self.assertEqual(payload, b"\x8f\x00\x00\x9d\x02\x00")
 
     def test_invalid_address_profile_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
+        with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'address_profile'"):
             FakeClient(address_profile="auto")
 
     def test_invalid_plc_profile_is_rejected(self) -> None:
@@ -1736,99 +2391,140 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(client.range_profile, "melsec:qcpu:qj71e71-100")
 
     def test_plc_profile_rejects_manual_profile_override(self) -> None:
-        with self.assertRaisesRegex(ValueError, "plc_profile already determines"):
+        with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'frame_type'"):
             FakeClient(plc_profile="melsec:iq-f", frame_type="4e")
+
+    def test_removed_low_level_public_surface_is_not_callable(self) -> None:
+        client = FakeClient()
+        self.assertFalse(hasattr(client, "request"))
+        for name in (
+            "array_label_read",
+            "array_label_write",
+            "label_read_random",
+            "label_write_random",
+            "memory_read",
+            "memory_write",
+            "extend_unit_read",
+            "extend_unit_write",
+            "remote_run_raw",
+            "remote_stop_raw",
+            "remote_pause_raw",
+            "remote_latch_clear_raw",
+            "remote_reset_raw",
+            "remote_password_lock_raw",
+            "remote_password_unlock_raw",
+            "self_test",
+            "build_array_label_read_payload",
+            "build_array_label_write_payload",
+            "build_label_read_random_payload",
+            "build_label_write_random_payload",
+            "parse_array_label_read_response",
+            "parse_label_read_random_response",
+        ):
+            self.assertFalse(hasattr(client, name), name)
+
+        with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'serial'"):
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", serial=1)  # type: ignore[call-arg]
+        with self.assertRaisesRegex(TypeError, "required keyword-only argument: 'subcommand'"):
+            client.raw_command(Command.CLEAR_ERROR, payload=b"")  # type: ignore[call-arg]
+        with self.assertRaisesRegex(TypeError, "required keyword-only argument: 'payload'"):
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0)  # type: ignore[call-arg]
+        self.assertIsNone(client.last_request)
+
+    def test_request_series_override_is_rejected_before_transport(self) -> None:
+        client = FakeClient()
+        with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'series'"):
+            client.read_devices("D0", 1, bit_unit=False, series=PLCSeries.QL)  # type: ignore[call-arg]
+        with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'series'"):
+            client.remote_password_lock("secret1", series=PLCSeries.QL)  # type: ignore[call-arg]
+        self.assertIsNone(client.last_request)
 
     def test_practical_path_warning_for_lt_direct_access(self) -> None:
         """Direct LT state access must fail instead of warning."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct bit read is not supported for LTC"):
-            client.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
+            client.read_devices("LTC0", 1, bit_unit=True)
         self.assertIsNone(client.last_request)
 
     def test_direct_bit_read_rejects_long_timer_state_devices(self) -> None:
         """Direct bit reads for LT/LST state devices must fail before transport."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct bit read is not supported for LTC"):
-            client.read_devices("LTC0", 1, bit_unit=True, series=PLCSeries.IQR)
+            client.read_devices("LTC0", 1, bit_unit=True)
         self.assertIsNone(client.last_request)
 
     def test_direct_bit_write_rejects_long_family_state_devices(self) -> None:
         """Direct bit writes for long-family state devices must fail before transport."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct bit write is not supported for LCC"):
-            client.write_devices("LCC0", [True], bit_unit=True, series=PLCSeries.IQR)
+            client.write_devices("LCC0", [True], bit_unit=True)
         self.assertIsNone(client.last_request)
 
     def test_direct_word_read_requires_four_word_long_timer_blocks(self) -> None:
         """LTN/LSTN direct reads must use 4-word units."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
-            client.read_devices("LTN0", 2, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("LTN0", 2, bit_unit=False)
         self.assertIsNone(client.last_request)
 
         client.next_response_data = b"\x01\x00\x02\x00\x03\x00\x04\x00"
-        out = client.read_devices("LTN0", 4, bit_unit=False, series=PLCSeries.IQR)
+        out = client.read_devices("LTN0", 4, bit_unit=False)
         self.assertEqual(out, [1, 2, 3, 4])
 
     def test_direct_word_read_rejects_lcn_and_lz_devices(self) -> None:
         """LCN/LZ direct word reads must use helper-selected random dword routes."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LCN"):
-            client.read_devices("LCN0", 4, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("LCN0", 4, bit_unit=False)
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LZ"):
-            client.read_devices("LZ0", 2, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("LZ0", 2, bit_unit=False)
         self.assertIsNone(client.last_request)
 
     def test_direct_word_write_rejects_long_current_and_lz_devices(self) -> None:
         """LTN/LSTN/LCN/LZ direct word writes must use helper-selected 32-bit routes."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LCN"):
-            client.write_devices("LCN0", [1], bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices("LCN0", [1], bit_unit=False)
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
-            client.write_devices("LZ0", [1], bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices("LZ0", [1], bit_unit=False)
         self.assertIsNone(client.last_request)
 
     def test_read_dwords_rejects_long_timer_direct_dword_path(self) -> None:
         """Helper dword reads must not use 2-word direct LT paths."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LTN"):
-            client.read_dwords("LTN0", 1, series=PLCSeries.IQR)
+            client.read_dwords("LTN0", 1)
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LCN"):
-            client.read_dwords("LCN0", 1, series=PLCSeries.IQR)
+            client.read_dwords("LCN0", 1)
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "Direct dword read is not supported for LZ"):
-            client.read_dwords("LZ0", 1, series=PLCSeries.IQR)
+            client.read_dwords("LZ0", 1)
         self.assertIsNone(client.last_request)
 
     def test_temporarily_unsupported_device_error_for_g_direct_only(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_g_direct_only."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11"
-        with self.assertRaises(SlmpUnsupportedDeviceError):
-            client.read_devices("G0", 1, bit_unit=False, series=PLCSeries.IQR)
+        with self.assertRaises(SlmpUnsupportedDeviceError) as raised:
+            client.read_devices("G0", 1, bit_unit=False)
+        self.assertIn("explicitly qualified Extended Device route", str(raised.exception))
+        self.assertNotIn("cpu_buffer", str(raised.exception))
+        self.assertNotIn("extend_unit", str(raised.exception))
 
     def test_extended_device_g_read_payload_matches_capture_shape(self) -> None:
         """Test test_extended_device_g_read_payload_matches_capture_shape."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11"
-        ext = ExtensionSpec(
-            extension_specification=0x0000,
-            extension_specification_modification=0x00,
-            device_modification_index=0x00,
-            device_modification_flags=0x00,
-            direct_memory_specification=0x00,
-        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-            out = client.read_devices_ext(r"U3E0\G10", 1, extension=ext, bit_unit=False, series=PLCSeries.IQR)
+            out = client.read_devices_ext(r"U3E0\G10", 1, bit_unit=False)
         self.assertEqual(out, [0x1111])
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
@@ -1837,42 +2533,79 @@ class TestDeviceApi(unittest.TestCase):
 
     def test_extended_device_ql_g_read_payload_matches_capture_shape(self) -> None:
         """Test test_extended_device_ql_g_read_payload_matches_capture_shape."""
-        client = FakeClient()
+        client = FakeClient(plc_profile="melsec:qnu", _maintainer_strict_profile=False)
         client.next_response_data = b"\x22\x00"
-        ext = ExtensionSpec(
-            extension_specification=0x0000,
-            extension_specification_modification=0x00,
-            device_modification_index=0x00,
-            device_modification_flags=0x00,
-            direct_memory_specification=0xF8,
-        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-            out = client.read_devices_ext(r"U01\G22", 1, extension=ext, bit_unit=False, series=PLCSeries.QL)
+            out = client.read_devices_ext(r"U01\G22", 1, bit_unit=False)
         self.assertEqual(out, [0x0022])
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
         self.assertEqual(subcommand, 0x0080)
         self.assertEqual(payload, b"\x00\x00\x16\x00\x00\xab\x00\x00\x01\x00\xf8\x01\x00")
 
+    def test_extended_device_modifications_use_typed_semantic_operands(self) -> None:
+        client = FakeClient(plc_profile="melsec:qnu", _maintainer_strict_profile=False)
+        client.next_response_data = b"\x01\x00"
+
+        out = client.read_devices_ext(
+            SlmpExtendedDevice(r"U1\D100", SlmpIndexZ(4)),
+            1,
+            bit_unit=False,
+        )
+        self.assertEqual(out, [1])
+
+        self.assertEqual(SlmpExtendedDevice("  U1\\D100  ").address, r"U1\D100")
+        with self.assertRaisesRegex(ValueError, "must be an integer"):
+            SlmpIndexZ(True)  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ValueError, "must be an integer"):
+            SlmpIndexLz(1.5)  # type: ignore[arg-type]
+        self.assertEqual(SlmpIndexLz(1).index, 1)
+        with self.assertRaisesRegex(ValueError, r"0\.\.1"):
+            SlmpIndexLz(2)
+        self.assertEqual(client.last_request[2][:2], b"\x04\x40")
+
+        client.read_devices_ext(
+            SlmpExtendedDevice(r"U1\D100", SlmpIndirect()),
+            1,
+            bit_unit=False,
+        )
+        self.assertEqual(client.last_request[2][:2], b"\x00\x08")
+
+        with self.assertRaisesRegex(ValueError, "LZ register mode"):
+            client.read_devices_ext(
+                SlmpExtendedDevice(r"U1\D100", SlmpIndexLz(1)),
+                1,
+                bit_unit=False,
+            )
+        with self.assertRaisesRegex(ValueError, "link-direct devices do not support"):
+            client.read_devices_ext(
+                SlmpExtendedDevice(r"J1\D100", SlmpIndexZ(1)),
+                1,
+                bit_unit=False,
+            )
+
+        with self.assertRaisesRegex(ValueError, "non-empty qualified"):
+            SlmpExtendedDevice("")
+
     def test_s_device_write_policy_follows_profile(self) -> None:
         """S writes are allowed only when the selected profile marks S writable."""
         client = FakeClient(plc_profile="melsec:iq-r")
-        self.assertEqual(parse_device("S10").code, "S")
+        self.assertEqual(parse_device("S10", plc_profile="melsec:iq-r").code, "S")
 
         client.next_response_data = b"\x10"
-        self.assertEqual(client.read_devices("S10", 1, bit_unit=True, series=PLCSeries.IQR), [True])
+        self.assertEqual(client.read_devices("S10", 1, bit_unit=True), [True])
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
         self.assertEqual(subcommand, 0x0003)
         self.assertIn(b"\x98\x00", payload)
 
         with self.assertRaisesRegex(ValueError, "S is read-only"):
-            client.write_devices("S0", [True], bit_unit=True, series=PLCSeries.IQR)
+            client.write_devices("S0", [True], bit_unit=True)
         with self.assertRaisesRegex(ValueError, "read-only device S"):
-            client.write_random_bits({"S10": True}, series=PLCSeries.IQR)
+            client.write_random_bits({"S10": True})
         with self.assertRaisesRegex(ValueError, "read-only device S"):
-            client.write_block(word_blocks=(), bit_blocks=[("S10", [1])], series=PLCSeries.IQR)
+            client.write_block(word_blocks=(), bit_blocks=[("S10", [1])])
 
         iqf_client = FakeClient(plc_profile="melsec:iq-f")
         iqf_client.write_devices("S10", [True], bit_unit=True)
@@ -1885,19 +2618,15 @@ class TestDeviceApi(unittest.TestCase):
     def test_temporarily_unsupported_device_error_for_hg(self) -> None:
         """Test test_temporarily_unsupported_device_error_for_hg."""
         client = FakeClient()
-        ext = ExtensionSpec(
-            extension_specification=0x0000,
-            extension_specification_modification=0x00,
-            device_modification_index=0x00,
-            device_modification_flags=0x00,
-            direct_memory_specification=0xFA,
-        )
-        with self.assertRaises(SlmpUnsupportedDeviceError):
-            client.read_devices("HG0", 1, bit_unit=False, series=PLCSeries.IQR)
+        with self.assertRaises(SlmpUnsupportedDeviceError) as raised:
+            client.read_devices("HG0", 1, bit_unit=False)
+        self.assertIn("explicitly qualified Extended Device route", str(raised.exception))
+        self.assertNotIn("cpu_buffer", str(raised.exception))
+        self.assertNotIn("extend_unit", str(raised.exception))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-            client.write_devices_ext(r"U3E0\HG20", [0x0032], extension=ext, bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices_ext(r"U3E0\HG20", [0x0032], bit_unit=False)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE)
         self.assertEqual(subcommand, 0x0082)
@@ -1906,16 +2635,9 @@ class TestDeviceApi(unittest.TestCase):
     def test_register_monitor_devices_ext_accepts_u3e0_qualified_device(self) -> None:
         """Test test_register_monitor_devices_ext_accepts_u3e0_qualified_device."""
         client = FakeClient()
-        ext = ExtensionSpec(
-            extension_specification=0x0000,
-            extension_specification_modification=0x00,
-            device_modification_index=0x00,
-            device_modification_flags=0x00,
-            direct_memory_specification=0x00,
-        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SlmpPracticalPathWarning)
-            client.register_monitor_devices_ext(word_devices=[(r"U3E0\G10", ext)], series=PLCSeries.IQR)
+            client.register_monitor_devices_ext(word_devices=[r"U3E0\G10"])
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_ENTRY_MONITOR)
         self.assertEqual(subcommand, 0x0082)
@@ -1925,65 +2647,65 @@ class TestDeviceApi(unittest.TestCase):
         """Extended direct word reads must use the same long-current guards as direct reads."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct word read is not supported for LCN"):
-            client.read_devices_ext(r"J1\LCN10", 4, extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices_ext(r"J1\LCN10", 4, bit_unit=False)
         self.assertIsNone(client.last_request)
 
     def test_write_devices_ext_rejects_long_current_and_lz_before_transport(self) -> None:
         """Extended direct word writes must reject 32-bit long-family devices before transport."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LTN"):
-            client.write_devices_ext(r"J1\LTN10", [1], extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices_ext(r"J1\LTN10", [1], bit_unit=False)
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
-            client.write_devices_ext(r"J1\LZ0", [1], extension=ExtensionSpec(), bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices_ext(r"J1\LZ0", [1], bit_unit=False)
         self.assertIsNone(client.last_request)
 
     def test_read_random_ext_rejects_long_current_word_entries_before_transport(self) -> None:
         """Extended random word reads must reject long current values as word entries."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ as word entries"):
-            client.read_random_ext(word_devices=[(r"J1\LCN10", ExtensionSpec())], series=PLCSeries.IQR)
+            client.read_random_ext(word_devices=[r"J1\LCN10"])
         self.assertIsNone(client.last_request)
 
     def test_extended_random_ql_uses_extended_point_limits_before_transport(self) -> None:
         """Extended random 008x commands use documented 96/960/94 limits on Q/L layout."""
         client = FakeClient()
-        read_devices = [(f"D{index}", ExtensionSpec()) for index in range(97)]
+        read_devices = [rf"U1\D{index}" for index in range(97)]
         with self.assertRaisesRegex(ValueError, r"1..96"):
-            client.read_random_ext(word_devices=read_devices, series=PLCSeries.QL)
+            client.read_random_ext(word_devices=read_devices)
 
-        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(81)]
-        with self.assertRaisesRegex(ValueError, r"limit=960"):
-            client.write_random_words_ext(word_values=word_values, series=PLCSeries.QL)
+        word_values = [(rf"U1\D{index}", index) for index in range(81)]
+        with self.assertRaisesRegex(ValueError, r"1..80"):
+            client.write_random_words_ext(word_values=word_values)
 
-        bit_values = [(f"M{index}", True, ExtensionSpec()) for index in range(95)]
+        bit_values = [(rf"U1\M{index}", True) for index in range(95)]
         with self.assertRaisesRegex(ValueError, r"1..94"):
-            client.write_random_bits_ext(bit_values=bit_values, series=PLCSeries.QL)
+            client.write_random_bits_ext(bit_values=bit_values)
 
         with self.assertRaisesRegex(ValueError, r"1..96"):
-            client.register_monitor_devices_ext(word_devices=read_devices, series=PLCSeries.QL)
+            client.register_monitor_devices_ext(word_devices=read_devices)
         self.assertIsNone(client.last_request)
 
     def test_extended_random_profile_limits_follow_canonical_profile_values(self) -> None:
         """Extended routes use the selected profile's canonical 008x limits."""
         client = FakeClient(plc_profile="melsec:iq-f")
 
-        read_devices = [(f"D{index}", ExtensionSpec()) for index in range(97)]
+        read_devices = [rf"U1\D{index}" for index in range(97)]
         with self.assertRaisesRegex(ValueError, r"1..96"):
             client.read_random_ext(word_devices=read_devices)
 
-        word_values = [(f"D{index}", index, ExtensionSpec()) for index in range(40)]
-        dword_values = [(f"D{200 + (index * 2)}", index, ExtensionSpec()) for index in range(40)]
+        word_values = [(rf"U1\D{index}", index) for index in range(40)]
+        dword_values = [(rf"U1\D{200 + (index * 2)}", index) for index in range(40)]
         with self.assertRaisesRegex(ValueError, r"limit=960"):
             client.write_random_words_ext(word_values=word_values, dword_values=dword_values)
 
-        bit_values = [(f"M{index}", True, ExtensionSpec()) for index in range(95)]
+        bit_values = [(rf"U1\M{index}", True) for index in range(95)]
         with self.assertRaisesRegex(ValueError, r"1..94"):
             client.write_random_bits_ext(bit_values=bit_values)
 
         monitor_client = FakeClient(plc_profile="melsec:lcpu")
-        monitor_devices = [(f"D{index}", ExtensionSpec()) for index in range(193)]
+        monitor_devices = [rf"U1\D{index}" for index in range(193)]
         with self.assertRaisesRegex(ValueError, r"1..192"):
             monitor_client.register_monitor_devices_ext(word_devices=monitor_devices)
 
@@ -1994,14 +2716,14 @@ class TestDeviceApi(unittest.TestCase):
         """Extended random word writes must reject long current values as word entries."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ as word entries"):
-            client.write_random_words_ext(word_values=[(r"J1\LZ0", 1, ExtensionSpec())], series=PLCSeries.IQR)
+            client.write_random_words_ext(word_values=[(r"J1\LZ0", 1)])
         self.assertIsNone(client.last_request)
 
     def test_register_monitor_devices_ext_rejects_lcs_lcc_before_transport(self) -> None:
         """Extended monitor registration must reject long counter state devices."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Entry Monitor Device"):
-            client.register_monitor_devices_ext(word_devices=[(r"J1\LCS10", ExtensionSpec())], series=PLCSeries.IQR)
+            client.register_monitor_devices_ext(word_devices=[r"J1\LCS10"])
         self.assertIsNone(client.last_request)
 
     def test_boundary_warning_for_multi_point_r_family_access(self) -> None:
@@ -2010,34 +2732,35 @@ class TestDeviceApi(unittest.TestCase):
         client.next_response_data = b"\x00\x00\x00\x00"
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            client.read_devices("ZR163839", 2, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("ZR163839", 2, bit_unit=False)
         self.assertTrue(any(item.category is SlmpBoundaryBehaviorWarning for item in caught))
 
     def test_odd_lz_direct_word_write_is_rejected_before_transport(self) -> None:
         """LZ is a double-word device and must not use the direct word write path."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Direct word write is not supported for LZ"):
-            client.write_devices("LZ1", [0], bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices("LZ1", [0], bit_unit=False)
         self.assertIsNone(client.last_request)
 
     def test_r_device_fixed_upper_limit(self) -> None:
         """Test test_r_device_fixed_upper_limit."""
         client = FakeClient()
         with self.assertRaises(ValueError):
-            client.read_devices("R32768", 1, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("R32768", 1, bit_unit=False)
         with self.assertRaises(ValueError):
-            client.write_devices("R32768", [1], bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices("R32768", [1], bit_unit=False)
 
     def test_write_random_bits(self) -> None:
         """Test test_write_random_bits."""
-        client = FakeClient()
-        client.write_random_bits({"M10": True, "Y20": False}, series=PLCSeries.QL)
-        command, subcommand, payload, _ = client.last_request
+        ql_client = FakeClient(plc_profile="melsec:qnu", _maintainer_strict_profile=False)
+        ql_client.write_random_bits({"M10": True, "Y20": False})
+        command, subcommand, payload, _ = ql_client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE_RANDOM)
         self.assertEqual(subcommand, 0x0001)
         self.assertEqual(payload[0], 2)
 
-        client.write_random_bits({"M10": True, "Y20": False}, series=PLCSeries.IQR)
+        client = FakeClient()
+        client.write_random_bits({"M10": True, "Y20": False})
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE_RANDOM)
         self.assertEqual(subcommand, 0x0003)
@@ -2048,35 +2771,34 @@ class TestDeviceApi(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "does not support G/HG bit entries"):
             client.write_random_bits_ext(
-                bit_values=[(r"U3E0\G10", True, ExtensionSpec())],
-                series=PLCSeries.IQR,
+                bit_values=[(r"U3E0\G10", True)],
             )
 
     def test_manual_point_limits_for_direct_access(self) -> None:
         client = FakeClient()
         client.next_response_data = b"\x00\x00" * 960
-        self.assertEqual(len(client.read_devices("D0", 960, bit_unit=False, series=PLCSeries.IQR)), 960)
+        self.assertEqual(len(client.read_devices("D0", 960, bit_unit=False)), 960)
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
-            client.read_devices("D0", 961, bit_unit=False, series=PLCSeries.IQR)
+            client.read_devices("D0", 961, bit_unit=False)
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
-            client.write_devices("D0", [0] * 961, bit_unit=False, series=PLCSeries.IQR)
+            client.write_devices("D0", [0] * 961, bit_unit=False)
 
         client.next_response_data = b"\x00" * 3584
-        self.assertEqual(len(client.read_devices("M0", 7168, bit_unit=True, series=PLCSeries.IQR)), 7168)
+        self.assertEqual(len(client.read_devices("M0", 7168, bit_unit=True)), 7168)
         with self.assertRaisesRegex(ValueError, r"1\.\.7168"):
-            client.read_devices("M0", 7169, bit_unit=True, series=PLCSeries.IQR)
+            client.read_devices("M0", 7169, bit_unit=True)
         with self.assertRaisesRegex(ValueError, r"1\.\.7168"):
-            client.write_devices("M0", [False] * 7169, bit_unit=True, series=PLCSeries.IQR)
+            client.write_devices("M0", [False] * 7169, bit_unit=True)
 
         iqf_client = FakeClient(plc_profile="melsec:iq-f")
         iqf_client.next_response_data = b"\x00" * 1792
-        self.assertEqual(len(iqf_client.read_devices("M0", 3584, bit_unit=True, series=PLCSeries.QL)), 3584)
+        self.assertEqual(len(iqf_client.read_devices("M0", 3584, bit_unit=True)), 3584)
         iqf_client.last_request = None
         with self.assertRaisesRegex(ValueError, r"1\.\.3584"):
-            iqf_client.read_devices("M0", 3585, bit_unit=True, series=PLCSeries.QL)
+            iqf_client.read_devices("M0", 3585, bit_unit=True)
         self.assertIsNone(iqf_client.last_request)
         with self.assertRaisesRegex(ValueError, r"1\.\.3584"):
-            iqf_client.write_devices("M0", [False] * 3585, bit_unit=True, series=PLCSeries.QL)
+            iqf_client.write_devices("M0", [False] * 3585, bit_unit=True)
         self.assertIsNone(iqf_client.last_request)
 
     def test_direct_write_limits_use_write_profile_keys(self) -> None:
@@ -2114,36 +2836,36 @@ class TestDeviceApi(unittest.TestCase):
         client = FakeClient(plc_profile="melsec:iq-r")
         client.next_response_data = b"\x34\x12"
 
-        self.assertEqual(client.read_devices("D999999", 1, series=PLCSeries.IQR), [0x1234])
-        client.write_devices("D999999", [0x5678], series=PLCSeries.IQR)
+        self.assertEqual(client.read_devices("D999999", 1, bit_unit=False), [0x1234])
+        client.write_devices("D999999", [0x5678], bit_unit=False)
 
         self.assertEqual(len(client.requests), 2)
 
     def test_manual_point_limits_for_random_write(self) -> None:
         client = FakeClient()
-        client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(80)], series=PLCSeries.IQR)
+        client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(80)])
         with self.assertRaisesRegex(ValueError, "word/dword access points out of range"):
-            client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(81)], series=PLCSeries.IQR)
+            client.write_random_words(word_values=[(f"D{8000 + i}", 0) for i in range(81)])
 
-        client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(68)], series=PLCSeries.IQR)
+        client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(68)])
         with self.assertRaisesRegex(ValueError, "word/dword access points out of range"):
-            client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(69)], series=PLCSeries.IQR)
+            client.write_random_words(dword_values=[(f"D{8000 + i * 2}", 0) for i in range(69)])
 
-        client.write_random_bits([(f"M{4000 + i}", False) for i in range(94)], series=PLCSeries.IQR)
+        client.write_random_bits([(f"M{4000 + i}", False) for i in range(94)])
         with self.assertRaisesRegex(ValueError, r"1\.\.94"):
-            client.write_random_bits([(f"M{4000 + i}", False) for i in range(95)], series=PLCSeries.IQR)
+            client.write_random_bits([(f"M{4000 + i}", False) for i in range(95)])
 
     def test_manual_point_limits_for_block_access(self) -> None:
         client = FakeClient()
         client.next_response_data = b"\x00\x00" * 960
-        result = client.read_block(word_blocks=[("D0", 960)], series=PLCSeries.IQR)
+        result = client.read_block(word_blocks=[("D0", 960)])
         self.assertEqual(len(result.word_blocks[0].values), 960)
         with self.assertRaisesRegex(ValueError, "total device points"):
-            client.read_block(word_blocks=[("D0", 961)], series=PLCSeries.IQR)
+            client.read_block(word_blocks=[("D0", 961)])
 
-        client.write_block(word_blocks=[("D8000", [0] * 951)], series=PLCSeries.IQR)
+        client.write_block(word_blocks=[("D8000", [0] * 951)])
         with self.assertRaisesRegex(ValueError, "total device points"):
-            client.write_block(word_blocks=[("D8000", [0] * 952)], series=PLCSeries.IQR)
+            client.write_block(word_blocks=[("D8000", [0] * 952)])
 
     def test_memory_read_words(self) -> None:
         """Test test_memory_read_words."""
@@ -2204,53 +2926,62 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
         self.assertEqual(payload, b"\x34\x00\x00\x00\x04\x00\xe0\x03\x78\x56\x34\x12")
 
-    def test_cpu_buffer_word_helpers_default_to_03e0(self) -> None:
-        """Test test_cpu_buffer_word_helpers_default_to_03e0."""
+    def test_cpu_buffer_aliases_and_enum_are_not_public(self) -> None:
+        """Extend Unit commands must not be exposed under a CPU-buffer name."""
+        import slmp
+        import slmp.constants
+
+        self.assertFalse(hasattr(slmp, "CpuModule"))
+        self.assertFalse(hasattr(slmp.constants, "CpuModule"))
+        for client_type in (SlmpClient,):
+            for name in (
+                "cpu_buffer_read_bytes",
+                "cpu_buffer_read_words",
+                "cpu_buffer_read_word",
+                "cpu_buffer_read_dword",
+                "cpu_buffer_write_bytes",
+                "cpu_buffer_write_words",
+                "cpu_buffer_write_word",
+                "cpu_buffer_write_dword",
+            ):
+                self.assertFalse(hasattr(client_type, name), name)
+
+    def test_remote_run_and_pause_require_explicit_typed_intent(self) -> None:
         client = FakeClient()
-        client.next_response_data = b"\x01\x48"
-        out = client.cpu_buffer_read_words(0x04, 1)
-        self.assertEqual(out, [0x4801])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03")
+        with self.assertRaises(TypeError):
+            client.remote_run()  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.remote_pause()  # type: ignore[call-arg]
 
-        client.cpu_buffer_write_words(0x04, [0x4801])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03\x01\x48")
+        expected_clear_modes = (
+            (RemoteClearMode.NO_CLEAR, b"\x00\x00"),
+            (RemoteClearMode.CLEAR_EXCEPT_LATCH, b"\x01\x00"),
+            (RemoteClearMode.CLEAR_ALL, b"\x02\x00"),
+        )
+        for clear_mode, wire in expected_clear_modes:
+            client.remote_run(force=False, clear_mode=clear_mode)
+            command, subcommand, payload, _ = client.last_request
+            self.assertEqual((command, subcommand), (Command.REMOTE_RUN, 0x0000))
+            self.assertEqual(payload, b"\x01\x00" + wire)
+        client.remote_run(force=True, clear_mode=RemoteClearMode.NO_CLEAR)
+        self.assertEqual(client.last_request[2], b"\x03\x00\x00\x00")
+        client.remote_pause(force=False)
+        self.assertEqual(client.last_request[2], b"\x01\x00")
+        client.remote_pause(force=True)
+        self.assertEqual(client.last_request[2], b"\x03\x00")
 
-        client.next_response_data = b"\x01\x48"
-        self.assertEqual(client.cpu_buffer_read_word(0x04), 0x4801)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03")
-
-        client.next_response_data = b"\xb1\xe9\xaf\x95"
-        self.assertEqual(client.cpu_buffer_read_dword(0x00), 0x95AFE9B1)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03")
-
-        client.cpu_buffer_write_word(0x04, 0x4801)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03\x01\x48")
-
-        client.cpu_buffer_write_dword(0x00, 0x95AFE9B1)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03\xb1\xe9\xaf\x95")
-
-    def test_remote_run(self) -> None:
-        """Test test_remote_run."""
-        client = FakeClient()
-        client.remote_run()
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.REMOTE_RUN)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x01\x00\x00\x00")
+        request_count = len(client.requests)
+        for invalid in (None, 0, 1, "false", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    client.remote_run(force=invalid, clear_mode=RemoteClearMode.NO_CLEAR)  # type: ignore[arg-type]
+                with self.assertRaises(ValueError):
+                    client.remote_pause(force=invalid)  # type: ignore[arg-type]
+        for invalid_clear_mode in (None, 0, 1, 2, 3, "no-clear", "", [], {}):
+            with self.subTest(invalid_clear_mode=invalid_clear_mode):
+                with self.assertRaises(ValueError):
+                    client.remote_run(force=False, clear_mode=invalid_clear_mode)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
 
     def test_remote_stop_uses_manual_fixed_mode(self) -> None:
         """Test test_remote_stop_uses_manual_fixed_mode."""
@@ -2272,16 +3003,52 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(subcommand, 0x0000)
         self.assertEqual(payload, b"\x05\x00ABCDE")
 
+    def test_clear_error_uses_fixed_empty_command(self) -> None:
+        client = FakeClient()
+
+        client.clear_error()
+
+        assert client.last_request is not None
+        command, subcommand, payload, _ = client.last_request
+        self.assertEqual(command, Command.CLEAR_ERROR)
+        self.assertEqual(subcommand, 0x0000)
+        self.assertEqual(payload, b"")
+
+    def test_clear_error_propagates_one_plc_error_without_fallback(self) -> None:
+        client = FakeClient()
+        client.next_response_end_code = 0xC051
+
+        with self.assertRaises(SlmpError):
+            client.clear_error()
+
+        self.assertEqual(len(client.requests), 1)
+
     def test_self_test_loopback_rejects_manual_invalid_payloads(self) -> None:
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
             client.self_test_loopback("HELLO")
         with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
             client.self_test_loopback(b"\x00\xff")
+        with self.assertRaisesRegex(ValueError, "only ASCII 0-9/A-F"):
+            client.self_test_loopback(b"ab12")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"")
         with self.assertRaisesRegex(ValueError, r"1\.\.960"):
             client.self_test_loopback(b"A" * 961)
+        self.assertEqual(client.requests, [])
+
+    def test_self_test_loopback_rejects_malformed_echo_responses(self) -> None:
+        client = FakeClient()
+
+        for response, message in (
+            (b"\x04\x00ABCDE", "size mismatch"),
+            (b"\x04\x00ABCD", "length mismatch"),
+            (b"\x05\x00ABCDF", "payload mismatch"),
+        ):
+            with self.subTest(response=response):
+                client.next_response_data = response
+                with self.assertRaisesRegex(SlmpError, message):
+                    client.self_test_loopback("ABCDE")
 
     def test_remote_reset_uses_no_response_mode_by_default(self) -> None:
         """Test test_remote_reset_uses_no_response_mode_by_default."""
@@ -2290,25 +3057,50 @@ class TestDeviceApi(unittest.TestCase):
         expected_kwargs = {"serial": None, "target": None, "monitoring_timer": None}
         self.assertEqual(client.last_no_response, (int(Command.REMOTE_RESET), 0x0000, b"\x01\x00", expected_kwargs))
 
-        client.remote_reset(expect_response=True)
-        expected_request_kwargs = {**expected_kwargs, "raise_on_error": None}
-        self.assertEqual(client.last_request, (int(Command.REMOTE_RESET), 0x0000, b"\x01\x00", expected_request_kwargs))
+        with self.assertRaises(TypeError):
+            client.remote_reset(expect_response=True)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.remote_reset(subcommand=0x0001)  # type: ignore[call-arg]
 
-        with self.assertRaises(ValueError):
-            client.remote_reset(subcommand=0x0001)
+    def test_remote_reset_send_only_closes_transport_before_next_request(self) -> None:
+        sock = _SendRecvSocket([])
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        client.remote_reset()
+
+        self.assertEqual(len(sock.sent), 1)
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
+
+    def test_udp_timeout_discards_socket_generation(self) -> None:
+        sock = _TimeoutUdpSocket()
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="udp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaises(socket.timeout):
+            client.read_devices("D0", 1, bit_unit=False)
+
+        self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_read_devices_ext(self) -> None:
         """Test test_read_devices_ext."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11"
-        ext = ExtensionSpec(
-            extension_specification=0x0001,
-            extension_specification_modification=0x00,
-            device_modification_index=0x00,
-            device_modification_flags=0x00,
-            direct_memory_specification=0xF9,
-        )
-        out = client.read_devices_ext("W100", 1, extension=ext, bit_unit=False, series=PLCSeries.QL)
+        out = client.read_devices_ext(r"J1\W100", 1, bit_unit=False)
         self.assertEqual(out, [0x1111])
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_READ)
@@ -2316,18 +3108,15 @@ class TestDeviceApi(unittest.TestCase):
         # Link direct format: 00 00 | dev_no(3) | dev_code(1) | 00 00 | j_net(1) | 00 | f9 | pts(2)
         self.assertEqual(payload, b"\x00\x00\x00\x01\x00\xb4\x00\x00\x01\x00\xf9\x01\x00")
 
-    def test_write_block_mixed_split(self) -> None:
-        """Test test_write_block_mixed_split."""
+    def test_write_block_split_option_is_removed(self) -> None:
         client = FakeClient()
-        client.write_block(
-            word_blocks=[("D100", [0x1111])],
-            bit_blocks=[("M200", [0x0001])],
-            series=PLCSeries.QL,
-            split_mixed_blocks=True,
-        )
-        self.assertEqual(len(client.requests), 2)
-        self.assertEqual(client.requests[0][0], Command.DEVICE_WRITE_BLOCK)
-        self.assertEqual(client.requests[1][0], Command.DEVICE_WRITE_BLOCK)
+        with self.assertRaises(TypeError):
+            client.write_block(
+                word_blocks=[("D100", [0x1111])],
+                bit_blocks=[("M200", [0x0001])],
+                split_mixed_blocks=True,  # type: ignore[call-arg]
+            )
+        self.assertEqual(client.requests, [])
 
     def test_write_block_default_keeps_mixed_request(self) -> None:
         """Test test_write_block_default_keeps_mixed_request."""
@@ -2335,7 +3124,6 @@ class TestDeviceApi(unittest.TestCase):
         client.write_block(
             word_blocks=[("D100", [0x1111])],
             bit_blocks=[("M200", [0x0001])],
-            series=PLCSeries.QL,
         )
         self.assertEqual(len(client.requests), 1)
         self.assertEqual(client.requests[0][0], Command.DEVICE_WRITE_BLOCK)
@@ -2348,7 +3136,6 @@ class TestDeviceApi(unittest.TestCase):
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
-                series=PLCSeries.IQR,
             )
         self.assertEqual(ctx.exception.end_code, 0xC05B)
         self.assertEqual(len(client.requests), 1)
@@ -2361,7 +3148,6 @@ class TestDeviceApi(unittest.TestCase):
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
-                series=PLCSeries.QL,
             )
         self.assertEqual(ctx.exception.end_code, 0xC056)
         self.assertEqual(len(client.requests), 1)
@@ -2374,7 +3160,6 @@ class TestDeviceApi(unittest.TestCase):
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
-                series=PLCSeries.QL,
             )
         self.assertEqual(ctx.exception.end_code, 0xC061)
         self.assertEqual(len(client.requests), 1)
@@ -2387,7 +3172,6 @@ class TestDeviceApi(unittest.TestCase):
             client.write_block(
                 word_blocks=[("D100", [0x1111])],
                 bit_blocks=[("M200", [0x0001])],
-                series=PLCSeries.IQR,
             )
         self.assertEqual(ctx.exception.end_code, 0xC059)
         self.assertEqual(len(client.requests), 1)
@@ -2395,7 +3179,7 @@ class TestDeviceApi(unittest.TestCase):
     def test_g_hg_extended_device_coverage_main_read_only(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_read_only."""
 
-        class CoverageClient(SlmpClient):
+        class CoverageClient(cli.SlmpClient):
             read_calls: list[tuple[str, int, int]] = []
             write_calls: list[tuple[str, list[int], int]] = []
 
@@ -2408,11 +3192,11 @@ class TestDeviceApi(unittest.TestCase):
             def read_type_name(self) -> TypeNameInfo:
                 return TypeNameInfo(raw=b"\x00" * 18, model="R120PCPU", model_code=0x4801)
 
-            def read_devices_ext(self, device, points, *, extension, bit_unit=False, series=None):  # type: ignore[override]
+            def _read_devices_ext_raw(self, device, points, *, extension, bit_unit=False, series=None):
                 type(self).read_calls.append((str(device), int(points), int(extension.direct_memory_specification)))
                 return [index for index in range(int(points))]
 
-            def write_devices_ext(self, device, values, *, extension, bit_unit=False, series=None) -> None:  # type: ignore[override]
+            def _write_devices_ext_raw(self, device, values, *, extension, bit_unit=False, series=None) -> None:
                 type(self).write_calls.append(
                     (str(device), [int(value) for value in values], int(extension.direct_memory_specification))
                 )
@@ -2424,6 +3208,11 @@ class TestDeviceApi(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--device",
@@ -2458,7 +3247,7 @@ class TestDeviceApi(unittest.TestCase):
     def test_g_hg_extended_device_coverage_main_write_check_restores_values(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_write_check_restores_values."""
 
-        class CoverageWriteClient(SlmpClient):
+        class CoverageWriteClient(cli.SlmpClient):
             memory: dict[str, list[int]] = {r"U01\G22": [0x1000, 0x1001]}
             write_calls: list[tuple[str, list[int], int]] = []
 
@@ -2471,11 +3260,11 @@ class TestDeviceApi(unittest.TestCase):
             def read_type_name(self) -> TypeNameInfo:
                 return TypeNameInfo(raw=b"\x00" * 18, model="FX5UC-32MT/D", model_code=0x0000)
 
-            def read_devices_ext(self, device, points, *, extension, bit_unit=False, series=None):  # type: ignore[override]
+            def _read_devices_ext_raw(self, device, points, *, extension, bit_unit=False, series=None):
                 values = list(type(self).memory[str(device)])
                 return values[: int(points)]
 
-            def write_devices_ext(self, device, values, *, extension, bit_unit=False, series=None) -> None:  # type: ignore[override]
+            def _write_devices_ext_raw(self, device, values, *, extension, bit_unit=False, series=None) -> None:
                 normalized = [int(value) & 0xFFFF for value in values]
                 type(self).write_calls.append((str(device), normalized, int(extension.direct_memory_specification)))
                 type(self).memory[str(device)] = list(normalized)
@@ -2487,6 +3276,11 @@ class TestDeviceApi(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--device",
@@ -2517,7 +3311,7 @@ class TestDeviceApi(unittest.TestCase):
     def test_g_hg_extended_device_coverage_main_handles_multiple_transports_and_targets(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_handles_multiple_transports_and_targets."""
 
-        class CoverageMatrixClient(SlmpClient):
+        class CoverageMatrixClient(cli.SlmpClient):
             init_calls: list[tuple[str, int, int, int]] = []
             read_calls: list[tuple[str, str, int, int, int]] = []
 
@@ -2568,7 +3362,7 @@ class TestDeviceApi(unittest.TestCase):
             def read_type_name(self) -> TypeNameInfo:
                 return TypeNameInfo(raw=b"\x00" * 18, model="R120PCPU", model_code=0x4804)
 
-            def read_devices_ext(self, device, points, *, extension, bit_unit=False, series=None):  # type: ignore[override]
+            def _read_devices_ext_raw(self, device, points, *, extension, bit_unit=False, series=None):
                 assert self.default_target is not None
                 type(self).read_calls.append(
                     (
@@ -2588,8 +3382,11 @@ class TestDeviceApi(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
                         "--series",
                         "iqr",
+                        *_SELF_ROUTE_ARGS,
                         "--transport",
                         "tcp",
                         "--transport",
@@ -2636,7 +3433,7 @@ class TestDeviceApi(unittest.TestCase):
     def test_g_hg_extended_device_coverage_main_type_name_failure_is_nonfatal(self) -> None:
         """Test test_g_hg_extended_device_coverage_main_type_name_failure_is_nonfatal."""
 
-        class CoverageTypeNameFailureClient(SlmpClient):
+        class CoverageTypeNameFailureClient(cli.SlmpClient):
             read_calls: list[tuple[str, int, int]] = []
 
             def connect(self) -> None:
@@ -2648,7 +3445,7 @@ class TestDeviceApi(unittest.TestCase):
             def read_type_name(self) -> TypeNameInfo:
                 raise RuntimeError("type name unsupported")
 
-            def read_devices_ext(self, device, points, *, extension, bit_unit=False, series=None):  # type: ignore[override]
+            def _read_devices_ext_raw(self, device, points, *, extension, bit_unit=False, series=None):
                 type(self).read_calls.append((str(device), int(points), int(extension.direct_memory_specification)))
                 return [0] * int(points)
 
@@ -2659,6 +3456,11 @@ class TestDeviceApi(unittest.TestCase):
                     [
                         "--host",
                         "192.168.250.100",
+                        "--port",
+                        "1025",
+                        "--transport",
+                        "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--device",
@@ -2688,6 +3490,10 @@ class TestDeviceApi(unittest.TestCase):
             port=1025,
             transport="tcp",
             series=None,
+            network=None,
+            station=None,
+            module_io=None,
+            multidrop=None,
         )
 
         self.assertEqual(steps[0].name, "unit_tests")
@@ -2695,6 +3501,31 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(steps[2].name, "mypy")
         self.assertTrue(any(step.name == "cli_help:slmp_connection_check.py" for step in steps))
         self.assertTrue(any(step.name == "cli_help:slmp_g_hg_extended_device_coverage.py" for step in steps))
+
+    def test_build_regression_steps_forwards_complete_live_target(self) -> None:
+        """The optional live step must pass an explicit complete route."""
+        steps = cli._build_regression_steps(
+            python_executable="python",
+            include_unit_tests=False,
+            include_ruff=False,
+            include_mypy=False,
+            include_cli_help=False,
+            include_live_connection_check=True,
+            host="192.168.250.100",
+            port=1025,
+            transport="tcp",
+            series="iqr",
+            network=0,
+            station=0xFF,
+            module_io=0x03FF,
+            multidrop=0,
+        )
+
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(
+            steps[0].command[-8:],
+            ("--network", "0", "--station", "255", "--module-io", "1023", "--multidrop", "0"),
+        )
 
     def test_regression_suite_main_runs_local_steps_and_writes_report(self) -> None:
         """Test test_regression_suite_main_runs_local_steps_and_writes_report."""
@@ -2743,7 +3574,7 @@ class TestDeviceApi(unittest.TestCase):
         # point0: current=0x00011234, status=0x0003 (contact+coil ON)
         # point1: current=0x0002ABCD, status=0x0002 (contact ON, coil OFF)
         client.next_response_data = b"\x34\x12\x01\x00\x03\x00\x00\x00" + b"\xcd\xab\x02\x00\x02\x00\x00\x00"
-        out = client.read_long_timer(head_no=10, points=2, series=PLCSeries.IQR)
+        out = client.read_long_timer(head_no=10, points=2)
         self.assertEqual(len(out), 2)
         self.assertIsInstance(out[0], LongTimerResult)
         self.assertEqual(out[0].device, "LTN10")
@@ -2763,7 +3594,7 @@ class TestDeviceApi(unittest.TestCase):
         """Test test_read_long_retentive_timer_decode."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11\x22\x22\x01\x00\x00\x00"
-        out = client.read_long_retentive_timer(head_no=0, points=1, series=PLCSeries.IQR)
+        out = client.read_long_retentive_timer(head_no=0, points=1)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].device, "LSTN0")
         self.assertEqual(out[0].current_value, 0x22221111)
@@ -2778,26 +3609,31 @@ class TestDeviceApi(unittest.TestCase):
         """Test test_long_timer_state_aliases."""
         client = FakeClient()
         client.next_response_data = b"\x34\x12\x01\x00\x03\x00\x00\x00" + b"\xcd\xab\x02\x00\x02\x00\x00\x00"
-        self.assertEqual(client.read_ltc_states(head_no=10, points=2, series=PLCSeries.IQR), [True, False])
+        self.assertEqual(client.read_ltc_states(head_no=10, points=2), [True, False])
         client.next_response_data = b"\x34\x12\x01\x00\x03\x00\x00\x00" + b"\xcd\xab\x02\x00\x02\x00\x00\x00"
-        self.assertEqual(client.read_lts_states(head_no=10, points=2, series=PLCSeries.IQR), [True, True])
+        self.assertEqual(client.read_lts_states(head_no=10, points=2), [True, True])
 
         client.next_response_data = b"\x11\x11\x22\x22\x01\x00\x00\x00" + b"\x11\x11\x22\x22\x02\x00\x00\x00"
-        self.assertEqual(client.read_lstc_states(head_no=0, points=2, series=PLCSeries.IQR), [True, False])
+        self.assertEqual(client.read_lstc_states(head_no=0, points=2), [True, False])
         client.next_response_data = b"\x11\x11\x22\x22\x01\x00\x00\x00" + b"\x11\x11\x22\x22\x02\x00\x00\x00"
-        self.assertEqual(client.read_lsts_states(head_no=0, points=2, series=PLCSeries.IQR), [False, True])
+        self.assertEqual(client.read_lsts_states(head_no=0, points=2), [False, True])
 
     def test_read_long_timer_validation(self) -> None:
         """Test test_read_long_timer_validation."""
         client = FakeClient()
-        with self.assertRaises(ValueError):
-            client.read_long_timer(head_no=-1, points=1)
-        with self.assertRaises(ValueError):
-            client.read_long_timer(head_no=0, points=0)
+        with self.assertRaises(TypeError):
+            client.read_long_timer()  # type: ignore[call-arg]
+        for head_no in (None, False, "0", -1, 0x1_0000_0000):
+            with self.subTest(head_no=head_no), self.assertRaises((TypeError, ValueError)):
+                client.read_long_timer(head_no=head_no, points=1)  # type: ignore[arg-type]
+        for points in (None, False, "1", 0, -1, 241, 0x4001):
+            with self.subTest(points=points), self.assertRaises((TypeError, ValueError)):
+                client.read_long_retentive_timer(head_no=0, points=points)  # type: ignore[arg-type]
+        self.assertIsNone(client.last_request)
 
     def test_label_payload_builders(self) -> None:
         """Test test_label_payload_builders."""
-        p041a = SlmpClient.build_array_label_read_payload(
+        p041a = _operations.build_array_label_read_payload(
             [LabelArrayReadPoint(label="LabelW", unit_specification=1, array_data_length=2)],
             abbreviation_labels=["Typ1"],
         )
@@ -2809,7 +3645,7 @@ class TestDeviceApi(unittest.TestCase):
             + b"\x01\x00\x02\x00",
         )
 
-        p141a = SlmpClient.build_array_label_write_payload(
+        p141a = _operations.build_array_label_write_payload(
             [LabelArrayWritePoint(label="LabelW", unit_specification=1, array_data_length=2, data=b"\x31\x00")]
         )
         self.assertEqual(
@@ -2817,22 +3653,56 @@ class TestDeviceApi(unittest.TestCase):
             b"\x01\x00\x00\x00" + b"\x06\x00L\x00a\x00b\x00e\x00l\x00W\x00" + b"\x01\x00\x02\x00\x31\x00",
         )
 
-        p041c = SlmpClient.build_label_read_random_payload(["LabelB", "LabelW"])
+        p041c = _operations.build_label_read_random_payload(["LabelB", "LabelW"])
         self.assertEqual(
             p041c,
             b"\x02\x00\x00\x00" + b"\x06\x00L\x00a\x00b\x00e\x00l\x00B\x00" + b"\x06\x00L\x00a\x00b\x00e\x00l\x00W\x00",
         )
 
-        p141b = SlmpClient.build_label_write_random_payload([LabelRandomWritePoint(label="LabelW", data=b"\x31\x00")])
+        p141b = _operations.build_label_write_random_payload([LabelRandomWritePoint(label="LabelW", data=b"\x31\x00")])
         self.assertEqual(
             p141b,
             b"\x01\x00\x00\x00" + b"\x06\x00L\x00a\x00b\x00e\x00l\x00W\x00" + b"\x02\x00\x31\x00",
         )
 
+    def test_label_abbreviation_contract(self) -> None:
+        valid = _operations.build_label_read_random_payload(
+            ["%1.Member", "%2.Member"],
+            abbreviation_labels=["RootA", "RootB"],
+        )
+        self.assertEqual(valid[:4], b"\x02\x00\x02\x00")
+
+        invalid_cases = (
+            lambda: _operations.build_label_read_random_payload(["%"], abbreviation_labels=["Root"]),
+            lambda: _operations.build_array_label_read_payload(
+                [LabelArrayReadPoint(label="%2.Member", unit_specification=1, array_data_length=1)],
+                abbreviation_labels=["Root"],
+            ),
+            lambda: _operations.build_array_label_write_payload(
+                [LabelArrayWritePoint(label="%0.Member", unit_specification=1, array_data_length=1, data=b"\x00")],
+                abbreviation_labels=["Root"],
+            ),
+            lambda: _operations.build_label_write_random_payload(
+                [LabelRandomWritePoint(label="%x.Member", data=b"\x00")],
+                abbreviation_labels=["Root"],
+            ),
+        )
+        for build in invalid_cases:
+            with self.subTest(build=build):
+                with self.assertRaisesRegex(ValueError, "invalid abbreviation reference"):
+                    build()
+
+        with self.assertRaisesRegex(TypeError, "sequence of strings"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels="Root")
+        with self.assertRaisesRegex(TypeError, "sequence of strings"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels=None)  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ValueError, "abbreviation points"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels=["Root"] * 65536)
+
     def test_label_response_parsers(self) -> None:
         """Test test_label_response_parsers."""
         array_resp = b"\x02\x00" + b"\x02\x01\x02\x00\x44\x00" + b"\x01\x00\x01\x00\x01\x00"
-        parsed_array = SlmpClient.parse_array_label_read_response(array_resp, expected_points=2)
+        parsed_array = _operations.parse_array_label_read_response(array_resp, expected_points=2)
         self.assertEqual(len(parsed_array), 2)
         self.assertIsInstance(parsed_array[0], LabelArrayReadResult)
         self.assertEqual(parsed_array[0].data_type_id, 0x02)
@@ -2842,7 +3712,7 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(parsed_array[1].data, b"\x01\x00")
 
         random_resp = b"\x02\x00" + b"\x01\x00\x02\x00\x01\x00" + b"\x02\x00\x02\x00\x31\x00"
-        parsed_random = SlmpClient.parse_label_read_random_response(random_resp, expected_points=2)
+        parsed_random = _operations.parse_label_read_random_response(random_resp, expected_points=2)
         self.assertEqual(len(parsed_random), 2)
         self.assertIsInstance(parsed_random[0], LabelRandomReadResult)
         self.assertEqual(parsed_random[0].data_type_id, 0x01)
@@ -2888,7 +3758,7 @@ class TestDeviceApi(unittest.TestCase):
         """Test test_read_random_returns_typed_result."""
         client = FakeClient()
         client.next_response_data = b"\x34\x12\x78\x56\xbc\x9a\x00\x00"
-        out = client.read_random(word_devices=["D100", "D101"], dword_devices=["D200"], series=PLCSeries.IQR)
+        out = client.read_random(word_devices=["D100", "D101"], dword_devices=["D200"])
         self.assertIsInstance(out, RandomReadResult)
         self.assertEqual(out.word["D100"], 0x1234)
         self.assertEqual(out.word["D101"], 0x5678)
@@ -2898,17 +3768,39 @@ class TestDeviceApi(unittest.TestCase):
         """Read Random must reject long counter state devices."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Read Random \\(0x0403\\) does not support LCS/LCC"):
-            client.read_random(word_devices=["LCS10"], series=PLCSeries.IQR)
+            client.read_random(word_devices=["LCS10"])
         self.assertIsNone(client.last_request)
 
     def test_run_monitor_cycle_returns_typed_result(self) -> None:
         """Test test_run_monitor_cycle_returns_typed_result."""
         client = FakeClient()
         client.next_response_data = b"\x11\x11\x22\x22\x33\x33\x44\x44"
-        out = client.run_monitor_cycle(word_points=2, dword_points=1)
-        self.assertIsInstance(out, MonitorResult)
-        self.assertEqual(out.word, [0x1111, 0x2222])
-        self.assertEqual(out.dword, [0x44443333])
+        for _ in range(3):
+            out = client.run_monitor_cycle(word_points=2, dword_points=1)
+            self.assertIsInstance(out, MonitorResult)
+            self.assertEqual(out.word, [0x1111, 0x2222])
+            self.assertEqual(out.dword, [0x44443333])
+        self.assertEqual(len(client.requests), 3)
+
+    def test_run_monitor_cycle_rejects_invalid_expected_counts_before_transport(self) -> None:
+        client = FakeClient()
+        for word_points, dword_points in ((0, 0), (97, 0), (-1, 2), (2, -1), (-2, 3), (True, 0), (1.0, 0)):
+            with self.assertRaises(ValueError):
+                client.run_monitor_cycle(word_points=word_points, dword_points=dword_points)  # type: ignore[arg-type]
+        self.assertEqual(client.requests, [])
+
+    def test_run_monitor_cycle_propagates_plc_error_and_rejects_size_mismatch(self) -> None:
+        client = FakeClient()
+        client.next_response_end_code = 0xC051
+        with self.assertRaises(SlmpError):
+            client.run_monitor_cycle(word_points=1, dword_points=0)
+        self.assertEqual(len(client.requests), 1)
+
+        client.next_response_end_code = 0
+        client.next_response_data = b"\x11"
+        with self.assertRaisesRegex(SlmpError, "monitor response size mismatch"):
+            client.run_monitor_cycle(word_points=1, dword_points=0)
+        self.assertEqual(len(client.requests), 2)
 
     def test_read_block_returns_typed_result(self) -> None:
         """Test test_read_block_returns_typed_result."""
@@ -2917,8 +3809,6 @@ class TestDeviceApi(unittest.TestCase):
         out = client.read_block(
             word_blocks=[("D100", 1)],
             bit_blocks=[("M200", 1)],
-            series=PLCSeries.IQR,
-            split_mixed_blocks=False,
         )
         self.assertIsInstance(out, BlockReadResult)
         self.assertEqual(out.word_blocks[0].device, "D100")
@@ -2933,7 +3823,6 @@ class TestDeviceApi(unittest.TestCase):
         out = client.read_block(
             word_blocks=(),
             bit_blocks=[("M1000", 4)],
-            series=PLCSeries.IQR,
         )
         self.assertEqual(out.bit_blocks[0].device, "M1000")
         self.assertEqual(out.bit_blocks[0].values, [0x0005, 0x0001, 0x0001, 0x0001])
@@ -2942,7 +3831,7 @@ class TestDeviceApi(unittest.TestCase):
         """Read Block must reject long counter state devices."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Read Block \\(0x0406\\) does not support LCS/LCC"):
-            client.read_block(bit_blocks=[("LCS10", 1)], series=PLCSeries.IQR)
+            client.read_block(bit_blocks=[("LCS10", 1)])
         self.assertIsNone(client.last_request)
 
     def test_read_block_rejects_q_profiles_before_transport(self) -> None:
@@ -2965,11 +3854,14 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(raised.exception.profile_id, "melsec:qnudv")
         self.assertEqual(raised.exception.feature_key, "block")
         self.assertEqual(raised.exception.state, "blocked")
+        self.assertNotIn("None", str(raised.exception))
+        self.assertNotIn("strict_profile", str(raised.exception))
+        self.assertNotIn("false", str(raised.exception).lower())
         self.assertIsNone(client.last_request)
 
     def test_read_block_qnudv_strict_profile_false_sends_request(self) -> None:
-        """strict_profile=False intentionally bypasses feature guard for live probing."""
-        client = FakeClient(plc_profile="melsec:qnudv", strict_profile=False)
+        """_maintainer_strict_profile=False intentionally bypasses feature guard for live probing."""
+        client = FakeClient(plc_profile="melsec:qnudv", _maintainer_strict_profile=False)
         client.next_response_data = b"\x34\x12\x10\x00"
         out = client.read_block(word_blocks=[("D100", 1)], bit_blocks=[("M100", 1)])
         self.assertEqual(out.word_blocks[0].values, [0x1234])
@@ -2994,7 +3886,7 @@ class TestDeviceApi(unittest.TestCase):
         """iQ-F link-direct is blocked by the canonical profile."""
         client = FakeClient(plc_profile="melsec:iq-f")
         with self.assertRaises(SlmpProfileFeatureError) as raised:
-            client.read_devices_ext(r"J2\SW10", 1, extension=ExtensionSpec())
+            client.read_devices_ext(r"J2\SW10", 1, bit_unit=False)
         self.assertEqual(raised.exception.feature_key, "ext_link_direct")
         self.assertEqual(raised.exception.state, "blocked")
         self.assertIsNone(client.last_request)
@@ -3003,7 +3895,7 @@ class TestDeviceApi(unittest.TestCase):
         """CPU-buffer HG is guarded outside iQ-R."""
         client = FakeClient(plc_profile="melsec:iq-l")
         with self.assertRaises(SlmpProfileFeatureError) as raised:
-            client.read_devices_ext(r"U3E0\HG20", 1, extension=ExtensionSpec())
+            client.read_devices_ext(r"U3E0\HG20", 1, bit_unit=False)
         self.assertEqual(raised.exception.feature_key, "hg_cpu_buffer")
         self.assertIsNone(client.last_request)
 
@@ -3011,13 +3903,13 @@ class TestDeviceApi(unittest.TestCase):
         """Config-dependent U\\G access is sent and left to PLC response."""
         client = FakeClient(plc_profile="melsec:iq-f")
         client.next_response_data = b"\x78\x56"
-        out = client.read_devices_ext(r"U1\G0", 1, extension=ExtensionSpec())
+        out = client.read_devices_ext(r"U1\G0", 1, bit_unit=False)
         self.assertEqual(out, [0x5678])
         self.assertIsNotNone(client.last_request)
 
     def test_iqr_write_policy_rejects_step_relay_even_when_not_strict(self) -> None:
-        """write_policy is always enforced, even with strict_profile=False."""
-        client = FakeClient(plc_profile="melsec:iq-r", strict_profile=False)
+        """write_policy is always enforced, even with _maintainer_strict_profile=False."""
+        client = FakeClient(plc_profile="melsec:iq-r", _maintainer_strict_profile=False)
         with self.assertRaisesRegex(ValueError, "S is read-only"):
             client.write_devices("S0", [True], bit_unit=True)
         self.assertIsNone(client.last_request)
@@ -3043,15 +3935,15 @@ class TestDeviceApi(unittest.TestCase):
         """Read Block must not use unsupported long-current word-block routes."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "does not support LCN/LZ"):
-            client.read_block(word_blocks=[("LCN10", 4)], series=PLCSeries.IQR)
+            client.read_block(word_blocks=[("LCN10", 4)])
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "does not support LCN/LZ"):
-            client.read_block(word_blocks=[("LZ0", 2)], series=PLCSeries.IQR)
+            client.read_block(word_blocks=[("LZ0", 2)])
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "requires 4-word blocks"):
-            client.read_block(word_blocks=[("LTN10", 2)], series=PLCSeries.IQR)
+            client.read_block(word_blocks=[("LTN10", 2)])
         self.assertIsNone(client.last_request)
 
     def test_write_block_multi_point_bit_values_are_packed_words(self) -> None:
@@ -3060,14 +3952,16 @@ class TestDeviceApi(unittest.TestCase):
         client.write_block(
             word_blocks=(),
             bit_blocks=[("M1000", [0x0005, 0x0001])],
-            series=PLCSeries.IQR,
         )
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE_BLOCK)
         self.assertEqual(subcommand, 0x0002)
         self.assertEqual(
             payload,
-            b"\x00\x01" + encode_device_spec("M1000", series=PLCSeries.IQR) + b"\x02\x00" + b"\x05\x00\x01\x00",
+            b"\x00\x01"
+            + encode_device_spec("M1000", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
+            + b"\x02\x00"
+            + b"\x05\x00\x01\x00",
         )
 
     def test_write_block_mixed_payload_inlines_data_per_block(self) -> None:
@@ -3076,7 +3970,6 @@ class TestDeviceApi(unittest.TestCase):
         client.write_block(
             word_blocks=[("D300", [0x1111, 0x2222])],
             bit_blocks=[("M200", [0x00FF])],
-            series=PLCSeries.IQR,
         )
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE_BLOCK)
@@ -3084,10 +3977,10 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(
             payload,
             b"\x01\x01"
-            + encode_device_spec("D300", series=PLCSeries.IQR)
+            + encode_device_spec("D300", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
             + b"\x02\x00"
             + b"\x11\x11\x22\x22"
-            + encode_device_spec("M200", series=PLCSeries.IQR)
+            + encode_device_spec("M200", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
             + b"\x01\x00"
             + b"\xff\x00",
         )
@@ -3098,18 +3991,17 @@ class TestDeviceApi(unittest.TestCase):
         client.write_block(
             word_blocks=[("D300", [0x1111, 0x2222]), ("D310", [0x3333])],
             bit_blocks=(),
-            series=PLCSeries.QL,
         )
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.DEVICE_WRITE_BLOCK)
-        self.assertEqual(subcommand, 0x0000)
+        self.assertEqual(subcommand, 0x0002)
         self.assertEqual(
             payload,
             b"\x02\x00"
-            + encode_device_spec("D300", series=PLCSeries.QL)
+            + encode_device_spec("D300", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
             + b"\x02\x00"
             + b"\x11\x11\x22\x22"
-            + encode_device_spec("D310", series=PLCSeries.QL)
+            + encode_device_spec("D310", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
             + b"\x01\x00"
             + b"\x33\x33",
         )
@@ -3118,7 +4010,7 @@ class TestDeviceApi(unittest.TestCase):
         """Write Block must reject long counter state devices."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Write Block \\(0x1406\\) does not support LCS/LCC"):
-            client.write_block(bit_blocks=[("LCC10", [1])], series=PLCSeries.IQR)
+            client.write_block(bit_blocks=[("LCC10", [1])])
         self.assertIsNone(client.last_request)
 
     def test_write_block_rejects_q_profiles_before_transport(self) -> None:
@@ -3137,18 +4029,18 @@ class TestDeviceApi(unittest.TestCase):
         """Write Block must not use unsupported long-current word-block routes."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ"):
-            client.write_block(word_blocks=[("LCN10", [1, 0])], series=PLCSeries.IQR)
+            client.write_block(word_blocks=[("LCN10", [1, 0])])
         self.assertIsNone(client.last_request)
 
         with self.assertRaisesRegex(ValueError, "does not support LTN/LSTN/LCN/LZ"):
-            client.write_block(word_blocks=[("LZ0", [1, 0])], series=PLCSeries.IQR)
+            client.write_block(word_blocks=[("LZ0", [1, 0])])
         self.assertIsNone(client.last_request)
 
     def test_register_monitor_devices_rejects_lcs_lcc(self) -> None:
         """Monitor register must reject long counter state devices."""
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "Entry Monitor Device \\(0x0801\\) does not support LCS/LCC"):
-            client.register_monitor_devices(word_devices=["LCS10"], series=PLCSeries.IQR)
+            client.register_monitor_devices(word_devices=["LCS10"])
         self.assertIsNone(client.last_request)
 
     def test_read_type_name_returns_typed_result(self) -> None:

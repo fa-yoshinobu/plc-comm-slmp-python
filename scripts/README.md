@@ -22,11 +22,9 @@ If you need to re-run focused live verification, use:
 
 - `slmp_open_items_recheck.py`
 - `slmp_pending_live_verification.py`
-- `slmp_special_device_probe.py`
 - `slmp_extended_device_device_recheck.py`
 - `slmp_g_hg_extended_device_recheck.py`
 - `slmp_g_hg_extended_device_coverage.py`
-- `slmp_mixed_block_compare.py`
 
 If you need human confirmation, use:
 
@@ -58,8 +56,6 @@ If you need human confirmation, use:
 - `slmp_pending_live_verification.py`
   - Re-check maintained command families.
   - Current workflow excludes `1006 remote reset`.
-- `slmp_special_device_probe.py`
-  - Focused recheck for `G/HG` and `LT/LST` related paths.
 - `slmp_extended_device_device_recheck.py`
   - Generic Extended Specification word-device read-write-readback with restore for qualified devices such as `U01\G22`.
 - `slmp_g_hg_extended_device_recheck.py`
@@ -67,8 +63,6 @@ If you need human confirmation, use:
 - `slmp_g_hg_extended_device_coverage.py`
   - Sweep qualified `G/HG` Extended Specification devices across addresses and point counts, with optional temporary write/readback/restore.
   - Supports repeated `--transport` and named `--target` entries for broader live coverage in one report.
-- `slmp_mixed_block_compare.py`
-  - Checklist-oriented live compare for word-only, bit-only, and mixed `0406/1406` block access.
 
 ### Human-in-the-loop verification
 
@@ -95,7 +89,9 @@ If you need human confirmation, use:
 
 - Most scripts write a local `*_latest.md` report under `internal_docs/<series>_<model>/`.
 - Do not commit generated probe reports once their conclusions are summarized in stable maintainer docs.
-- Interactive scripts temporarily change PLC values; read `internal_docs/maintainer/TESTING_GUIDE.md` first.
+- Live evidence collection must use the canonical profile JSON and the
+  profile repository probe. Do not guess alternate frame, compatibility, or
+  route combinations from this library repository.
 - Packet captures and raw communication logs are local-only and must not be committed.
 
 

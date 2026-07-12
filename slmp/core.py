@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import warnings
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
@@ -41,22 +41,12 @@ from .errors import (
     SlmpUnsupportedDeviceError,
 )
 
-DEFAULT_TCP_PORT = 1025
-DEFAULT_UDP_PORT = 1035
-
-
-def _default_port_for_transport(transport: str) -> int:
-    normalized = transport.lower()
-    if normalized == "tcp":
-        return DEFAULT_TCP_PORT
-    if normalized == "udp":
-        return DEFAULT_UDP_PORT
-    raise ValueError("transport must be 'tcp' or 'udp'")
-
 
 def _resolve_port(port: int | None, transport: str) -> int:
-    if port is None:
-        return _default_port_for_transport(transport)
+    if not isinstance(transport, str) or transport.strip().lower() not in {"tcp", "udp"}:
+        raise ValueError("transport must be 'tcp' or 'udp'")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("port is required and must be an integer in range 1..65535")
     return port
 
 
@@ -71,10 +61,10 @@ class SlmpTarget:
         multidrop: Multidrop station number (0x00 for no multidrop).
     """
 
-    network: int = 0x00
-    station: int = 0xFF
-    module_io: int | ModuleIONo | str = 0x03FF
-    multidrop: int = 0x00
+    network: int
+    station: int
+    module_io: int | ModuleIONo | str
+    multidrop: int
 
     def __post_init__(self) -> None:
         """Resolve module_io from enum name or value."""
@@ -88,26 +78,48 @@ class SlmpTarget:
             object.__setattr__(self, "module_io", resolved)
         elif isinstance(value, ModuleIONo):
             object.__setattr__(self, "module_io", value.value)
+        for name, item, maximum in (
+            ("network", self.network, 0xFF),
+            ("station", self.station, 0xFF),
+            ("module_io", self.module_io, 0xFFFF),
+            ("multidrop", self.multidrop, 0xFF),
+        ):
+            if isinstance(item, bool) or not isinstance(item, int) or not 0 <= item <= maximum:
+                raise ValueError(f"{name} must be an integer in range 0..{maximum}")
 
 
 @dataclass(frozen=True)
 class DeviceRef:
-    """Device reference.
+    """Immutable profile-bound semantic device reference.
 
     Attributes:
         code: Device code string (e.g. 'D', 'X').
-        number: Device address number.
+        number: Wire-level device address number.
+        plc_profile: Canonical PLC profile used to interpret and format the address.
     """
 
     code: str
     number: int
-    radix_override: int | None = field(default=None, compare=False, repr=False)
+    plc_profile: str | SlmpPlcProfile
+
+    def __post_init__(self) -> None:
+        normalized_profile = _normalize_plc_profile_hint(self.plc_profile)
+        if normalized_profile is None:
+            raise ValueError("plc_profile is required for DeviceRef")
+        if normalized_profile == SlmpPlcProfile.QCpu.value:
+            raise ValueError(_QCPU_BASE_PROFILE_MESSAGE)
+        code = str(self.code).strip().upper()
+        if code not in DEVICE_CODES:
+            raise ValueError(f"Unknown SLMP device code: {self.code!r}")
+        if isinstance(self.number, bool) or not isinstance(self.number, int) or self.number < 0:
+            raise ValueError("device number must be a non-negative integer")
+        _ensure_device_supported_for_profile(code, normalized_profile)
+        object.__setattr__(self, "code", code)
+        object.__setattr__(self, "plc_profile", normalized_profile)
 
     def __str__(self) -> str:
         """Return the string representation of the device (e.g., 'D100', 'X1F')."""
-        radix = self.radix_override
-        if radix is None and self.code in DEVICE_CODES:
-            radix = DEVICE_CODES[self.code].radix
+        radix = _resolve_device_radix(self.code, self.plc_profile)
         if radix == 16:
             return f"{self.code}{self.number:X}"
         if radix == 8:
@@ -320,36 +332,19 @@ def _ensure_device_supported_for_profile(code: str, plc_profile: object | None =
         )
 
 
-def _apply_plc_profile_hint(value: DeviceRef, plc_profile: object | None = None) -> DeviceRef:
-    if plc_profile is None:
-        return value
-    if value.code not in DEVICE_CODES:
-        return value
-    _ensure_device_supported_for_profile(value.code, plc_profile)
-    radix = _resolve_device_radix(value.code, plc_profile)
-    if value.radix_override == radix:
-        return value
-    if value.radix_override is None and DEVICE_CODES[value.code].radix == radix:
-        return value
-    return replace(value, radix_override=radix)
-
-
 def _require_explicit_plc_profile_for_xy(
     value: str | DeviceRef,
     plc_profile: object | None,
     ref: DeviceRef,
 ) -> DeviceRef:
-    if not isinstance(value, str):
-        return ref
-    if _normalize_plc_profile_hint(plc_profile) is not None:
-        return ref
-    if ref.code not in _IQF_OCTAL_DEVICE_CODES:
-        return ref
-    raise ValueError(
-        "X/Y string addresses require explicit plc_profile. "
-        "Use plc_profile='melsec:iq-f' for FX/iQ-F targets, choose an explicit non-iQ-F profile, "
-        "or pass a numeric DeviceRef."
-    )
+    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    if normalized_profile is None:
+        raise ValueError("plc_profile is required for semantic device addresses")
+    if ref.plc_profile != normalized_profile:
+        raise ValueError(
+            f"DeviceRef plc_profile {ref.plc_profile!r} does not match requested plc_profile {normalized_profile!r}."
+        )
+    return ref
 
 
 def _split_device_text(value: str, text: str) -> tuple[str, str]:
@@ -531,7 +526,7 @@ def decode_cpu_operation_state(status_word: int) -> CpuOperationState:
 
 
 @dataclass(frozen=True)
-class SlmpTraceFrame:
+class _SlmpTraceFrame:
     """A single SLMP transaction captured by a trace hook."""
 
     serial: int
@@ -546,7 +541,7 @@ class SlmpTraceFrame:
 
 
 @dataclass(frozen=True)
-class ExtensionSpec:
+class _ExtensionSpec:
     """Extended Device extension fields (binary, 0080..0083)."""
 
     extension_specification: int = 0x0000
@@ -557,7 +552,85 @@ class ExtensionSpec:
 
 
 @dataclass(frozen=True)
-class ExtendedDevice:
+class SlmpIndexZ:
+    """Typed Z index-register modification for one Extended Device operand."""
+
+    index: int
+
+    def __post_init__(self) -> None:
+        if isinstance(self.index, bool) or not isinstance(self.index, int):
+            raise ValueError("SlmpIndexZ.index must be an integer in range 0..255")
+        _check_u8(self.index, "SlmpIndexZ.index")
+
+
+@dataclass(frozen=True)
+class SlmpIndexLz:
+    """Typed LZ long-index-register modification for one Extended Device operand."""
+
+    index: int
+
+    def __post_init__(self) -> None:
+        if isinstance(self.index, bool) or not isinstance(self.index, int):
+            raise ValueError("SlmpIndexLz.index must be an integer in range 0..1")
+        if not 0 <= self.index <= 1:
+            raise ValueError(f"SlmpIndexLz.index out of range (0..1): {self.index}")
+
+
+@dataclass(frozen=True)
+class SlmpIndirect:
+    """Typed word-device indirect modification for one Extended Device operand."""
+
+
+SlmpDeviceModification = SlmpIndexZ | SlmpIndexLz | SlmpIndirect
+
+
+@dataclass(frozen=True)
+class SlmpExtendedDevice:
+    """Qualified Extended Device text plus an optional typed modification."""
+
+    address: str
+    modification: SlmpDeviceModification | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.address, str) or not self.address.strip():
+            raise ValueError("SlmpExtendedDevice.address must be a non-empty qualified device string")
+        object.__setattr__(self, "address", self.address.strip())
+        if self.modification is not None and not isinstance(
+            self.modification,
+            (SlmpIndexZ, SlmpIndexLz, SlmpIndirect),
+        ):
+            raise ValueError("SlmpExtendedDevice.modification must be SlmpIndexZ, SlmpIndexLz, SlmpIndirect, or None")
+
+
+def _format_semantic_extended_device_key(
+    device: str | SlmpExtendedDevice,
+    *,
+    plc_profile: object,
+) -> str:
+    """Return a canonical result key that preserves the complete Extended Device route."""
+    address = device.address if isinstance(device, SlmpExtendedDevice) else device
+    parsed = _parse_extended_device(address, plc_profile=plc_profile)
+    if parsed.qualifier == "J":
+        assert parsed.extension_specification is not None
+        key = f"J{parsed.extension_specification}\\{parsed.ref}"
+    elif parsed.qualifier == "U":
+        assert parsed.extension_specification is not None
+        key = f"U{parsed.extension_specification:X}\\{parsed.ref}"
+    else:
+        key = str(parsed.ref)
+
+    modification = device.modification if isinstance(device, SlmpExtendedDevice) else None
+    if isinstance(modification, SlmpIndexZ):
+        return f"{key}+Z{modification.index}"
+    if isinstance(modification, SlmpIndexLz):
+        return f"{key}+LZ{modification.index}"
+    if isinstance(modification, SlmpIndirect):
+        return f"{key}+INDIRECT"
+    return key
+
+
+@dataclass(frozen=True)
+class _ExtendedDevice:
     """Extended Device text plus optional qualified extension-specification override."""
 
     ref: DeviceRef
@@ -569,42 +642,55 @@ class ExtendedDevice:
 def parse_device(
     value: str | DeviceRef,
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> DeviceRef:
     """Parse a device string into a `DeviceRef`.
 
     Args:
         value: Device string (e.g. 'D100', 'X1F') or `DeviceRef` object.
+        plc_profile: Exact canonical PLC profile that defines the device grammar.
 
     Returns:
         A `DeviceRef` object containing the device code and numeric address.
 
     Raises:
-        ValueError: If the device format is invalid or the code is unknown.
+        ValueError: If the profile is missing or ambiguous, the device format is
+            invalid, the code is unsupported, or a bound `DeviceRef` belongs to
+            another profile.
     """
+    normalized_profile = _normalize_plc_profile_hint(plc_profile)
+    if normalized_profile is None:
+        raise ValueError("plc_profile is required for semantic device addresses")
+    if normalized_profile == SlmpPlcProfile.QCpu.value:
+        raise ValueError(_QCPU_BASE_PROFILE_MESSAGE)
     if isinstance(value, DeviceRef):
-        return _apply_plc_profile_hint(value, plc_profile)
+        if value.plc_profile != normalized_profile:
+            raise ValueError(
+                f"DeviceRef plc_profile {value.plc_profile!r} does not match requested "
+                f"plc_profile {normalized_profile!r}."
+            )
+        return value
 
     text = value.strip().upper()
     code, num_txt = _split_device_text(value, text)
-    _ensure_device_supported_for_profile(code, plc_profile)
+    _ensure_device_supported_for_profile(code, normalized_profile)
 
-    base = _resolve_device_radix(code, plc_profile)
+    base = _resolve_device_radix(code, normalized_profile)
     try:
         number = int(num_txt, base)
     except ValueError:
         raise ValueError(f"Invalid SLMP device number {num_txt!r} for device code '{code}' in {value!r}.") from None
-    return _apply_plc_profile_hint(DeviceRef(code=code, number=number), plc_profile)
+    return DeviceRef(code=code, number=number, plc_profile=normalized_profile)
 
 
-def parse_extended_device(
+def _parse_extended_device(
     value: str | DeviceRef,
     *,
-    plc_profile: object | None = None,
-) -> ExtendedDevice:
-    r"""Parse an Extended Device string (e.g., 'U01\G10', 'J2\SW10') or return ExtendedDevice as-is."""
+    plc_profile: object,
+) -> _ExtendedDevice:
+    r"""Parse an Extended Device string (e.g., 'U01\G10', 'J2\SW10') or return _ExtendedDevice as-is."""
     if isinstance(value, DeviceRef):
-        return ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
+        return _ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
 
     text = value.strip().upper()
 
@@ -614,7 +700,7 @@ def parse_extended_device(
         j_net_txt, device_txt = j_qualified.groups()
         j_network = int(j_net_txt)
         _check_u8(j_network, "extended_device j_network")
-        return ExtendedDevice(
+        return _ExtendedDevice(
             ref=parse_device(device_txt, plc_profile=plc_profile),
             extension_specification=j_network,
             direct_memory_specification=DIRECT_MEMORY_LINK_DIRECT,
@@ -634,24 +720,24 @@ def parse_extended_device(
         elif dev_ref.code == "HG":
             _validate_hg_extension_specification(extension_specification)
             dm = DIRECT_MEMORY_CPU_BUFFER  # 0xFA
-        return ExtendedDevice(
+        return _ExtendedDevice(
             ref=dev_ref,
             extension_specification=extension_specification,
             direct_memory_specification=dm,
             qualifier="U",
         )
 
-    return ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
+    return _ExtendedDevice(ref=parse_device(value, plc_profile=plc_profile))
 
 
-def resolve_extended_device_and_extension(
+def _resolve_extended_device_and_extension(
     device: str | DeviceRef,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     *,
-    plc_profile: object | None = None,
-) -> tuple[DeviceRef, ExtensionSpec]:
+    plc_profile: object,
+) -> tuple[DeviceRef, _ExtensionSpec]:
     """Resolve device and extension specification, prioritizing explicit qualification in the device string."""
-    qualified = parse_extended_device(device, plc_profile=plc_profile)
+    qualified = _parse_extended_device(device, plc_profile=plc_profile)
     _validate_g_hg_extended_device_qualification(qualified)
     overrides: dict[str, Any] = {}
     if (
@@ -904,7 +990,10 @@ def encode_device_spec(
     plc_profile: object | None = None,
 ) -> bytes:
     """Encode a device specification into bytes based on the PLC series."""
-    ref = parse_device(device, plc_profile=plc_profile)
+    if isinstance(device, DeviceRef) and plc_profile is None:
+        ref = device
+    else:
+        ref = parse_device(device, plc_profile=plc_profile)
     if ref.code == "R" and ref.number > 32767:
         raise ValueError(f"R device number out of supported range (0..32767): {ref.number}")
     dev = DEVICE_CODES[ref.code]
@@ -918,7 +1007,7 @@ def encode_device_spec(
     return ref.number.to_bytes(4, "little") + dev.code.to_bytes(2, "little")
 
 
-def encode_extension_spec(spec: ExtensionSpec) -> bytes:
+def _encode_extension_spec(spec: _ExtensionSpec) -> bytes:
     """Encode an Extended Device extension specification into bytes."""
     _validate_extension_spec(spec)
     return (
@@ -929,7 +1018,7 @@ def encode_extension_spec(spec: ExtensionSpec) -> bytes:
     )
 
 
-def _validate_extension_spec(spec: ExtensionSpec) -> None:
+def _validate_extension_spec(spec: _ExtensionSpec) -> None:
     _check_u16(spec.extension_specification, "extension_specification")
     _check_u8(spec.extension_specification_modification, "extension_specification_modification")
     _check_u8(spec.device_modification_index, "device_modification_index")
@@ -942,7 +1031,7 @@ def _validate_hg_extension_specification(extension_specification: int) -> None:
         raise ValueError("HG Extended Device access is valid only for U3E0\\HG through U3E3\\HG.")
 
 
-def _validate_g_hg_extended_device_qualification(device: ExtendedDevice) -> None:
+def _validate_g_hg_extended_device_qualification(device: _ExtendedDevice) -> None:
     if device.ref.code == "G":
         if device.qualifier != "U":
             raise ValueError("G Extended Device access requires U-qualified module access such as U1\\G0.")
@@ -959,7 +1048,7 @@ def _encode_manual_extended_device_spec(
     ref: DeviceRef,
     *,
     series: PLCSeries,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     include_direct_memory_at_end: bool,
 ) -> bytes:
     _validate_extension_spec(extension)
@@ -978,7 +1067,7 @@ def _encode_manual_extended_device_spec(
 def _encode_link_direct_device_spec(
     ref: DeviceRef,
     *,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     include_direct_memory_at_end: bool,
 ) -> bytes:
     """Encode a link direct device spec (J\\device) verified by GOT pcap.
@@ -1000,17 +1089,17 @@ def _encode_link_direct_device_spec(
     return bytes(payload)
 
 
-def encode_extended_device_spec(
+def _encode_extended_device_spec(
     device: str | DeviceRef,
     *,
     series: PLCSeries,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     include_direct_memory_at_end: bool = True,
     plc_profile: object | None = None,
 ) -> bytes:
     """Encode an Extended Device extended device specification into bytes."""
-    ref, effective_extension = resolve_extended_device_and_extension(device, extension, plc_profile=plc_profile)
-    return encode_resolved_extended_device_spec(
+    ref, effective_extension = _resolve_extended_device_and_extension(device, extension, plc_profile=plc_profile)
+    return _encode_resolved_extended_device_spec(
         ref,
         series=series,
         extension=effective_extension,
@@ -1018,11 +1107,11 @@ def encode_extended_device_spec(
     )
 
 
-def encode_resolved_extended_device_spec(
+def _encode_resolved_extended_device_spec(
     ref: DeviceRef,
     *,
     series: PLCSeries,
-    extension: ExtensionSpec,
+    extension: _ExtensionSpec,
     include_direct_memory_at_end: bool = True,
 ) -> bytes:
     """Encode an already validated Extended Device spec."""
@@ -1040,7 +1129,7 @@ def encode_resolved_extended_device_spec(
     )
 
 
-def build_device_modification_flags(
+def _build_device_modification_flags(
     *,
     series: PLCSeries,
     use_indirect_specification: bool = False,
@@ -1066,6 +1155,38 @@ def build_device_modification_flags(
         high = 0x8
     low = 0x8 if use_indirect_specification else 0x0
     return ((high & 0xF) << 4) | (low & 0xF)
+
+
+def _apply_semantic_device_modification(
+    extension: _ExtensionSpec,
+    modification: SlmpDeviceModification | None,
+    *,
+    series: PLCSeries,
+) -> _ExtensionSpec:
+    if modification is None:
+        return extension
+    if extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
+        raise ValueError("J-qualified link-direct devices do not support Z, LZ, or indirect modification")
+    if isinstance(modification, SlmpIndexZ):
+        return replace(
+            extension,
+            device_modification_index=modification.index,
+            device_modification_flags=_build_device_modification_flags(series=series, register_mode="z"),
+        )
+    if isinstance(modification, SlmpIndexLz):
+        return replace(
+            extension,
+            device_modification_index=modification.index,
+            device_modification_flags=_build_device_modification_flags(series=series, register_mode="lz"),
+        )
+    return replace(
+        extension,
+        device_modification_index=0,
+        device_modification_flags=_build_device_modification_flags(
+            series=series,
+            use_indirect_specification=True,
+        ),
+    )
 
 
 def decode_device_words(data: bytes) -> list[int]:
@@ -1094,7 +1215,7 @@ def pack_bit_values(values: Iterable[bool | int]) -> bytes:
     Returns:
         Packed binary data.
     """
-    bits = [1 if bool(v) else 0 for v in values]
+    bits = [_require_write_bit(value, "bit value") for value in values]
     out = bytearray()
     for i in range(0, len(bits), 2):
         hi = bits[i] & 0x1
@@ -1144,6 +1265,29 @@ def _check_u32(value: int, name: str) -> None:
         raise ValueError(f"{name} out of range (0..4294967295): {value}")
 
 
+def _require_write_u16(value: object, name: str = "value") -> int:
+    """Return one exact unsigned word value or reject before frame creation."""
+    if type(value) is not int or not 0 <= value <= 0xFFFF:
+        raise ValueError(f"{name} must be an integer in range 0..65535: {value!r}")
+    return value
+
+
+def _require_write_u32(value: object, name: str = "value") -> int:
+    """Return one exact unsigned double-word value or reject before frame creation."""
+    if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError(f"{name} must be an integer in range 0..4294967295: {value!r}")
+    return value
+
+
+def _require_write_bit(value: object, name: str = "value") -> int:
+    """Return 0/1 for an explicit boolean or exact integer bit value."""
+    if type(value) is bool:
+        return 1 if value else 0
+    if type(value) is int and value in (0, 1):
+        return value
+    raise ValueError(f"{name} must be bool or the integer 0 or 1: {value!r}")
+
+
 def _check_points_u16(points: int, name: str) -> None:
     if points < 0 or points > 0xFFFF:
         raise ValueError(f"{name} out of range (0..65535): {points}")
@@ -1188,6 +1332,10 @@ def _check_random_read_like_counts(
     plc_profile: object | None = None,
     limit_key: str = "random_read_word",
 ) -> None:
+    if word_points < 0 or dword_points < 0:
+        raise ValueError(
+            f"{name} word_points and dword_points must be non-negative: word={word_points}, dword={dword_points}"
+        )
     total = word_points + dword_points
     effective_limit_key = f"{limit_key}_ext" if extension else limit_key
     limit_info = profile_limit(plc_profile, effective_limit_key)
@@ -1293,7 +1441,7 @@ def _check_block_request_limits(
 def _normalize_items(
     values: Mapping[str | DeviceRef, Any] | Sequence[tuple[str | DeviceRef, Any]],
     *,
-    plc_profile: object | None = None,
+    plc_profile: object,
 ) -> list[tuple[DeviceRef, Any]]:
     if isinstance(values, Mapping):
         items = list(values.items())
@@ -1323,7 +1471,7 @@ def _check_temporarily_unsupported_device(ref: DeviceRef, *, access_kind: str = 
     if ref.code in _G_HG_CODES:
         raise SlmpUnsupportedDeviceError(
             f"{ref.code} is temporarily unsupported in direct typed device APIs on this project; "
-            "use the Extended Device _ext APIs or the verified cpu_buffer_*/extend_unit_* helpers instead"
+            "use the explicitly qualified Extended Device route supported by the selected profile"
         )
     raise SlmpUnsupportedDeviceError(
         f"{ref.code} is temporarily unsupported in typed device APIs on this project; "
@@ -1402,6 +1550,8 @@ def _validate_random_write_word_devices(
     dword_refs: Sequence[DeviceRef] = (),
     *,
     plc_profile: object | None = None,
+    word_namespaces: Sequence[object] | None = None,
+    dword_namespaces: Sequence[object] | None = None,
 ) -> None:
     read_only = next((ref for ref in (*word_refs, *dword_refs) if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
@@ -1413,12 +1563,28 @@ def _validate_random_write_word_devices(
             "Write Random (0x1402) does not support LTN/LSTN/LCN/LZ as word entries. "
             "Use dword entries or write_typed/write_named with ':D' or ':L' instead."
         )
+    word_scopes = tuple(word_namespaces) if word_namespaces is not None else (None,) * len(word_refs)
+    dword_scopes = tuple(dword_namespaces) if dword_namespaces is not None else (None,) * len(dword_refs)
+    if len(word_scopes) != len(word_refs) or len(dword_scopes) != len(dword_refs):
+        raise ValueError("random write destination namespace count mismatch")
+    occupied: set[tuple[object, str, int]] = set()
+    for ref, scope in zip(word_refs, word_scopes, strict=True):
+        slot = (scope, ref.code, ref.number)
+        if slot in occupied:
+            raise ValueError(f"Write Random (0x1402) has a duplicate destination: {ref}")
+        occupied.add(slot)
+    for ref, scope in zip(dword_refs, dword_scopes, strict=True):
+        slots = ((scope, ref.code, ref.number), (scope, ref.code, ref.number + 1))
+        if any(slot in occupied for slot in slots):
+            raise ValueError(f"Write Random (0x1402) has overlapping word/dword destinations: {ref}")
+        occupied.update(slots)
 
 
 def _validate_random_write_bit_devices(
     bit_refs: Sequence[DeviceRef],
     *,
     plc_profile: object | None = None,
+    namespaces: Sequence[object] | None = None,
 ) -> None:
     read_only = next((ref for ref in bit_refs if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
@@ -1427,6 +1593,30 @@ def _validate_random_write_bit_devices(
         )
     if any(ref.code in _G_HG_CODES for ref in bit_refs):
         raise ValueError("Write Random (0x1402) does not support G/HG bit entries. Use U-qualified word access.")
+    scopes = tuple(namespaces) if namespaces is not None else (None,) * len(bit_refs)
+    if len(scopes) != len(bit_refs):
+        raise ValueError("random bit write destination namespace count mismatch")
+    seen: set[tuple[object, str, int]] = set()
+    for ref, scope in zip(bit_refs, scopes, strict=True):
+        key = (scope, ref.code, ref.number)
+        if key in seen:
+            raise ValueError(f"Write Random (0x1402) has a duplicate bit destination: {ref}")
+        seen.add(key)
+
+
+def _validate_block_write_ranges(
+    word_blocks: Sequence[tuple[DeviceRef, Sequence[object]]],
+    bit_blocks: Sequence[tuple[DeviceRef, Sequence[object]]],
+) -> None:
+    """Reject duplicate or overlapping block destinations before encoding."""
+    occupied: set[tuple[str, int]] = set()
+    for kind, blocks in (("word", word_blocks), ("bit", bit_blocks)):
+        for ref, values in blocks:
+            span = len(values) * (16 if kind == "bit" else 1)
+            slots = {(ref.code, ref.number + offset) for offset in range(span)}
+            if occupied.intersection(slots):
+                raise ValueError(f"Write Block (0x1406) has overlapping {kind} destination range at {ref}")
+            occupied.update(slots)
 
 
 def _validate_block_read_devices(
@@ -1506,17 +1696,8 @@ def _warn_practical_device_path(ref: DeviceRef, *, series: PLCSeries, access_kin
         if access_kind == "direct":
             warnings.warn(
                 (
-                    f"direct access to {ref.code} is known to fail on the validated iQ-R target; "
-                    "use cpu_buffer_* or extend_unit_* helpers instead"
-                ),
-                SlmpPracticalPathWarning,
-                stacklevel=3,
-            )
-        elif access_kind == "extended_device":
-            warnings.warn(
-                (
-                    f"Extended Device access to {ref.code} uses a capture-aligned builder; "
-                    "revalidate it on the actual PLC and keep cpu_buffer_* or extend_unit_* helpers as the fallback"
+                    f"standalone direct access to {ref.code} is not a valid route; "
+                    "use the explicitly qualified Extended Device route supported by the selected profile"
                 ),
                 SlmpPracticalPathWarning,
                 stacklevel=3,
@@ -1567,7 +1748,9 @@ _PROFILE_UNSUPPORTED_DEVICE_CODES: dict[str, frozenset[str]] = {
 
 
 def _encode_label_name(label: str) -> bytes:
-    if not label:
+    if not isinstance(label, str):
+        raise TypeError("label must be a string")
+    if not label or not label.strip():
         raise ValueError("label must not be empty")
     raw = label.encode("utf-16-le")
     if len(raw) % 2 != 0:
