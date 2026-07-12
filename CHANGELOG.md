@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Tests: Removed vendored cross-repository vector JSON and its dedicated runners. Cross-implementation comparison is executed independently of this library repository.
 ### BREAKING
 - Library: `read_named` and `poll` now accept only one random-readable named batch, and reject routes that would require hidden follow-up requests. `write_named` likewise emits one random-write request or rejects the complete update set before transport.
 
@@ -193,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Made named-address parsing and typed read/write helpers require explicit dtype suffixes such as `:U`, `:S`, `:D`, `:L`, `:F`, or `:BIT`; bare devices no longer default to `U`, `BIT`, or long-timer `D`.
 - Library: Removed embedded localized SLMP end-code message text; end-code helpers now return stable code-derived keys while message lookup hooks return `None`.
 - Docs: Reworked the end-code page around raw `end_code` inspection and code-derived keys instead of bundled message text.
-- Tests: Updated high-level address parser and shared-spec vectors for explicit dtype requirements.
+- Tests: Updated high-level address parser tests for explicit dtype requirements.
 - Tests: Updated SLMP end-code helper coverage for code-derived keys and non-embedded messages.
 
 ### Fixed
@@ -218,8 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-06-24
 
 ### Added
-- Tests: Added 4 missing RD device encoding vectors (`rd0_iqr`, `rd0_legacy`, `rd524287_iqr`, `rd524287_legacy`) to `tests/shared-spec/device_spec_vectors.json`.
-- Tests: Added `read_words_rd524286_2_iqr` frame golden vector to `tests/shared-spec/frame_golden_vectors.json`.
+- Tests: Added RD device encoding coverage for `RD0` and `RD524287` in iQ-R and legacy modes.
+- Tests: Added an iQ-R `read_words` frame case for `RD524286` with two points.
 
 ### Changed
 - Release: Bumped package metadata to `1.0.0` for the first stable release line.
