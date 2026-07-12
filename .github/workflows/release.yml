@@ -42,6 +42,8 @@ jobs:
         with: { python-version: "3.11" }
 
       - name: Verify exact tag checkout and source versions
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         shell: bash
         run: |
           tag="${{ steps.release.outputs.tag }}"
