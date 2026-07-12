@@ -28,20 +28,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Removed the public low-level `request()` method and caller-selected 4E serial numbers. `raw_command(command, subcommand, payload)` remains the single maintainer raw entry point and allocates serials internally.
 - Library: Removed command-specific raw-payload wrappers and public label payload builder/parser methods. Use the semantic typed APIs, or the single maintainer `raw_command` entry point for investigation.
 - Library: Removed public chunked read/write helpers and mixed-block request splitting. One standard API call now produces one protocol request and rejects profile-limit overflow before transport.
-- Library: Made generic device access unit (`bit_unit`), CPU-buffer module number, remote run/pause modes, and long-timer head/count values explicit where their omission could select a different operation or address.
+- Library: Made generic device access unit (`bit_unit`), typed CPU-buffer target (`module=CpuModule.CPU1` through `CPU4`), remote run/pause modes, and long-timer head/count values explicit where their omission could select a different operation or address. CPU-buffer helpers reject raw integers and unrelated module enums; Direct and Extended Device generic APIs reject every non-Boolean unit value before framing instead of treating false-like values as word access.
+- Library: Long-timer and long-retentive-timer helpers now reject non-integer heads/counts, negative or 32-bit-overflow heads, zero counts, and counts above the one-request direct-word limit before transport in both sync and async clients.
 - Library: Replaced public raw Extended Device field controls with qualified addresses and typed `SlmpExtendedDevice` modifiers.
 - Library: Removed public error-code message/language lookup and public trace/strict-profile controls; structured end codes remain available without embedding manual wording.
+- Library: Profile feature errors no longer append an internal bypass hint placeholder or the literal text `None`; normal error text reports only the profile, feature state, and available evidence.
+- Library: `raise_on_error` now accepts only actual Booleans in connection options, sync/async clients, and internal request overrides. Omission remains `True`; strings, numbers, null, and containers cannot silently change PLC end-code handling. Each request snapshots the effective policy before waiting or transport, so later mutation cannot change an in-flight response decision.
+- Library: The maintainer-only trace callback remains disabled by omission and now rejects non-callable values during sync/async client construction.
 
 ### Changed
 
+- Library: Random read keeps the unused word or DWord category optional, rejects all-empty or invalid supplied collections before transport, and returns an explicit empty mapping for the unused result category.
+- Library: Random word write keeps the unused word or DWord value category optional while rejecting all-empty, malformed, duplicate, overlapping, or invalid value collections before transport; random bit write remains a separate required-input API.
+- Library: Block read/write keeps the unused word or bit block category optional, rejects all-empty or malformed inputs before transport, returns an explicit empty list for the unused read category, and rejects overlapping write ranges.
+- Library: Request-level monitoring timer omission inherits the validated connection value, explicit zero is preserved, and sync/async overrides now reject Booleans, non-integers, and values outside `0..65535` before framing.
 - Library: Standardized communication timeout omission to 3 seconds, monitoring timer omission to 4 seconds (`0x0010`), and TCP keepalive idle to 30 seconds.
+- Library: TCP connection setup now fails closed when required keepalive configuration cannot be applied. Sync sockets and async writers are closed before the failure is returned, and no partially configured connection is retained.
+- Tooling: Standardized every communicating CLI `--timeout` omission to 3 seconds; read-soak, mixed-load, and TCP-concurrency tools no longer select 5 seconds when the option is absent.
 - Library: Reset UDP transport state after timeout/cancellation so a delayed 3E response cannot be accepted by a later request.
 - Tooling: Required explicit port and transport for every bundled CLI command that communicates with a PLC.
+- Tooling: The internal CLI probe client signature now also requires `transport`; direct internal construction can no longer infer TCP even when a command wrapper is bypassed.
+- Tooling: The internal CLI probe client now requires a complete `default_target`, and every communicating CLI plus the shared sample parser requires explicit `--network`, `--station`, `--module-io`, and `--multidrop` values instead of constructing an own-station route from omission.
+- Tooling: The optional live step in the regression-suite command now requires and forwards a complete route through `--live-network`, `--live-station`, `--live-module-io`, and `--live-multidrop`.
 - Samples: Required explicit port and transport and bound address parsing/formatting to the selected PLC profile.
+- Samples: Removed the last asynchronous sample fallback that supplied `192.168.250.100:1025`; every target must now be written as an explicit `HOST:PORT` pair.
 
 ### Tests
 
 - Tests: Added sync/async contract tests for removed overrides, internal serial allocation, required parameters, profile-derived wire shapes, timeout validation, UDP reset behavior, and public-surface removal.
+- Tests: Added a source-level invariant requiring every communicating CLI and shared sample monitoring-timer default to remain `0x0010` (four seconds).
+- Tests: Added sync and async regressions proving keepalive setup failure closes the new transport and leaves the client disconnected.
+- Tests: Added sync and async regressions proving the maintainer raw command cannot omit its keyword-only subcommand or payload and reaches no transport when either field is missing.
 
 ## [3.1.0] - 2026-07-10
 

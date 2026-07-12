@@ -3,6 +3,7 @@
 import asyncio
 import re
 from contextlib import AbstractContextManager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 try:
     import pytest
@@ -35,11 +36,175 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
     pytest = _PytestFallback()
 
 from slmp.async_client import AsyncSlmpClient
-from slmp.constants import Command, PLCSeries, RemoteClearMode
+from slmp.constants import Command, CpuModule, PLCSeries, RemoteClearMode
 from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
 from slmp.errors import SlmpProfileFeatureError
 
+
+def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
+    payload = end_code.to_bytes(2, "little") + data
+    return (
+        b"\xd4\x00"
+        + serial.to_bytes(2, "little")
+        + b"\x00\x00"
+        + b"\x00\xff\xff\x03\x00"
+        + len(payload).to_bytes(2, "little")
+        + payload
+    )
+
+
 # --- Mock SLMP Server for Testing ---
+
+
+@pytest.mark.asyncio
+async def test_async_tcp_connect_closes_writer_when_required_keepalive_setup_fails() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    reader = MagicMock()
+    writer = MagicMock()
+    writer.get_extra_info.return_value = MagicMock()
+    writer.wait_closed = AsyncMock()
+
+    with (
+        patch("slmp.async_client.asyncio.open_connection", new=AsyncMock(return_value=(reader, writer))),
+        patch("slmp.async_client.configure_tcp_keepalive", side_effect=OSError("keepalive unavailable")),
+    ):
+        with pytest.raises(OSError, match="keepalive unavailable"):
+            await client.connect()
+
+    writer.close.assert_called_once_with()
+    writer.wait_closed.assert_awaited_once_with()
+    assert client._reader is None
+    assert client._writer is None
+
+
+@pytest.mark.asyncio
+async def test_async_raise_on_error_requires_real_booleans_before_transport() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    with pytest.raises(ValueError, match="raise_on_error must be a boolean"):
+        AsyncSlmpClient(  # type: ignore[arg-type]
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+            raise_on_error="false",
+        )
+
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    with pytest.raises(ValueError, match="raise_on_error must be a boolean"):
+        await client._request(  # type: ignore[arg-type]
+            Command.SELF_TEST,
+            0,
+            b"",
+            raise_on_error="false",
+        )
+    assert client._reader is None
+
+    async def respond(frame: bytes) -> bytes:
+        client.raise_on_error = False
+        return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"ng", end_code=0xC051)
+
+    client.raise_on_error = True
+    with patch.object(client, "_send_and_receive", side_effect=respond):
+        with pytest.raises(SlmpError):
+            await client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+        client.raise_on_error = True
+        response = await client.raw_command(
+            Command.CLEAR_ERROR,
+            subcommand=0,
+            payload=b"",
+            raise_on_error=False,
+        )
+        assert response.end_code == 0xC051
+        client.raise_on_error = False
+        response = await client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+        assert response.end_code == 0xC051
+
+
+@pytest.mark.asyncio
+async def test_async_request_monitoring_timer_rejects_invalid_override_before_transport() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    for invalid in (False, True, -1, 0x10000, 1.5, "16", [], {}):
+        with pytest.raises(ValueError, match="monitoring_timer must be an integer"):
+            await client.raw_command(  # type: ignore[arg-type]
+                Command.CLEAR_ERROR,
+                subcommand=0,
+                payload=b"",
+                monitoring_timer=invalid,
+            )
+    assert client._reader is None
+
+
+@pytest.mark.asyncio
+async def test_async_generic_device_bit_unit_is_required_and_must_be_boolean() -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    with pytest.raises(TypeError):
+        await client.read_devices("D0", 1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        await client.write_devices("D0", [1])  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        await client.read_devices_ext(r"U3E0\G0", 1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        await client.write_devices_ext(r"U3E0\G0", [1])  # type: ignore[call-arg]
+
+    for invalid in (None, 0, 1, "false", "", [], {}):
+        with pytest.raises(ValueError, match="bit_unit is required and must be a boolean"):
+            await client.read_devices("D0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="bit_unit is required and must be a boolean"):
+            await client.write_devices("D0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="bit_unit is required and must be a boolean"):
+            await client.read_devices_ext(r"U3E0\G0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="bit_unit is required and must be a boolean"):
+            await client.write_devices_ext(r"U3E0\G0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+    assert client._reader is None
+    assert client._writer is None
+
+
+def test_async_maintainer_trace_hook_defaults_off_and_requires_callable() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    assert client._trace_hook is None
+    with pytest.raises(ValueError, match="_maintainer_trace_hook must be callable or None"):
+        AsyncSlmpClient(  # type: ignore[arg-type]
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+            _maintainer_trace_hook="stdout",
+        )
 
 
 class MockSLMPServer:
@@ -180,6 +345,26 @@ class FakeAsyncClient(AsyncSlmpClient):
 
 
 # --- Test Cases ---
+
+
+@pytest.mark.asyncio
+async def test_async_cpu_buffer_helpers_require_explicit_typed_module() -> None:
+    client = FakeAsyncClient()
+    with pytest.raises(TypeError):
+        await client.cpu_buffer_read_words(0, 1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        await client.cpu_buffer_write_words(0, [1])  # type: ignore[call-arg]
+    for invalid in (None, 0x03E0, "CPU1", "", 0x03E4):
+        with pytest.raises(ValueError, match="CpuModule.CPU1"):
+            await client.cpu_buffer_read_words(0, 1, module=invalid)  # type: ignore[arg-type]
+    assert client.last_request is None
+
+    for module in CpuModule:
+        client.next_response_data = b"\x34\x12"
+        assert await client.cpu_buffer_read_words(0, 1, module=module) == [0x1234]
+        assert int.from_bytes(client.last_request[2][6:8], "little") == int(module)
+        await client.cpu_buffer_write_words(0, [0x1234], module=module)
+        assert int.from_bytes(client.last_request[2][6:8], "little") == int(module)
 
 
 @pytest.mark.asyncio
@@ -329,12 +514,32 @@ async def test_async_removed_overrides_and_raw_serial_are_rejected_before_transp
 
     with pytest.raises(TypeError, match="unexpected keyword argument 'serial'"):
         await cli.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", serial=1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="required keyword-only argument: 'subcommand'"):
+        await cli.raw_command(Command.CLEAR_ERROR, payload=b"")  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="required keyword-only argument: 'payload'"):
+        await cli.raw_command(Command.CLEAR_ERROR, subcommand=0)  # type: ignore[call-arg]
     with pytest.raises(TypeError, match="unexpected keyword argument 'series'"):
         await cli.read_devices("D0", 1, bit_unit=False, series=PLCSeries.QL)  # type: ignore[call-arg]
     with pytest.raises(TypeError, match="unexpected keyword argument 'series'"):
         await cli.remote_password_lock("secret1", series=PLCSeries.QL)  # type: ignore[call-arg]
     with pytest.raises(TypeError, match="missing 2 required keyword-only arguments"):
         await cli.read_long_timer()  # type: ignore[call-arg]
+    assert cli.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_long_timer_head_and_points_are_required_and_validated_before_transport() -> None:
+    cli = FakeAsyncClient()
+
+    with pytest.raises(TypeError, match="missing 2 required keyword-only arguments"):
+        await cli.read_long_retentive_timer()  # type: ignore[call-arg]
+    for head_no in (None, False, "0", -1, 0x1_0000_0000):
+        with pytest.raises((TypeError, ValueError)):
+            await cli.read_long_timer(head_no=head_no, points=1)  # type: ignore[arg-type]
+    for points in (None, False, "1", 0, -1, 241, 0x4001):
+        with pytest.raises((TypeError, ValueError)):
+            await cli.read_long_retentive_timer(head_no=0, points=points)  # type: ignore[arg-type]
+
     assert cli.last_request is None
 
 

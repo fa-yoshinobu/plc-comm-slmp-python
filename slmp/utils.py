@@ -123,6 +123,8 @@ class SlmpConnectionOptions:
             or not 0 <= self.monitoring_timer <= 0xFFFF
         ):
             raise ValueError("monitoring_timer must be an integer in range 0..65535")
+        if type(self.raise_on_error) is not bool:
+            raise ValueError("raise_on_error must be a boolean")
         (
             normalized_plc_profile,
             plc_series,

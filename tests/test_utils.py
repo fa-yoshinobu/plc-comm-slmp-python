@@ -714,6 +714,19 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TypeError):
             SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r", port=1025, default_target=TEST_TARGET)
 
+    def test_connection_options_require_boolean_raise_on_error(self):
+        for invalid in (None, 0, 1, "false", "true", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "raise_on_error must be a boolean"):
+                    SlmpConnectionOptions(
+                        "127.0.0.1",
+                        plc_profile="melsec:iq-r",
+                        port=1025,
+                        transport="tcp",
+                        default_target=TEST_TARGET,
+                        raise_on_error=invalid,  # type: ignore[arg-type]
+                    )
+
     def test_connection_options_reject_short_plc_profile_alias(self):
         with self.assertRaisesRegex(ValueError, "Unsupported plc_profile"):
             SlmpConnectionOptions(

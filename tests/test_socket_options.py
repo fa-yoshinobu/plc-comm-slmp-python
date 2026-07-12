@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import socket
+from unittest.mock import MagicMock, patch
 
 from slmp._socket_options import configure_tcp_keepalive
+from slmp.client import SlmpClient
+from slmp.core import SlmpTarget
 
 
 class _CaptureSocket:
@@ -30,3 +33,29 @@ def test_tcp_keepalive_enables_socket_and_uses_30_second_idle() -> None:
         assert (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 30) in captured.options
     elif hasattr(socket, "SIO_KEEPALIVE_VALS"):
         assert (socket.SIO_KEEPALIVE_VALS, (1, 30_000, 1000)) in captured.ioctls
+
+
+def test_tcp_connect_closes_socket_when_required_keepalive_setup_fails() -> None:
+    raw_socket = MagicMock()
+    client = SlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+
+    with (
+        patch("slmp.client.socket.socket", return_value=raw_socket),
+        patch("slmp.client.configure_tcp_keepalive", side_effect=OSError("keepalive unavailable")),
+    ):
+        try:
+            client.connect()
+        except OSError as error:
+            assert str(error) == "keepalive unavailable"
+        else:  # pragma: no cover - protects the fail-closed contract
+            raise AssertionError("keepalive setup failure was not raised")
+
+    raw_socket.close.assert_called_once_with()
+    raw_socket.connect.assert_not_called()
+    assert client._sock is None

@@ -54,10 +54,10 @@ def add_connection_args(parser: argparse.ArgumentParser) -> None:
 
 
 def add_target_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--network", type=int_auto, default=0x00, help="Target network number")
-    parser.add_argument("--station", type=int_auto, default=0xFF, help="Target station number")
-    parser.add_argument("--module-io", type=int_auto, default=0x03FF, help="Target module I/O number")
-    parser.add_argument("--multidrop", type=int_auto, default=0x00, help="Target multidrop station number")
+    parser.add_argument("--network", type=int_auto, required=True, help="Target network number")
+    parser.add_argument("--station", type=int_auto, required=True, help="Target station number")
+    parser.add_argument("--module-io", type=int_auto, required=True, help="Target module I/O number")
+    parser.add_argument("--multidrop", type=int_auto, required=True, help="Target multidrop station number")
 
 
 def create_client_from_args(

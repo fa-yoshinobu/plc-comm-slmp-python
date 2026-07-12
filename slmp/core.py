@@ -1660,7 +1660,9 @@ _PROFILE_UNSUPPORTED_DEVICE_CODES: dict[str, frozenset[str]] = {
 
 
 def _encode_label_name(label: str) -> bytes:
-    if not label:
+    if not isinstance(label, str):
+        raise TypeError("label must be a string")
+    if not label or not label.strip():
         raise ValueError("label must not be empty")
     raw = label.encode("utf-16-le")
     if len(raw) % 2 != 0:

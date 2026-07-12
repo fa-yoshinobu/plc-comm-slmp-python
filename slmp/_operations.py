@@ -6,7 +6,7 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, PLCSeries
+from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, CpuModule, PLCSeries
 from .core import (
     BlockReadResult,
     DeviceBlockResult,
@@ -92,6 +92,34 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
+def _require_bit_unit(bit_unit: object, operation: str) -> bool:
+    if type(bit_unit) is not bool:
+        raise ValueError(f"{operation} bit_unit is required and must be a boolean")
+    return bit_unit
+
+
+def _require_cpu_module(module: object) -> int:
+    if type(module) is not CpuModule:
+        raise ValueError("module is required and must be CpuModule.CPU1 through CpuModule.CPU4")
+    return int(module)
+
+
+def _validate_long_timer_range(head_no: object, points: object, plc_profile: object) -> tuple[int, int]:
+    if type(head_no) is not int:
+        raise TypeError("head_no is required and must be an integer")
+    _check_u32(head_no, "head_no")
+    if type(points) is not int:
+        raise TypeError("points is required and must be an integer")
+    word_points = points * 4
+    _check_direct_device_points(
+        word_points,
+        bit_unit=False,
+        name="long timer",
+        plc_profile=plc_profile,
+    )
+    return head_no, word_points
+
+
 def _parse_device_for_address_profile(device: str | DeviceRef, address_profile: object | None) -> DeviceRef:
     ref = parse_device(device, plc_profile=address_profile)
     return _require_explicit_plc_profile_for_xy(device, address_profile, ref)
@@ -117,6 +145,7 @@ def build_read_devices_request(
 ) -> OperationRequest:
     """Build a direct device read request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "read_devices")
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -168,6 +197,7 @@ def build_write_devices_request(
 ) -> OperationRequest:
     """Build a direct device write request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "write_devices")
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -306,6 +336,7 @@ def build_read_devices_ext_request(
 ) -> OperationRequest:
     """Build an extended-device direct read request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "read_devices_ext")
     _check_direct_device_points(
         points,
         bit_unit=bit_unit,
@@ -338,6 +369,7 @@ def build_write_devices_ext_request(
 ) -> OperationRequest:
     """Build an extended-device direct write request."""
 
+    bit_unit = _require_bit_unit(bit_unit, "write_devices_ext")
     if not values:
         raise ValueError("values must not be empty")
     _check_direct_device_points(
@@ -1104,6 +1136,38 @@ def build_extend_unit_write_dword_request(head_address: int, module_no: int, val
     )
 
 
+def _normalize_abbreviation_labels(labels: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(labels, (str, bytes, bytearray)) or not isinstance(labels, Sequence):
+        raise TypeError("abbreviation_labels must be a sequence of strings")
+    _check_u16(len(labels), "number of abbreviation points")
+    normalized: list[str] = []
+    for label in labels:
+        if not isinstance(label, str):
+            raise TypeError("abbreviation label must be a string")
+        _encode_label_name(label)
+        normalized.append(label)
+    return tuple(normalized)
+
+
+def _validate_abbreviation_references(label: str, abbreviation_count: int) -> None:
+    _encode_label_name(label)
+    index = 0
+    while index < len(label):
+        if label[index] != "%":
+            index += 1
+            continue
+        digit_start = index + 1
+        digit_end = digit_start
+        while digit_end < len(label) and "0" <= label[digit_end] <= "9":
+            digit_end += 1
+        if digit_end == digit_start:
+            raise ValueError(f"label contains an invalid abbreviation reference; use %1 through %{abbreviation_count}")
+        reference = int(label[digit_start:digit_end])
+        if reference < 1 or reference > abbreviation_count:
+            raise ValueError(f"label contains an invalid abbreviation reference; use %1 through %{abbreviation_count}")
+        index = digit_end
+
+
 def build_array_label_read_payload(
     points: Sequence[LabelArrayReadPoint],
     *,
@@ -1114,13 +1178,14 @@ def build_array_label_read_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         _check_label_unit_specification(point.unit_specification, "unit_specification")
         _check_u16(point.array_data_length, "array_data_length")
         payload += _encode_label_name(point.label)
@@ -1140,13 +1205,14 @@ def build_array_label_write_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         _check_label_unit_specification(point.unit_specification, "unit_specification")
         _check_u16(point.array_data_length, "array_data_length")
         raw = bytes(point.data)
@@ -1175,13 +1241,14 @@ def build_label_read_random_payload(
     if not labels:
         raise ValueError("labels must not be empty")
     _check_u16(len(labels), "number of read data points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(labels).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for label in labels:
+        _validate_abbreviation_references(label, len(abbreviations))
         payload += _encode_label_name(label)
     return bytes(payload)
 
@@ -1196,13 +1263,14 @@ def build_label_write_random_payload(
     if not points:
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of write data points")
-    _check_u16(len(abbreviation_labels), "number of abbreviation points")
+    abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
     payload = bytearray()
     payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviation_labels).to_bytes(2, "little")
-    for name in abbreviation_labels:
+    payload += len(abbreviations).to_bytes(2, "little")
+    for name in abbreviations:
         payload += _encode_label_name(name)
     for point in points:
+        _validate_abbreviation_references(point.label, len(abbreviations))
         raw = bytes(point.data)
         _check_u16(len(raw), "write data length")
         payload += _encode_label_name(point.label)

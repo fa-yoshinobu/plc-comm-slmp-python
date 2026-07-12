@@ -60,24 +60,20 @@ class SlmpClient(_StandardSlmpClient):
     def __init__(
         self,
         host: str,
-        port: int | None = None,
+        port: int,
         *,
-        transport: str = "tcp",
+        transport: str,
         timeout: float = 3.0,
         plc_profile: object | None = None,
         plc_series: PLCSeries | str | None = None,
         frame_type: FrameType | str | None = None,
-        default_target: SlmpTarget | None = None,
+        default_target: SlmpTarget,
         monitoring_timer: int = 0x0010,
         raise_on_error: bool = True,
         trace_hook: Callable[[_SlmpTraceFrame], None] | None = None,
         address_profile: object | None = None,
         _allow_manual_profile: bool = True,
     ) -> None:
-        if port is None:
-            raise ValueError("port is required")
-        if default_target is None:
-            raise ValueError("default_target is required and must be a complete SlmpTarget")
         requested_series = plc_series
         requested_frame = frame_type
         requested_address_profile = address_profile
@@ -965,6 +961,10 @@ def _build_regression_steps(
     port: int,
     transport: str,
     series: str | None,
+    network: int | None,
+    station: int | None,
+    module_io: int | None,
+    multidrop: int | None,
 ) -> list[RegressionStep]:
     root = _project_root()
     steps: list[RegressionStep] = []
@@ -998,8 +998,8 @@ def _build_regression_steps(
                 )
             )
     if include_live_connection_check:
-        if not host or not series:
-            raise ValueError("host and series are required when live connection check is enabled")
+        if not host or not series or network is None or station is None or module_io is None or multidrop is None:
+            raise ValueError("host, series, and a complete target route are required for a live connection check")
         steps.append(
             RegressionStep(
                 name="live_connection_check",
@@ -1014,6 +1014,14 @@ def _build_regression_steps(
                     transport,
                     "--series",
                     series,
+                    "--network",
+                    str(network),
+                    "--station",
+                    str(station),
+                    "--module-io",
+                    str(module_io),
+                    "--multidrop",
+                    str(multidrop),
                 ),
             )
         )
@@ -2313,10 +2321,10 @@ def connection_check_main(argv: Sequence[str] | None = None) -> int:
         help=(f"optional compatibility policy JSON; defaults to {_compatibility_default_policy_output()} when present"),
     )
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00, help="e.g. 0x00")
-    parser.add_argument("--station", type=_int_auto, default=0xFF, help="e.g. 0xFF")
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF, help="e.g. 0x03FF")
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00, help="e.g. 0x00")
+    parser.add_argument("--network", type=_int_auto, required=True, help="e.g. 0x00")
+    parser.add_argument("--station", type=_int_auto, required=True, help="e.g. 0xFF")
+    parser.add_argument("--module-io", type=_int_auto, required=True, help="e.g. 0x03FF")
+    parser.add_argument("--multidrop", type=_int_auto, required=True, help="e.g. 0x00")
     parser.add_argument("--read-device", help="optional device read test, e.g. D100 or M10")
     parser.add_argument("--points", type=int, default=1, help="points for --read-device")
     parser.add_argument("--bit-unit", action="store_true", help="read in bit units")
@@ -2594,10 +2602,10 @@ def extended_device_device_recheck_main(argv: Sequence[str] | None = None) -> in
         help="frame type used for the connection check (default: 3e)",
     )
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--probe",
         action="append",
@@ -2809,10 +2817,10 @@ def g_hg_extended_device_recheck_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument("--cpu-io", type=_int_auto, default=0x03E0, help="base CPU buffer extension spec")
     parser.add_argument("--g-device", default=r"U3E0\G10", help="qualified Extended Device G device to probe")
     parser.add_argument("--hg-device", default=r"U3E0\HG20", help="qualified Extended Device HG device to probe")
@@ -3280,10 +3288,10 @@ def device_range_probe_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010)
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--spec",
         action="append",
@@ -3500,10 +3508,10 @@ def register_boundary_probe_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--spec",
         action="append",
@@ -3685,10 +3693,10 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--target",
         action="append",
@@ -3972,10 +3980,10 @@ def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument("--cpu-io", type=_int_auto, default=0x03E0, help="CPU buffer start I/O")
     parser.add_argument(
         "--output",
@@ -4064,10 +4072,10 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--label-array",
         action="append",
@@ -4311,10 +4319,10 @@ def manual_label_verification_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
     parser.add_argument("--monitoring-timer", type=_int_auto, default=0x0010, help="e.g. 0x0010")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument(
         "--label-random",
         action="append",
@@ -4542,12 +4550,12 @@ def read_soak_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
-    parser.add_argument("--timeout", type=float, default=5.0)
+    parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument("--device", default="D1000")
     parser.add_argument("--points", type=int, default=1)
     parser.add_argument("--bit-unit", action="store_true")
@@ -4666,12 +4674,12 @@ def mixed_read_load_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
-    parser.add_argument("--timeout", type=float, default=5.0)
+    parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument("--base-device", default="D1000")
     parser.add_argument("--rotate-span", type=int, default=200)
     parser.add_argument("--rounds", type=int, default=2000)
@@ -4838,12 +4846,12 @@ def tcp_concurrency_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Practical multi-client TCP read concurrency test")
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--timeout", type=float, default=5.0)
+    parser.add_argument("--timeout", type=float, default=3.0)
     parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, default=0x00)
-    parser.add_argument("--station", type=_int_auto, default=0xFF)
-    parser.add_argument("--module-io", type=_int_auto, default=0x03FF)
-    parser.add_argument("--multidrop", type=_int_auto, default=0x00)
+    parser.add_argument("--network", type=_int_auto, required=True)
+    parser.add_argument("--station", type=_int_auto, required=True)
+    parser.add_argument("--module-io", type=_int_auto, required=True)
+    parser.add_argument("--multidrop", type=_int_auto, required=True)
     parser.add_argument("--device", default="D1000")
     parser.add_argument("--points", type=int, default=1)
     parser.add_argument("--bit-unit", action="store_true")
@@ -5030,6 +5038,10 @@ def regression_suite_main(argv: Sequence[str] | None = None) -> int:
         choices=("ql", "iqr"),
         help="PLC series for the optional live connection check",
     )
+    parser.add_argument("--live-network", type=_int_auto, help="target network for the optional live check")
+    parser.add_argument("--live-station", type=_int_auto, help="target station for the optional live check")
+    parser.add_argument("--live-module-io", type=_int_auto, help="target module I/O for the optional live check")
+    parser.add_argument("--live-multidrop", type=_int_auto, help="target multidrop station for the optional live check")
     parser.add_argument(
         "--fail-fast",
         action="store_true",
@@ -5043,9 +5055,19 @@ def regression_suite_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     if args.include_live_connection_check and (
-        not args.host or args.port is None or not args.transport or not args.series
+        not args.host
+        or args.port is None
+        or not args.transport
+        or not args.series
+        or args.live_network is None
+        or args.live_station is None
+        or args.live_module_io is None
+        or args.live_multidrop is None
     ):
-        parser.error("--include-live-connection-check requires --host, --port, --transport, and --series")
+        parser.error(
+            "--include-live-connection-check requires --host, --port, --transport, --series, "
+            "--live-network, --live-station, --live-module-io, and --live-multidrop"
+        )
 
     steps = _build_regression_steps(
         python_executable=args.python,
@@ -5058,6 +5080,10 @@ def regression_suite_main(argv: Sequence[str] | None = None) -> int:
         port=args.port,
         transport=args.transport,
         series=args.series,
+        network=args.live_network,
+        station=args.live_station,
+        module_io=args.live_module_io,
+        multidrop=args.live_multidrop,
     )
     results = _run_regression_steps(
         steps,

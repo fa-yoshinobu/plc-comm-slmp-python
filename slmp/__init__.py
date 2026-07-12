@@ -14,7 +14,7 @@ __version__ = "3.1.0"
 from .async_client import AsyncSlmpClient
 from .capability_profiles import display_name
 from .client import SlmpClient
-from .constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
+from .constants import Command, CpuModule, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from .core import (
     DEVICE_CODES,
     BlockReadResult,
@@ -113,6 +113,7 @@ __all__ = [
     "AsyncSlmpClient",
     "BlockReadResult",
     "Command",
+    "CpuModule",
     "CpuOperationState",
     "CpuOperationStatus",
     "DEVICE_CODES",

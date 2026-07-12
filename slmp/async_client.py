@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from . import _operations
 from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
-from .constants import Command, FrameType, RemoteClearMode
+from .constants import Command, CpuModule, FrameType, RemoteClearMode
 from .core import (
     BlockReadResult,
     CpuOperationState,
@@ -136,9 +136,13 @@ class AsyncSlmpClient:
         ):
             raise ValueError("monitoring_timer must be an integer in range 0..65535")
         self.monitoring_timer = monitoring_timer
+        if type(raise_on_error) is not bool:
+            raise ValueError("raise_on_error must be a boolean")
         self.raise_on_error = raise_on_error
         if type(_maintainer_strict_profile) is not bool:
             raise ValueError("_maintainer_strict_profile must be a boolean")
+        if _maintainer_trace_hook is not None and not callable(_maintainer_trace_hook):
+            raise ValueError("_maintainer_trace_hook must be callable or None")
         self._trace_hook = _maintainer_trace_hook
         self._strict_profile = _maintainer_strict_profile
 
@@ -193,15 +197,28 @@ class AsyncSlmpClient:
                     return
                 fut = asyncio.open_connection(self.host, self.port)
                 try:
-                    self._reader, self._writer = await asyncio.wait_for(fut, timeout=self.timeout)
+                    reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
                 except asyncio.TimeoutError as err:
                     raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
-                writer = self._writer
-                assert writer is not None
-                raw_socket = writer.get_extra_info("socket")
-                if raw_socket is not None:
+                try:
+                    raw_socket = writer.get_extra_info("socket")
+                    if raw_socket is None:
+                        raise ConnectionError("TCP socket is unavailable; required keepalive policy cannot be applied")
                     raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     configure_tcp_keepalive(raw_socket, idle_seconds=30)
+                except BaseException:
+                    try:
+                        writer.close()
+                    except Exception:
+                        pass
+                    else:
+                        try:
+                            await writer.wait_closed()
+                        except BaseException:
+                            pass
+                    raise
+                self._reader = reader
+                self._writer = writer
             else:
                 if self._udp_transport is not None:
                     return
@@ -261,6 +278,15 @@ class AsyncSlmpClient:
         raise_on_error: bool | None = None,
     ) -> SlmpResponse:
         """Send an SLMP request and receive a response."""
+        if monitoring_timer is not None and (
+            isinstance(monitoring_timer, bool)
+            or not isinstance(monitoring_timer, int)
+            or not 0 <= monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
+        if raise_on_error is not None and type(raise_on_error) is not bool:
+            raise ValueError("raise_on_error must be a boolean when provided")
+        do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
         monitor = self.monitoring_timer if monitoring_timer is None else monitoring_timer
@@ -298,7 +324,6 @@ class AsyncSlmpClient:
                 )
             )
 
-        do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
         if do_raise and resp.end_code != 0:
             raise SlmpError(
                 f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
@@ -884,19 +909,22 @@ class AsyncSlmpClient:
         request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
         await self._request(request.command, request.subcommand, request.payload)
 
-    async def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int) -> list[int]:
+    async def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module: CpuModule) -> list[int]:
         """Read words from the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_words(head_address, word_length, module_no)
 
-    async def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module_no: int) -> None:
+    async def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module: CpuModule) -> None:
         """Write words to the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_words(head_address, module_no, values)
 
     async def read_long_timer(self, *, head_no: int, points: int) -> list[LongTimerResult]:
         """Read long timers from the PLC."""
-        words_raw = await self.read_devices(f"LTN{head_no}", points * 4, bit_unit=False)
+        head_no, word_points = _operations._validate_long_timer_range(head_no, points, self.plc_profile)
+        words_raw = await self.read_devices(f"LTN{head_no}", word_points, bit_unit=False)
         result = []
         int_words = cast(list[int], words_raw)
         for i in range(points):
@@ -916,7 +944,8 @@ class AsyncSlmpClient:
 
     async def read_long_retentive_timer(self, *, head_no: int, points: int) -> list[LongTimerResult]:
         """Read long retentive timers from the PLC."""
-        words_raw = await self.read_devices(f"LSTN{head_no}", points * 4, bit_unit=False)
+        head_no, word_points = _operations._validate_long_timer_range(head_no, points, self.plc_profile)
+        words_raw = await self.read_devices(f"LSTN{head_no}", word_points, bit_unit=False)
         result = []
         int_words = cast(list[int], words_raw)
         for i in range(points):
@@ -981,33 +1010,39 @@ class AsyncSlmpClient:
         request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
         await self._request(request.command, request.subcommand, request.payload)
 
-    async def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int) -> bytes:
+    async def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module: CpuModule) -> bytes:
         """Read bytes from the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_bytes(head_address, byte_length, module_no)
 
-    async def cpu_buffer_read_word(self, head_address: int, *, module_no: int) -> int:
+    async def cpu_buffer_read_word(self, head_address: int, *, module: CpuModule) -> int:
         """Read a single word from the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_word(head_address, module_no)
 
-    async def cpu_buffer_read_dword(self, head_address: int, *, module_no: int) -> int:
+    async def cpu_buffer_read_dword(self, head_address: int, *, module: CpuModule) -> int:
         """Read a double word from the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return await self.extend_unit_read_dword(head_address, module_no)
 
-    async def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int) -> None:
+    async def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module: CpuModule) -> None:
         """Write bytes to the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_bytes(head_address, module_no, data)
 
-    async def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int) -> None:
+    async def cpu_buffer_write_word(self, head_address: int, value: int, *, module: CpuModule) -> None:
         """Write a single word to the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_word(head_address, module_no, value)
 
-    async def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int) -> None:
+    async def cpu_buffer_write_dword(self, head_address: int, value: int, *, module: CpuModule) -> None:
         """Write a double word to the CPU buffer."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         await self.extend_unit_write_dword(head_address, module_no, value)
 
@@ -1028,6 +1063,12 @@ class AsyncSlmpClient:
         monitoring_timer: int | None = None,
     ) -> None:
         """Send an SLMP request without waiting for a response."""
+        if monitoring_timer is not None and (
+            isinstance(monitoring_timer, bool)
+            or not isinstance(monitoring_timer, int)
+            or not 0 <= monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
         monitor = self.monitoring_timer if monitoring_timer is None else monitoring_timer

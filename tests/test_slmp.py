@@ -1,5 +1,6 @@
 """Tests for SLMP client and core functions."""
 
+import ast
 import json
 import socket
 import threading
@@ -30,7 +31,7 @@ from slmp.client import (
     _recv_exact,
     _recv_tcp_frame,
 )
-from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
+from slmp.constants import Command, CpuModule, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from slmp.core import (
     DeviceRef,
     SlmpBoundaryBehaviorWarning,
@@ -55,6 +56,17 @@ from slmp.core import (
     unpack_bit_values,
 )
 from slmp.errors import SlmpProfileFeatureError
+
+_SELF_ROUTE_ARGS = [
+    "--network",
+    "0x00",
+    "--station",
+    "0xFF",
+    "--module-io",
+    "0x03FF",
+    "--multidrop",
+    "0x00",
+]
 
 print(f"DEBUG: core file = {slmp.core.__file__}")
 
@@ -204,6 +216,110 @@ def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
 
 
 class TestReceiveHelpers(unittest.TestCase):
+    def test_maintainer_trace_hook_defaults_off_and_requires_callable(self) -> None:
+        """Normal clients emit no trace and invalid internal hooks fail early."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+        )
+        self.assertIsNone(client._trace_hook)
+        with self.assertRaisesRegex(ValueError, "_maintainer_trace_hook must be callable or None"):
+            SlmpClient(  # type: ignore[arg-type]
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                default_target=target,
+                plc_profile="melsec:iq-r",
+                _maintainer_trace_hook="stdout",
+            )
+
+    def test_raise_on_error_requires_real_booleans_before_transport(self) -> None:
+        """Error-policy aliases must not silently enable or disable PLC errors."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        for invalid in (None, 0, 1, "false", "true", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "raise_on_error must be a boolean"):
+                    SlmpClient(  # type: ignore[arg-type]
+                        "127.0.0.1",
+                        1025,
+                        transport="tcp",
+                        default_target=target,
+                        plc_profile="melsec:iq-r",
+                        raise_on_error=invalid,
+                    )
+
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=target,
+            plc_profile="melsec:iq-r",
+        )
+        with self.assertRaisesRegex(ValueError, "raise_on_error must be a boolean"):
+            client._request(  # type: ignore[arg-type]
+                Command.SELF_TEST,
+                0,
+                b"",
+                raise_on_error="false",
+            )
+        self.assertIsNone(client._sock)
+
+        def respond(frame: bytes) -> bytes:
+            client.raise_on_error = False
+            return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"ng", end_code=0xC051)
+
+        client.raise_on_error = True
+        with patch.object(client, "_send_and_receive", side_effect=respond):
+            with self.assertRaises(SlmpError):
+                client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            client.raise_on_error = True
+            response = client.raw_command(
+                Command.CLEAR_ERROR,
+                subcommand=0,
+                payload=b"",
+                raise_on_error=False,
+            )
+            self.assertEqual(response.end_code, 0xC051)
+            client.raise_on_error = False
+            response = client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            self.assertEqual(response.end_code, 0xC051)
+
+    def test_request_monitoring_timer_inherits_or_requires_exact_u16(self) -> None:
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            plc_profile="melsec:iq-r",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            monitoring_timer=0x0020,
+        )
+        sent_frames: list[bytes] = []
+
+        def respond(frame: bytes) -> bytes:
+            sent_frames.append(frame)
+            return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+
+        with patch.object(client, "_send_and_receive", side_effect=respond):
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"")
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", monitoring_timer=0)
+
+        self.assertEqual(int.from_bytes(sent_frames[0][13:15], "little"), 0x0020)
+        self.assertEqual(int.from_bytes(sent_frames[1][13:15], "little"), 0)
+        for invalid in (False, True, -1, 0x10000, 1.5, "16", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "monitoring_timer must be an integer"):
+                    client.raw_command(  # type: ignore[arg-type]
+                        Command.CLEAR_ERROR,
+                        subcommand=0,
+                        payload=b"",
+                        monitoring_timer=invalid,
+                    )
+        self.assertEqual(len(sent_frames), 2)
+
     def test_sync_client_serializes_parallel_requests_and_allocates_unique_serials(self) -> None:
         client = SlmpClient(
             "127.0.0.1",
@@ -241,6 +357,110 @@ class TestReceiveHelpers(unittest.TestCase):
         self.assertEqual(max_active, 1)
         self.assertEqual(sorted(serials), list(range(32)))
         self.assertEqual(sorted(response.serial for response in responses), list(range(32)))
+
+    def test_generic_device_bit_unit_is_required_and_must_be_boolean(self) -> None:
+        client = FakeClient()
+        with self.assertRaises(TypeError):
+            client.read_devices("D0", 1)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.write_devices("D0", [1])  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.read_devices_ext(r"U3E0\G0", 1)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            client.write_devices_ext(r"U3E0\G0", [1])  # type: ignore[call-arg]
+
+        for invalid in (None, 0, 1, "false", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.read_devices("D0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.write_devices("D0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.read_devices_ext(r"U3E0\G0", 1, bit_unit=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "bit_unit is required and must be a boolean"):
+                    client.write_devices_ext(r"U3E0\G0", [1], bit_unit=invalid)  # type: ignore[arg-type]
+        self.assertEqual(client.requests, [])
+
+    def test_random_read_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"\x34\x12"
+        word_only = client.read_random(word_devices=["D0"])
+        self.assertEqual(word_only.word, {"D0": 0x1234})
+        self.assertEqual(word_only.dword, {})
+
+        client.next_response_data = b"\x78\x56\x34\x12"
+        dword_only = client.read_random(dword_devices=["D2"])
+        self.assertEqual(dword_only.word, {})
+        self.assertEqual(dword_only.dword, {"D2": 0x12345678})
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.read_random()
+        with self.assertRaises(ValueError):
+            client.read_random_ext()
+        for invalid in (None, 1, {}, "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_random(word_devices=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_random_ext(word_devices=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_random_word_write_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.write_random_words(word_values=[("D0", 0x1234)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_random_words(dword_values=[("D2", 0x12345678)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+        client.write_random_words_ext(word_values=[(r"U3E0\D0", 0x1234)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_random_words_ext(dword_values=[(r"U3E0\D2", 0x12345678)])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.write_random_words()
+        with self.assertRaises(ValueError):
+            client.write_random_words_ext()
+        for invalid in (None, 1, object(), "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_random_words(word_values=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_random_words_ext(word_values=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
+
+    def test_block_access_allows_one_side_only_and_rejects_invalid_or_empty_inputs(self) -> None:
+        client = FakeClient()
+
+        client.next_response_data = b"\x34\x12"
+        word_only = client.read_block(word_blocks=[("D0", 1)])
+        self.assertEqual(word_only.word_blocks[0].values, [0x1234])
+        self.assertEqual(word_only.bit_blocks, [])
+        client.next_response_data = b"\x10\x00"
+        bit_only = client.read_block(bit_blocks=[("M0", 1)])
+        self.assertEqual(bit_only.word_blocks, [])
+        self.assertEqual(bit_only.bit_blocks[0].values, [0x0010])
+
+        client.write_block(word_blocks=[("D0", [0x1234])])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x01\x00")
+        client.write_block(bit_blocks=[("M0", [0x0001])])
+        self.assertEqual(client.requests[-1][2][0:2], b"\x00\x01")
+
+        request_count = len(client.requests)
+        with self.assertRaises(ValueError):
+            client.read_block()
+        with self.assertRaises(ValueError):
+            client.write_block()
+        for invalid in (None, 1, object(), "D0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises((TypeError, ValueError)):
+                    client.read_block(word_blocks=invalid)  # type: ignore[arg-type]
+                with self.assertRaises((TypeError, ValueError)):
+                    client.write_block(word_blocks=invalid)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
 
     def test_recv_exact_prefers_recv_into(self) -> None:
         sock = _RecvIntoSocket([b"\x01", b"\x02\x03"])
@@ -993,6 +1213,100 @@ class TestCodec(unittest.TestCase):
 class TestCli(unittest.TestCase):
     """TestCli class."""
 
+    def test_internal_cli_client_requires_explicit_transport(self) -> None:
+        """The CLI probe client must not infer TCP when transport is omitted."""
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        with self.assertRaises(TypeError):
+            cli.SlmpClient(  # type: ignore[call-arg]
+                "127.0.0.1",
+                1025,
+                plc_profile="melsec:iq-r",
+                default_target=target,
+            )
+
+    def test_internal_cli_client_requires_complete_target_argument(self) -> None:
+        """The CLI probe client must not construct an own-station route from omission."""
+        with self.assertRaises(TypeError):
+            cli.SlmpClient(  # type: ignore[call-arg]
+                "127.0.0.1",
+                1025,
+                transport="tcp",
+                plc_profile="melsec:iq-r",
+            )
+
+    def test_every_cli_route_component_is_explicitly_required(self) -> None:
+        """CLI tools and samples must not infer an own-station target route."""
+        route_flags = {"--network", "--station", "--module-io", "--multidrop"}
+        sources = (
+            Path(cli.__file__),
+            Path(__file__).parents[1] / "samples" / "_common.py",
+        )
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            found: list[str] = []
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr != "add_argument" or not node.args:
+                    continue
+                first = node.args[0]
+                if not isinstance(first, ast.Constant) or first.value not in route_flags:
+                    continue
+                found.append(str(first.value))
+                keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+                self.assertNotIn("default", keywords, f"{source}:{first.value}")
+                required = keywords.get("required")
+                self.assertIsInstance(required, ast.Constant, f"{source}:{first.value}")
+                assert isinstance(required, ast.Constant)
+                self.assertIs(required.value, True, f"{source}:{first.value}")
+            self.assertEqual(set(found), route_flags, str(source))
+
+    def test_every_cli_communication_timeout_defaults_to_three_seconds(self) -> None:
+        """All communicating CLI parsers share the approved three-second default."""
+        tree = ast.parse(Path(cli.__file__).read_text(encoding="utf-8"))
+        defaults: list[float] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "add_argument" or not node.args:
+                continue
+            first = node.args[0]
+            if not isinstance(first, ast.Constant) or first.value != "--timeout":
+                continue
+            default = next((keyword.value for keyword in node.keywords if keyword.arg == "default"), None)
+            self.assertIsInstance(default, ast.Constant)
+            assert isinstance(default, ast.Constant)
+            self.assertIsInstance(default.value, (int, float))
+            defaults.append(float(default.value))
+        self.assertGreater(len(defaults), 0)
+        self.assertEqual(set(defaults), {3.0})
+
+    def test_every_cli_monitoring_timer_defaults_to_four_seconds(self) -> None:
+        """All CLI and shared sample parsers use 16 quarter-seconds."""
+        sources = (
+            Path(cli.__file__),
+            Path(__file__).parents[1] / "samples" / "_common.py",
+            Path(__file__).parents[1] / "samples" / "high_level_sync.py",
+        )
+        defaults: list[int] = []
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if node.func.attr != "add_argument" or not node.args:
+                    continue
+                first = node.args[0]
+                if not isinstance(first, ast.Constant) or first.value != "--monitoring-timer":
+                    continue
+                default = next((keyword.value for keyword in node.keywords if keyword.arg == "default"), None)
+                self.assertIsInstance(default, ast.Constant, str(source))
+                assert isinstance(default, ast.Constant)
+                self.assertIsInstance(default.value, int, str(source))
+                defaults.append(int(default.value))
+        self.assertGreater(len(defaults), 0)
+        self.assertEqual(set(defaults), {0x0010})
+
     def test_connection_check_main_selects_frame_type(self) -> None:
         """Test test_connection_check_main_selects_frame_type."""
 
@@ -1050,7 +1364,17 @@ class TestCli(unittest.TestCase):
             patch.object(cli, "_load_compatibility_policy", return_value=None),
         ):
             rc_default = cli.connection_check_main(
-                ["--host", "192.168.250.100", "--port", "1025", "--transport", "tcp", "--series", "ql"]
+                [
+                    "--host",
+                    "192.168.250.100",
+                    "--port",
+                    "1025",
+                    "--transport",
+                    "tcp",
+                    *_SELF_ROUTE_ARGS,
+                    "--series",
+                    "ql",
+                ]
             )
             rc_explicit = cli.connection_check_main(
                 [
@@ -1060,6 +1384,7 @@ class TestCli(unittest.TestCase):
                     "1025",
                     "--transport",
                     "tcp",
+                    *_SELF_ROUTE_ARGS,
                     "--series",
                     "ql",
                     "--frame-type",
@@ -1145,6 +1470,7 @@ class TestCli(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--frame-type",
@@ -1511,6 +1837,7 @@ class TestCli(unittest.TestCase):
                             "1025",
                             "--transport",
                             "tcp",
+                            *_SELF_ROUTE_ARGS,
                             "--series",
                             "iqr",
                             "--monitoring-timer",
@@ -1689,6 +2016,7 @@ class TestCli(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--monitoring-timer",
@@ -1757,6 +2085,7 @@ class TestCli(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--label-array",
@@ -1885,6 +2214,10 @@ class TestDeviceApi(unittest.TestCase):
 
         with self.assertRaisesRegex(TypeError, "unexpected keyword argument 'serial'"):
             client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", serial=1)  # type: ignore[call-arg]
+        with self.assertRaisesRegex(TypeError, "required keyword-only argument: 'subcommand'"):
+            client.raw_command(Command.CLEAR_ERROR, payload=b"")  # type: ignore[call-arg]
+        with self.assertRaisesRegex(TypeError, "required keyword-only argument: 'payload'"):
+            client.raw_command(Command.CLEAR_ERROR, subcommand=0)  # type: ignore[call-arg]
         self.assertIsNone(client.last_request)
 
     def test_request_series_override_is_rejected_before_transport(self) -> None:
@@ -2373,61 +2706,94 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
         self.assertEqual(payload, b"\x34\x00\x00\x00\x04\x00\xe0\x03\x78\x56\x34\x12")
 
-    def test_cpu_buffer_word_helpers_require_explicit_module_no(self) -> None:
-        """CPU-buffer helpers must not silently select a module number."""
+    def test_cpu_buffer_helpers_require_explicit_typed_module(self) -> None:
+        """CPU-buffer helpers must not silently select or accept an arbitrary module number."""
         client = FakeClient()
         with self.assertRaises(TypeError):
             client.cpu_buffer_read_words(0x04, 1)
         with self.assertRaises(TypeError):
             client.cpu_buffer_write_words(0x04, [0x4801])
+        for invalid in (None, 0x03E0, ModuleIONo.MULTIPLE_CPU_1, "CPU1", "", 0x03E4):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "CpuModule.CPU1"):
+                    client.cpu_buffer_read_words(0x04, 1, module=invalid)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(ValueError, "CpuModule.CPU1"):
+                    client.cpu_buffer_write_words(0x04, [0x4801], module=invalid)  # type: ignore[arg-type]
         self.assertIsNone(client.last_request)
 
-        client.next_response_data = b"\x01\x48"
-        out = client.cpu_buffer_read_words(0x04, 1, module_no=0x03E0)
-        self.assertEqual(out, [0x4801])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03")
+        for module in CpuModule:
+            client.next_response_data = b"\x01\x48"
+            out = client.cpu_buffer_read_words(0x04, 1, module=module)
+            self.assertEqual(out, [0x4801])
+            command, subcommand, payload, _ = client.last_request
+            self.assertEqual(command, Command.EXTEND_UNIT_READ)
+            self.assertEqual(subcommand, 0x0000)
+            self.assertEqual(int.from_bytes(payload[6:8], "little"), int(module))
 
-        client.cpu_buffer_write_words(0x04, [0x4801], module_no=0x03E0)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03\x01\x48")
+            client.cpu_buffer_write_words(0x04, [0x4801], module=module)
+            command, subcommand, payload, _ = client.last_request
+            self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
+            self.assertEqual(subcommand, 0x0000)
+            self.assertEqual(int.from_bytes(payload[6:8], "little"), int(module))
 
         client.next_response_data = b"\x01\x48"
-        self.assertEqual(client.cpu_buffer_read_word(0x04, module_no=0x03E0), 0x4801)
+        self.assertEqual(client.cpu_buffer_read_word(0x04, module=CpuModule.CPU1), 0x4801)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.EXTEND_UNIT_READ)
         self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03")
 
         client.next_response_data = b"\xb1\xe9\xaf\x95"
-        self.assertEqual(client.cpu_buffer_read_dword(0x00, module_no=0x03E0), 0x95AFE9B1)
+        self.assertEqual(client.cpu_buffer_read_dword(0x00, module=CpuModule.CPU1), 0x95AFE9B1)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.EXTEND_UNIT_READ)
         self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03")
 
-        client.cpu_buffer_write_word(0x04, 0x4801, module_no=0x03E0)
+        client.cpu_buffer_write_word(0x04, 0x4801, module=CpuModule.CPU1)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
         self.assertEqual(payload, b"\x04\x00\x00\x00\x02\x00\xe0\x03\x01\x48")
 
-        client.cpu_buffer_write_dword(0x00, 0x95AFE9B1, module_no=0x03E0)
+        client.cpu_buffer_write_dword(0x00, 0x95AFE9B1, module=CpuModule.CPU1)
         command, subcommand, payload, _ = client.last_request
         self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
         self.assertEqual(payload, b"\x00\x00\x00\x00\x04\x00\xe0\x03\xb1\xe9\xaf\x95")
 
-    def test_remote_run(self) -> None:
-        """Test test_remote_run."""
+    def test_remote_run_and_pause_require_explicit_typed_intent(self) -> None:
         client = FakeClient()
         with self.assertRaises(TypeError):
             client.remote_run()  # type: ignore[call-arg]
-        client.remote_run(force=False, clear_mode=RemoteClearMode.NO_CLEAR)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.REMOTE_RUN)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x01\x00\x00\x00")
+        with self.assertRaises(TypeError):
+            client.remote_pause()  # type: ignore[call-arg]
+
+        expected_clear_modes = (
+            (RemoteClearMode.NO_CLEAR, b"\x00\x00"),
+            (RemoteClearMode.CLEAR_EXCEPT_LATCH, b"\x01\x00"),
+            (RemoteClearMode.CLEAR_ALL, b"\x02\x00"),
+        )
+        for clear_mode, wire in expected_clear_modes:
+            client.remote_run(force=False, clear_mode=clear_mode)
+            command, subcommand, payload, _ = client.last_request
+            self.assertEqual((command, subcommand), (Command.REMOTE_RUN, 0x0000))
+            self.assertEqual(payload, b"\x01\x00" + wire)
+        client.remote_run(force=True, clear_mode=RemoteClearMode.NO_CLEAR)
+        self.assertEqual(client.last_request[2], b"\x03\x00\x00\x00")
+        client.remote_pause(force=False)
+        self.assertEqual(client.last_request[2], b"\x01\x00")
+        client.remote_pause(force=True)
+        self.assertEqual(client.last_request[2], b"\x03\x00")
+
+        request_count = len(client.requests)
+        for invalid in (None, 0, 1, "false", "", [], {}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    client.remote_run(force=invalid, clear_mode=RemoteClearMode.NO_CLEAR)  # type: ignore[arg-type]
+                with self.assertRaises(ValueError):
+                    client.remote_pause(force=invalid)  # type: ignore[arg-type]
+        for invalid_clear_mode in (None, 0, 1, 2, 3, "no-clear", "", [], {}):
+            with self.subTest(invalid_clear_mode=invalid_clear_mode):
+                with self.assertRaises(ValueError):
+                    client.remote_run(force=False, clear_mode=invalid_clear_mode)  # type: ignore[arg-type]
+        self.assertEqual(len(client.requests), request_count)
 
     def test_remote_stop_uses_manual_fixed_mode(self) -> None:
         """Test test_remote_stop_uses_manual_fixed_mode."""
@@ -2588,6 +2954,7 @@ class TestDeviceApi(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "iqr",
                         "--device",
@@ -2655,6 +3022,7 @@ class TestDeviceApi(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--device",
@@ -2760,6 +3128,7 @@ class TestDeviceApi(unittest.TestCase):
                         "1025",
                         "--series",
                         "iqr",
+                        *_SELF_ROUTE_ARGS,
                         "--transport",
                         "tcp",
                         "--transport",
@@ -2833,6 +3202,7 @@ class TestDeviceApi(unittest.TestCase):
                         "1025",
                         "--transport",
                         "tcp",
+                        *_SELF_ROUTE_ARGS,
                         "--series",
                         "ql",
                         "--device",
@@ -2862,6 +3232,10 @@ class TestDeviceApi(unittest.TestCase):
             port=1025,
             transport="tcp",
             series=None,
+            network=None,
+            station=None,
+            module_io=None,
+            multidrop=None,
         )
 
         self.assertEqual(steps[0].name, "unit_tests")
@@ -2869,6 +3243,31 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(steps[2].name, "mypy")
         self.assertTrue(any(step.name == "cli_help:slmp_connection_check.py" for step in steps))
         self.assertTrue(any(step.name == "cli_help:slmp_g_hg_extended_device_coverage.py" for step in steps))
+
+    def test_build_regression_steps_forwards_complete_live_target(self) -> None:
+        """The optional live step must pass an explicit complete route."""
+        steps = cli._build_regression_steps(
+            python_executable="python",
+            include_unit_tests=False,
+            include_ruff=False,
+            include_mypy=False,
+            include_cli_help=False,
+            include_live_connection_check=True,
+            host="192.168.250.100",
+            port=1025,
+            transport="tcp",
+            series="iqr",
+            network=0,
+            station=0xFF,
+            module_io=0x03FF,
+            multidrop=0,
+        )
+
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(
+            steps[0].command[-8:],
+            ("--network", "0", "--station", "255", "--module-io", "1023", "--multidrop", "0"),
+        )
 
     def test_regression_suite_main_runs_local_steps_and_writes_report(self) -> None:
         """Test test_regression_suite_main_runs_local_steps_and_writes_report."""
@@ -2964,10 +3363,15 @@ class TestDeviceApi(unittest.TestCase):
     def test_read_long_timer_validation(self) -> None:
         """Test test_read_long_timer_validation."""
         client = FakeClient()
-        with self.assertRaises(ValueError):
-            client.read_long_timer(head_no=-1, points=1)
-        with self.assertRaises(ValueError):
-            client.read_long_timer(head_no=0, points=0)
+        with self.assertRaises(TypeError):
+            client.read_long_timer()  # type: ignore[call-arg]
+        for head_no in (None, False, "0", -1, 0x1_0000_0000):
+            with self.subTest(head_no=head_no), self.assertRaises((TypeError, ValueError)):
+                client.read_long_timer(head_no=head_no, points=1)  # type: ignore[arg-type]
+        for points in (None, False, "1", 0, -1, 241, 0x4001):
+            with self.subTest(points=points), self.assertRaises((TypeError, ValueError)):
+                client.read_long_retentive_timer(head_no=0, points=points)  # type: ignore[arg-type]
+        self.assertIsNone(client.last_request)
 
     def test_label_payload_builders(self) -> None:
         """Test test_label_payload_builders."""
@@ -3002,6 +3406,40 @@ class TestDeviceApi(unittest.TestCase):
             p141b,
             b"\x01\x00\x00\x00" + b"\x06\x00L\x00a\x00b\x00e\x00l\x00W\x00" + b"\x02\x00\x31\x00",
         )
+
+    def test_label_abbreviation_contract(self) -> None:
+        valid = _operations.build_label_read_random_payload(
+            ["%1.Member", "%2.Member"],
+            abbreviation_labels=["RootA", "RootB"],
+        )
+        self.assertEqual(valid[:4], b"\x02\x00\x02\x00")
+
+        invalid_cases = (
+            lambda: _operations.build_label_read_random_payload(["%"], abbreviation_labels=["Root"]),
+            lambda: _operations.build_array_label_read_payload(
+                [LabelArrayReadPoint(label="%2.Member", unit_specification=1, array_data_length=1)],
+                abbreviation_labels=["Root"],
+            ),
+            lambda: _operations.build_array_label_write_payload(
+                [LabelArrayWritePoint(label="%0.Member", unit_specification=1, array_data_length=1, data=b"\x00")],
+                abbreviation_labels=["Root"],
+            ),
+            lambda: _operations.build_label_write_random_payload(
+                [LabelRandomWritePoint(label="%x.Member", data=b"\x00")],
+                abbreviation_labels=["Root"],
+            ),
+        )
+        for build in invalid_cases:
+            with self.subTest(build=build):
+                with self.assertRaisesRegex(ValueError, "invalid abbreviation reference"):
+                    build()
+
+        with self.assertRaisesRegex(TypeError, "sequence of strings"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels="Root")
+        with self.assertRaisesRegex(TypeError, "sequence of strings"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels=None)  # type: ignore[arg-type]
+        with self.assertRaisesRegex(ValueError, "abbreviation points"):
+            _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels=["Root"] * 65536)
 
     def test_label_response_parsers(self) -> None:
         """Test test_label_response_parsers."""
@@ -3136,6 +3574,9 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(raised.exception.profile_id, "melsec:qnudv")
         self.assertEqual(raised.exception.feature_key, "block")
         self.assertEqual(raised.exception.state, "blocked")
+        self.assertNotIn("None", str(raised.exception))
+        self.assertNotIn("strict_profile", str(raised.exception))
+        self.assertNotIn("false", str(raised.exception).lower())
         self.assertIsNone(client.last_request)
 
     def test_read_block_qnudv_strict_profile_false_sends_request(self) -> None:

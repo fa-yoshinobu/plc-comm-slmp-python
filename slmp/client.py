@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from . import _operations
 from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
-from .constants import Command, FrameType, PLCSeries, RemoteClearMode
+from .constants import Command, CpuModule, FrameType, PLCSeries, RemoteClearMode
 from .core import (
     BlockReadResult,
     CpuOperationState,
@@ -31,7 +31,6 @@ from .core import (
     TypeNameInfo,
     _apply_semantic_device_modification,
     _build_device_modification_flags,
-    _check_points_u16,
     _ExtensionSpec,
     _parse_extended_device,
     _raise_response_error,
@@ -135,9 +134,13 @@ class SlmpClient:
         ):
             raise ValueError("monitoring_timer must be an integer in range 0..65535")
         self.monitoring_timer = monitoring_timer
+        if type(raise_on_error) is not bool:
+            raise ValueError("raise_on_error must be a boolean")
         self.raise_on_error = raise_on_error
         if type(_maintainer_strict_profile) is not bool:
             raise ValueError("_maintainer_strict_profile must be a boolean")
+        if _maintainer_trace_hook is not None and not callable(_maintainer_trace_hook):
+            raise ValueError("_maintainer_trace_hook must be callable or None")
         self._trace_hook = _maintainer_trace_hook
         self._strict_profile = _maintainer_strict_profile
 
@@ -190,13 +193,18 @@ class SlmpClient:
             return
         sock_type = socket.SOCK_STREAM if self.transport == "tcp" else socket.SOCK_DGRAM
         sock = socket.socket(socket.AF_INET, sock_type)
-        sock.settimeout(self.timeout)
-        if self.transport == "tcp":
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            configure_tcp_keepalive(sock, idle_seconds=30)
+        try:
+            sock.settimeout(self.timeout)
+            if self.transport == "tcp":
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                configure_tcp_keepalive(sock, idle_seconds=30)
             sock.connect((self.host, self.port))
-        else:
-            sock.connect((self.host, self.port))
+        except BaseException:
+            try:
+                sock.close()
+            except Exception:
+                pass
+            raise
         self._sock = sock
 
     def close(self) -> None:
@@ -227,6 +235,15 @@ class SlmpClient:
         raise_on_error: bool | None = None,
     ) -> SlmpResponse:
         """Serialize one request on this client connection."""
+        if monitoring_timer is not None and (
+            isinstance(monitoring_timer, bool)
+            or not isinstance(monitoring_timer, int)
+            or not 0 <= monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
+        if raise_on_error is not None and type(raise_on_error) is not bool:
+            raise ValueError("raise_on_error must be a boolean when provided")
+        effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
         with self._request_lock:
             return self._request_unlocked(
                 command,
@@ -235,7 +252,7 @@ class SlmpClient:
                 serial=serial,
                 target=target,
                 monitoring_timer=monitoring_timer,
-                raise_on_error=raise_on_error,
+                raise_on_error=effective_raise_on_error,
             )
 
     def _request_unlocked(
@@ -379,7 +396,6 @@ class SlmpClient:
             points: Number of consecutive points to read.
             bit_unit: If True, read in bit units (returns list of bool);
                 otherwise read in word units (returns list of int).
-            series: Optional PLC series override for this specific request.
 
         Returns:
             A list of integers (for word units) or booleans (for bit units).
@@ -414,7 +430,6 @@ class SlmpClient:
             values: Sequence of values to write.
             bit_unit: If True, write in bit units (expects Sequence[bool]);
                 otherwise write in word units (expects Sequence[int]).
-            series: Optional PLC series override for this specific request.
 
         Raises:
             SlmpError: If the PLC returns an error code.
@@ -644,7 +659,6 @@ class SlmpClient:
         Args:
             word_devices: List of word devices to read.
             dword_devices: List of double-word devices to read.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -673,7 +687,6 @@ class SlmpClient:
         Args:
             word_devices: Qualified word-device addresses.
             dword_devices: Qualified double-word-device addresses.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -712,7 +725,6 @@ class SlmpClient:
         Args:
             word_values: Mapping or sequence of (device, value) for word devices.
             dword_values: Mapping or sequence of (device, value) for double-word devices.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -736,7 +748,6 @@ class SlmpClient:
         Args:
             word_values: Qualified (device, value) pairs for word devices.
             dword_values: Qualified (device, value) pairs for double-word devices.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -767,7 +778,6 @@ class SlmpClient:
 
         Args:
             bit_values: Mapping or sequence of (device, value) for bit devices.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -787,7 +797,6 @@ class SlmpClient:
 
         Args:
             bit_values: Qualified (device, value) pairs for bit devices.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("random")
@@ -815,7 +824,6 @@ class SlmpClient:
         Args:
             word_devices: List of word devices to monitor.
             dword_devices: List of double-word devices to monitor.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("monitor")
@@ -839,7 +847,6 @@ class SlmpClient:
         Args:
             word_devices: Qualified word-device addresses.
             dword_devices: Qualified double-word-device addresses.
-            series: Optional PLC series override.
 
         """
         self._ensure_profile_feature_allowed("monitor")
@@ -996,12 +1003,7 @@ class SlmpClient:
         points: int,
         series: PLCSeries | str | None,
     ) -> list[LongTimerResult]:
-        if head_no < 0:
-            raise ValueError(f"head_no must be >= 0: {head_no}")
-        if points < 1:
-            raise ValueError(f"points must be >= 1: {points}")
-        word_points = points * 4
-        _check_points_u16(word_points, "long timer word points")
+        head_no, word_points = _operations._validate_long_timer_range(head_no, points, self.plc_profile)
 
         words_raw = self.read_devices(
             f"{device_prefix}{head_no}",
@@ -1134,43 +1136,51 @@ class SlmpClient:
         request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
         self._request(request.command, request.subcommand, request.payload)
 
-    def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module_no: int) -> bytes:
+    def cpu_buffer_read_bytes(self, head_address: int, byte_length: int, *, module: CpuModule) -> bytes:
         """Read CPU buffer memory by extend-unit command using the CPU start I/O number."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_bytes(head_address, byte_length, module_no)
 
-    def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module_no: int) -> list[int]:
+    def cpu_buffer_read_words(self, head_address: int, word_length: int, *, module: CpuModule) -> list[int]:
         """Read CPU buffer memory words by extend-unit command using the CPU start I/O number."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_words(head_address, word_length, module_no)
 
-    def cpu_buffer_read_word(self, head_address: int, *, module_no: int) -> int:
+    def cpu_buffer_read_word(self, head_address: int, *, module: CpuModule) -> int:
         """Read one 16-bit CPU buffer word via the verified extend-unit path."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_word(head_address, module_no)
 
-    def cpu_buffer_read_dword(self, head_address: int, *, module_no: int) -> int:
+    def cpu_buffer_read_dword(self, head_address: int, *, module: CpuModule) -> int:
         """Read one 32-bit CPU buffer value via the verified extend-unit path."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         return self.extend_unit_read_dword(head_address, module_no)
 
-    def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module_no: int) -> None:
+    def cpu_buffer_write_bytes(self, head_address: int, data: bytes, *, module: CpuModule) -> None:
         """Write CPU buffer memory by extend-unit command using the CPU start I/O number."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_bytes(head_address, module_no, data)
 
-    def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module_no: int) -> None:
+    def cpu_buffer_write_words(self, head_address: int, values: Sequence[int], *, module: CpuModule) -> None:
         """Write CPU buffer memory words by extend-unit command using the CPU start I/O number."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_words(head_address, module_no, values)
 
-    def cpu_buffer_write_word(self, head_address: int, value: int, *, module_no: int) -> None:
+    def cpu_buffer_write_word(self, head_address: int, value: int, *, module: CpuModule) -> None:
         """Write one 16-bit CPU buffer word via the verified extend-unit path."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_word(head_address, module_no, value)
 
-    def cpu_buffer_write_dword(self, head_address: int, value: int, *, module_no: int) -> None:
+    def cpu_buffer_write_dword(self, head_address: int, value: int, *, module: CpuModule) -> None:
         """Write one 32-bit CPU buffer value via the verified extend-unit path."""
+        module_no = _operations._require_cpu_module(module)
         self._ensure_profile_feature_allowed("hg_cpu_buffer")
         self.extend_unit_write_dword(head_address, module_no, value)
 
@@ -1375,6 +1385,12 @@ class SlmpClient:
         monitoring_timer: int | None = None,
     ) -> None:
         """Serialize one no-response request on this client connection."""
+        if monitoring_timer is not None and (
+            isinstance(monitoring_timer, bool)
+            or not isinstance(monitoring_timer, int)
+            or not 0 <= monitoring_timer <= 0xFFFF
+        ):
+            raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         with self._request_lock:
             self._send_no_response_unlocked(
                 command,

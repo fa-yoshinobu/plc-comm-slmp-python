@@ -12,6 +12,7 @@ from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import (
     Command,
+    CpuModule,
     FrameType,
     RemoteClearMode,
 )
@@ -407,14 +408,14 @@ def _parity_cases() -> list[_ParityCase]:
         ),
         _ParityCase(
             "cpu_buffer_read_bytes",
-            lambda c: c.cpu_buffer_read_bytes(0x3000, 4, module_no=0x03E0),
-            lambda c: c.cpu_buffer_read_bytes(0x3000, 4, module_no=0x03E0),
+            lambda c: c.cpu_buffer_read_bytes(0x3000, 4, module=CpuModule.CPU1),
+            lambda c: c.cpu_buffer_read_bytes(0x3000, 4, module=CpuModule.CPU1),
             [b"\x05\x06\x07\x08"],
         ),
         _ParityCase(
             "cpu_buffer_write_bytes",
-            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08", module_no=0x03E0),
-            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08", module_no=0x03E0),
+            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08", module=CpuModule.CPU1),
+            lambda c: c.cpu_buffer_write_bytes(0x3000, b"\x05\x06\x07\x08", module=CpuModule.CPU1),
             [b""],
         ),
         _ParityCase(

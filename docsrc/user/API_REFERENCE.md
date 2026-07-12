@@ -37,7 +37,7 @@ when a typed modification is required; otherwise pass the qualified string.
 | Monitor registration/cycle | `register_monitor_devices`, `register_monitor_devices_ext`, `run_monitor_cycle` |
 | Memory command words | `memory_read_words`, `memory_write_words` |
 | Extend-unit command words | `extend_unit_read_words`, `extend_unit_write_words` |
-| CPU-buffer convenience words | `cpu_buffer_read_words`, `cpu_buffer_write_words` |
+| CPU-buffer convenience words | `cpu_buffer_read_words`, `cpu_buffer_write_words`; require `module=CpuModule.CPU1` through `CPU4` |
 | Label array access | `read_array_labels`, `write_array_labels` |
 | Label random access | `read_random_labels`, `write_random_labels` |
 | Remote CPU control | `remote_run`, `remote_stop`, `remote_pause`, `remote_latch_clear`, `remote_reset` |

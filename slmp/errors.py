@@ -77,11 +77,8 @@ class SlmpProfileFeatureError(ValueError):
         self.feature_key = feature_key
         self.state = state
         self.evidence = evidence
-        self.disable_hint = None
         evidence_text = "" if not evidence else f" Evidence: {evidence}."
-        super().__init__(
-            f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}.{evidence_text} {self.disable_hint}"
-        )
+        super().__init__(f"Feature {feature_key!r} is {state} for plc_profile {profile_id!r}.{evidence_text}")
 
 
 class SlmpPracticalPathWarning(UserWarning):

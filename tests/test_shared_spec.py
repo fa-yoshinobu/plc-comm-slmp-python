@@ -32,13 +32,13 @@ def _build_4e_response(request: bytes, response_data: bytes, end_code: int = 0) 
 class CaptureClient(SlmpClient):
     """Capture outgoing frames without using a real socket."""
 
-    def __init__(self, response_data: bytes) -> None:
+    def __init__(self, response_data: bytes, plc_profile: str = "melsec:iq-r") -> None:
         super().__init__(
             "127.0.0.1",
             1025,
             transport="tcp",
             default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
-            plc_profile="melsec:iq-r",
+            plc_profile=plc_profile,
             monitoring_timer=0x0010,
             raise_on_error=True,
         )
@@ -95,7 +95,7 @@ class TestSharedFrameVectors(unittest.TestCase):
                 continue
             with self.subTest(case=case["id"]):
                 response_data = bytes.fromhex(case.get("response_data_hex", ""))
-                client = CaptureClient(response_data)
+                client = CaptureClient(response_data, case.get("plc_profile", "melsec:iq-r"))
                 self._dispatch_case(client, case)
                 self.assertIsNotNone(client.captured_frame)
                 self.assertEqual(client.captured_frame.hex().upper(), case["request_hex"])
