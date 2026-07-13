@@ -85,6 +85,38 @@ async def test_async_tcp_connect_closes_writer_when_required_keepalive_setup_fai
 
 
 @pytest.mark.asyncio
+async def test_async_traffic_stats_count_complete_exchange_and_timeout_after_send() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1", 1025, transport="tcp", default_target=target, plc_profile="melsec:iq-r", timeout=0.1
+    )
+    response = _build_4e_response(0, b"\x34\x12")
+    reader = MagicMock()
+    reader.readexactly = AsyncMock(side_effect=[response[:13], response[13:]])
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    client._reader = reader
+    client._writer = writer
+
+    frame = b"\x01\x02\x03"
+    assert await client._send_and_receive(frame) == response
+    assert client.traffic_stats().request_count == 1
+    assert client.traffic_stats().tx_bytes == len(frame)
+    assert client.traffic_stats().rx_bytes == len(response)
+
+    reader.readexactly = AsyncMock(side_effect=asyncio.TimeoutError())
+    client._reader = reader
+    client._writer = writer
+    with pytest.raises(SlmpError):
+        await client._send_and_receive(frame)
+    stats = client.traffic_stats()
+    assert stats.request_count == 2
+    assert stats.tx_bytes == len(frame) * 2
+    assert stats.rx_bytes == len(response)
+
+
+@pytest.mark.asyncio
 async def test_async_raise_on_error_requires_real_booleans_before_transport() -> None:
     target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
     with pytest.raises(ValueError, match="raise_on_error must be a boolean"):

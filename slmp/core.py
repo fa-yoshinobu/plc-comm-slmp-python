@@ -89,6 +89,15 @@ class SlmpTarget:
 
 
 @dataclass(frozen=True)
+class SlmpTrafficStats:
+    """Immutable lifetime traffic-counter snapshot for one client."""
+
+    request_count: int
+    tx_bytes: int
+    rx_bytes: int
+
+
+@dataclass(frozen=True)
 class DeviceRef:
     """Immutable profile-bound semantic device reference.
 

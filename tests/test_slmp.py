@@ -661,6 +661,30 @@ class TestReceiveHelpers(unittest.TestCase):
         self.assertEqual(client.read_devices("D0", 1, bit_unit=False), [0x2222])
         self.assertEqual(len(sock.sent), 1)
 
+        stats = client.traffic_stats()
+        self.assertEqual(stats.request_count, 1)
+        self.assertEqual(stats.tx_bytes, len(sock.sent[0]))
+        self.assertEqual(stats.rx_bytes, len(stale) + len(matching))
+        client.close()
+        self.assertEqual(client.traffic_stats(), stats)
+
+    def test_traffic_stats_count_send_before_timeout_and_not_pre_send_guard(self) -> None:
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        client = SlmpClient("127.0.0.1", 1025, transport="udp", default_target=target, plc_profile="melsec:iq-r")
+        self.assertEqual(client.traffic_stats().request_count, 0)
+        with self.assertRaises(ValueError):
+            client.read_devices("D0", 1, bit_unit=None)  # type: ignore[arg-type]
+        self.assertEqual(client.traffic_stats().request_count, 0)
+
+        sock = _TimeoutUdpSocket()
+        client._sock = sock  # type: ignore[attr-defined]
+        with self.assertRaises(TimeoutError):
+            client.read_devices("D0", 1, bit_unit=False)
+        stats = client.traffic_stats()
+        self.assertEqual(stats.request_count, 1)
+        self.assertGreater(stats.tx_bytes, 0)
+        self.assertEqual(stats.rx_bytes, 0)
+
     def test_sync_interrupt_after_send_closes_transport_generation(self) -> None:
         sock = _InterruptSocket([])
         client = SlmpClient(

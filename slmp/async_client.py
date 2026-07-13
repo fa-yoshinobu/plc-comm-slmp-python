@@ -28,6 +28,7 @@ from .core import (
     SlmpExtendedDevice,
     SlmpResponse,
     SlmpTarget,
+    SlmpTrafficStats,
     TypeNameInfo,
     _apply_semantic_device_modification,
     _ExtensionSpec,
@@ -152,8 +153,22 @@ class AsyncSlmpClient:
 
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
+        self._request_count = 0
+        self._tx_bytes = 0
+        self._rx_bytes = 0
         self._udp_transport: asyncio.DatagramTransport | None = None
         self._udp_protocol: SLMPDatagramProtocol | None = None
+
+    def traffic_stats(self) -> SlmpTrafficStats:
+        """Return a read-only snapshot of cumulative traffic for this client lifetime."""
+        return SlmpTrafficStats(self._request_count, self._tx_bytes, self._rx_bytes)
+
+    def _record_send(self, frame_length: int) -> None:
+        self._request_count += 1
+        self._tx_bytes += frame_length
+
+    def _record_receive(self, frame_length: int) -> None:
+        self._rx_bytes += frame_length
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
         ref = parse_device(device, plc_profile=self.plc_profile)
@@ -1056,10 +1071,12 @@ class AsyncSlmpClient:
                 assert self._writer is not None
                 self._writer.write(frame)
                 await self._writer.drain()
+                self._record_send(len(frame))
                 await self._close_tcp_unlocked()
             else:
                 assert self._udp_transport is not None
                 self._udp_transport.sendto(frame)
+                self._record_send(len(frame))
                 self._close_udp_unlocked()
 
         await self._emit_trace(
@@ -1089,6 +1106,7 @@ class AsyncSlmpClient:
                     assert self._writer is not None
                     self._writer.write(frame)
                     await self._writer.drain()
+                    self._record_send(len(frame))
                     while True:
                         raw = await self._receive_frame()
                         if _response_matches_serial(raw, expected_serial):
@@ -1099,11 +1117,13 @@ class AsyncSlmpClient:
                     while not self._udp_protocol.queue.empty():
                         self._udp_protocol.queue.get_nowait()
                     self._udp_transport.sendto(frame)
+                    self._record_send(len(frame))
                     while True:
                         try:
                             raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=self.timeout)
                         except asyncio.TimeoutError as err:
                             raise SlmpError("UDP communication timeout") from err
+                        self._record_receive(len(raw))
                         if _response_matches_serial(raw, expected_serial):
                             return raw
             except BaseException:
@@ -1119,9 +1139,14 @@ class AsyncSlmpClient:
         head_size = 13 if self.frame_type == FrameType.FRAME_4E else 9
         try:
             head = await asyncio.wait_for(self._reader.readexactly(head_size), timeout=self.timeout)
+            expected_subheader = b"\xd4\x00" if self.frame_type == FrameType.FRAME_4E else b"\xd0\x00"
+            if head[:2] != expected_subheader:
+                raise SlmpError("unexpected response frame type")
             response_data_length = int.from_bytes(head[-2:], "little")
             tail = await asyncio.wait_for(self._reader.readexactly(response_data_length), timeout=self.timeout)
-            return head + tail
+            frame = head + tail
+            self._record_receive(len(frame))
+            return frame
         except (asyncio.TimeoutError, asyncio.IncompleteReadError) as err:
             raise SlmpError("communication timeout or connection closed") from err
 

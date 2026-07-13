@@ -559,3 +559,8 @@ closes the transport. This prevents a possible reset NG response from being
 mistaken for the next 3E response. Open a new connection and verify the PLC
 state before continuing; the return value confirms transmission, not PLC
 execution.
+## Traffic statistics
+
+Call `client.traffic_stats()` for an immutable client-lifetime snapshot of `request_count`,
+`tx_bytes`, and `rx_bytes`. Complete sends and complete received frames are counted; close and
+reconnect do not reset the snapshot.

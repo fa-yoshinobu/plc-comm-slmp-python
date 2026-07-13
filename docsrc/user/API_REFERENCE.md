@@ -95,3 +95,10 @@ there is no implicit own-station route in the public connection API.
 
 The docs site also renders the installed package with mkdocstrings so class,
 function, and dataclass signatures are searchable from the site API reference.
+
+## Traffic Statistics
+
+`SlmpClient.traffic_stats()` and `AsyncSlmpClient.traffic_stats()` return an immutable
+`SlmpTrafficStats(request_count, tx_bytes, rx_bytes)` snapshot. The queued async wrapper
+delegates the same method to its inner client. Counters are cumulative for the client lifetime
+and are not reset by close or reconnect.

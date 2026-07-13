@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added immutable lifetime traffic snapshots through `traffic_stats()` on synchronous, asynchronous, and queued clients.
+
 ## [3.1.0] - 2026-07-13
 
 - Library: Added fixed semantic `clear_error` APIs to sync and async clients.

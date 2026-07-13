@@ -28,6 +28,7 @@ from .core import (
     SlmpExtendedDevice,
     SlmpResponse,
     SlmpTarget,
+    SlmpTrafficStats,
     TypeNameInfo,
     _apply_semantic_device_modification,
     _build_device_modification_flags,
@@ -148,6 +149,21 @@ class SlmpClient:
         self._serial = 0
         self._request_lock = threading.RLock()
         self._sock: socket.socket | None = None
+        self._request_count = 0
+        self._tx_bytes = 0
+        self._rx_bytes = 0
+
+    def traffic_stats(self) -> SlmpTrafficStats:
+        """Return a read-only snapshot of cumulative traffic for this client lifetime."""
+        with self._request_lock:
+            return SlmpTrafficStats(self._request_count, self._tx_bytes, self._rx_bytes)
+
+    def _record_send(self, frame_length: int) -> None:
+        self._request_count += 1
+        self._tx_bytes += frame_length
+
+    def _record_receive(self, frame_length: int) -> None:
+        self._rx_bytes += frame_length
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
         ref = parse_device(device, plc_profile=self.plc_profile)
@@ -1394,6 +1410,7 @@ class SlmpClient:
         assert self._sock is not None
         if self.transport == "tcp":
             self._sock.sendall(frame)
+            self._record_send(len(frame))
             self._emit_trace(
                 _SlmpTraceFrame(
                     serial=serial_no,
@@ -1408,7 +1425,9 @@ class SlmpClient:
                 )
             )
         else:
-            self._sock.send(frame)
+            if self._sock.send(frame) != len(frame):
+                raise OSError("UDP send did not accept the complete SLMP datagram")
+            self._record_send(len(frame))
             self._emit_trace(
                 _SlmpTraceFrame(
                     serial=serial_no,
@@ -1440,6 +1459,7 @@ class SlmpClient:
         if self.transport == "tcp":
             try:
                 self._sock.sendall(frame)
+                self._record_send(len(frame))
                 while True:
                     raw = self._receive_frame()
                     if _response_matches_serial(raw, expected_serial):
@@ -1449,7 +1469,9 @@ class SlmpClient:
                 raise
 
         try:
-            self._sock.send(frame)
+            if self._sock.send(frame) != len(frame):
+                raise OSError("UDP send did not accept the complete SLMP datagram")
+            self._record_send(len(frame))
             while True:
                 raw = self._receive_frame()
                 if _response_matches_serial(raw, expected_serial):
@@ -1467,8 +1489,11 @@ class SlmpClient:
         sock = self._sock
         try:
             if self.transport == "tcp":
-                return _recv_tcp_frame(sock, frame_type=self.frame_type)
-            return sock.recv(65535)
+                frame = _recv_tcp_frame(sock, frame_type=self.frame_type)
+            else:
+                frame = sock.recv(65535)
+            self._record_receive(len(frame))
+            return frame
         except (OSError, SlmpError):
             self.close()
             raise
