@@ -17,12 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-13
+
 - Library: Added fixed semantic `clear_error` APIs to sync and async clients.
 - Library: Monitor cycle expected counts must total at least one and stay within the selected profile's monitor-registration limit.
 - Library: Self-test loopback now rejects declared-length, actual-length, trailing-data, and echo mismatches instead of returning unverified response bytes.
 - Docs: Clarified explicit monitor counts and that `U3En\HG` never changes or retries the user-selected request target.
 
 - Tests: Removed vendored cross-repository vector JSON and its dedicated runners. Cross-implementation comparison is executed independently of this library repository.
+
 ### BREAKING
 - Library: Extended random-read result keys now retain the complete qualified route and typed modifier, preventing values from different CPUs, units, or networks from overwriting each other. Applications must migrate qualified-result lookups such as `HG0` to `U3E0\HG0`; ordinary random-read output keys retain their existing spelling.
 - Library: Ordinary and Extended Device random reads now reject duplicate wire targets and overlapping Word/DWord targets before transport. Ordinary result-key spelling is unchanged, but previously accepted duplicate input lists must be corrected.
@@ -48,8 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: `write_named` now emits exactly one protocol request. It batches compatible word/DWord or bit entries, rejects mixed command families, and rejects hidden bit-in-word read-modify-write; callers must use `write_bit_in_word` explicitly for that two-request operation.
 - Library: Typed and generic write APIs now reject strings, fractional integers, Boolean-as-numeric values, truthy bit values, and out-of-range integers before transport instead of converting, masking, wrapping, or saturating them.
 
-### Changed
+### Added
+- Library: Added `SlmpPlcProfileDescriptor` and `plc_profile_descriptors()` for canonical SLMP profile metadata.
 
+### Changed
 - Library: Random read keeps the unused word or DWord category optional, rejects all-empty or invalid supplied collections before transport, and returns an explicit empty mapping for the unused result category.
 - Library: Random word write keeps the unused word or DWord value category optional while rejecting all-empty, malformed, duplicate, overlapping, or invalid value collections before transport; random bit write remains a separate required-input API.
 - Library: Block read/write keeps the unused word or bit block category optional, rejects all-empty or malformed inputs before transport, returns an explicit empty list for the unused read category, and rejects overlapping write ranges.
@@ -67,19 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Samples: Required explicit port and transport and bound address parsing/formatting to the selected PLC profile.
 - Samples: Removed the last asynchronous sample fallback that supplied `192.168.250.100:1025`; every target must now be written as an explicit `HOST:PORT` pair.
 
-### Tests
-
-- Tests: Added sync/async contract tests for removed overrides, internal serial allocation, required parameters, profile-derived wire shapes, timeout validation, UDP reset behavior, and public-surface removal.
-- Tests: Added a source-level invariant requiring every communicating CLI and shared sample monitoring-timer default to remain `0x0010` (four seconds).
-- Tests: Added sync and async regressions proving keepalive setup failure closes the new transport and leaves the client disconnected.
-- Tests: Added sync and async regressions proving the maintainer raw command cannot omit its keyword-only subcommand or payload and reaches no transport when either field is missing.
-
-## [3.1.0] - 2026-07-10
-
-### Added
-- Library: Added `SlmpPlcProfileDescriptor` and `plc_profile_descriptors()` for canonical SLMP profile metadata.
-
-### Changed
 - Release: Bumped package metadata and `slmp.__version__` to `3.1.0`.
 - Tooling: Pinned canonical SLMP profile imports to published profile tag `v2.0.0`.
 - Docs: Corrected the current wheel and source-distribution names in release guidance and removed hand-maintained page navigation from `GETTING_STARTED.md`.
@@ -87,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - CI: Required an existing exact release tag checkout and matching tag, `pyproject.toml`, runtime, filename, and package metadata before GitHub Release upload.
 - CI: Removed the broken generic PyInstaller executable gate; supported CLI tools remain wheel console entry points and built distributions are now inspected before upload.
+
+### Tests
+- Tests: Added sync/async contract tests for removed overrides, internal serial allocation, required parameters, profile-derived wire shapes, timeout validation, UDP reset behavior, and public-surface removal.
+- Tests: Added a source-level invariant requiring every communicating CLI and shared sample monitoring-timer default to remain `0x0010` (four seconds).
+- Tests: Added sync and async regressions proving keepalive setup failure closes the new transport and leaves the client disconnected.
+- Tests: Added sync and async regressions proving the maintainer raw command cannot omit its keyword-only subcommand or payload and reaches no transport when either field is missing.
 
 ## [3.0.0] - 2026-07-10
 
