@@ -228,14 +228,19 @@ module configuration.
 
 When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
 Read `end_code` for the PLC response code and `error_info` when the PLC returned the structured error-information block.
+Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` subclass, in both clients. The configured
+`timeout` is one send/receive deadline; discarding a valid response for another route or 4E serial does not restart it.
+Connection establishment is a separate operation with its own timeout.
 
 ```python
-from slmp import SlmpError
+from slmp import SlmpError, SlmpTimeoutError
 
 
 try:
     value = await read_typed(client, "D100", "U")
     print(f"D100={value}")
+except SlmpTimeoutError:
+    print("SLMP request deadline expired")
 except SlmpError as exc:
     if exc.end_code is not None:
         print(f"SLMP end_code=0x{exc.end_code:04X}")
@@ -559,3 +564,8 @@ closes the transport. This prevents a possible reset NG response from being
 mistaken for the next 3E response. Open a new connection and verify the PLC
 state before continuing; the return value confirms transmission, not PLC
 execution.
+## Traffic statistics
+
+Call `client.traffic_stats()` for an immutable client-lifetime snapshot of `request_count`,
+`tx_bytes`, and `rx_bytes`. Complete sends and complete received frames are counted; close and
+reconnect do not reset the snapshot.

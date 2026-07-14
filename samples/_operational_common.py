@@ -16,25 +16,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, read_named
+from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, plc_profile_descriptors, read_named
 from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
-PLC_PROFILES = (
-    "melsec:iq-f",
-    "melsec:iq-r",
-    "melsec:iq-r:rj71en71",
-    "melsec:iq-l",
-    "melsec:mx-f",
-    "melsec:mx-r",
-    "melsec:qcpu:qj71e71-100",
-    "melsec:lcpu",
-    "melsec:lcpu:lj71e71-100",
-    "melsec:qnu",
-    "melsec:qnu:qj71e71-100",
-    "melsec:qnudv",
-    "melsec:qnudv:qj71e71-100",
-)
+PLC_PROFILES = tuple(profile.canonical_name for profile in plc_profile_descriptors() if profile.connectable)
 
 RETRYABLE_ERRORS = (OSError, ConnectionError, TimeoutError, EOFError, asyncio.TimeoutError)
 

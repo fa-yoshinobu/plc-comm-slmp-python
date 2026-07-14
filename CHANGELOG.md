@@ -17,6 +17,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- Library: Request-exchange deadline expiry now raises the public `SlmpTimeoutError` subclass of `SlmpError`. The synchronous client no longer exposes the socket's `TimeoutError`, and asynchronous callers that compare exact exception types must accept the new subtype.
+- Library: A response is accepted only when its complete route and, for 4E, serial match the request. Discarded foreign responses and split TCP reads now consume one request deadline instead of receiving a fresh timeout budget.
+
+### Added
+
+- Library: Added immutable lifetime traffic snapshots through `traffic_stats()` on synchronous, asynchronous, and queued clients.
+- Library: Added the `melsec:mx-r:rj71en71` connection profile with MX-R address rules and canonical live capability data.
+
+### Fixed
+
+- Library: Require every accepted 3E/4E TCP/UDP response to match all four request route fields, and require 4E responses to match both route and serial. Valid foreign responses are discarded within the same request deadline; malformed frames invalidate the transport.
+- Library: Apply one absolute deadline to send and complete response assembly. Foreign-route and wrong-serial traffic, including split TCP headers and bodies, can no longer restart or extend the deadline.
+
+### Tests
+
+- Tests: Added deterministic sync/async TCP/UDP correlation matrices for every route field, delayed matching responses, wrong-serial and foreign-route floods, malformed frames, split TCP deadline boundaries, and cancellation ownership.
+- Tests: Added direct MX-R RJ71EN71 catalog, base-profile, connection-option, and sample-selector coverage.
+
+### Tooling
+
+- Tooling: Refreshed canonical SLMP profile fixtures for 2026-07-14, including `melsec:mx-r:rj71en71` and its device-range rules.
+- Tooling: Updated the canonical profile import default from `v2.0.0` to `v2.1.0` so drift checks reproduce the checked-in fixtures.
+
 ## [3.1.0] - 2026-07-13
 
 - Library: Added fixed semantic `clear_error` APIs to sync and async clients.

@@ -78,7 +78,14 @@ If you ran live verification:
 - do not commit packet captures or raw communication logs
 - do not commit one-off verification reports or templates
 
-## 6. Tagging Flow
+## 6. Final Publication Integrity Gate
+
+- enumerate every unchecked repository TODO and maintainer checkbox; pass it, mark it explicitly not required, or record an item-by-item release disposition
+- build the shared docs site in a fresh virtual environment using the registry package and require the version/symbol check plus `mkdocs build --strict`
+- compare the published PyPI wheel and sdist byte-for-byte with the inspected GitHub Release assets
+- verify the immutable tag target, final Release state/assets, docs deployment, open release PR count, and clean working tree
+
+## 7. Tagging Flow
 
 1. update `version` in `pyproject.toml`
 2. update `CHANGELOG.md`
@@ -86,7 +93,7 @@ If you ran live verification:
 4. create a normal release commit
 5. create the tag
 
-## 7. Publish
+## 8. Publish
 
 If you are publishing artifacts:
 

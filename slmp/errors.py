@@ -64,6 +64,10 @@ class SlmpError(Exception):
         return self.end_code is not None and is_remote_password_end_code(self.end_code)
 
 
+class SlmpTimeoutError(SlmpError):
+    """Raised when one SLMP request exchange reaches its absolute deadline."""
+
+
 class SlmpUnsupportedDeviceError(ValueError):
     """Project-level validation error for device families intentionally disabled in typed APIs."""
 

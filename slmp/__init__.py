@@ -39,6 +39,7 @@ from .core import (
     SlmpPlcProfileDescriptor,
     SlmpResponse,
     SlmpTarget,
+    SlmpTrafficStats,
     TypeNameInfo,
     available_plc_profiles,
     decode_cpu_operation_state,
@@ -67,6 +68,7 @@ from .errors import (
     SlmpErrorInfo,
     SlmpPracticalPathWarning,
     SlmpProfileFeatureError,
+    SlmpTimeoutError,
     SlmpUnsupportedDeviceError,
 )
 from .utils import (
@@ -142,9 +144,11 @@ __all__ = [
     "available_plc_profiles",
     "SlmpProfileFeatureError",
     "SlmpPracticalPathWarning",
+    "SlmpTimeoutError",
     "SlmpUnsupportedDeviceError",
     "SlmpResponse",
     "SlmpTarget",
+    "SlmpTrafficStats",
     "TypeNameInfo",
     "decode_cpu_operation_state",
     "display_name",

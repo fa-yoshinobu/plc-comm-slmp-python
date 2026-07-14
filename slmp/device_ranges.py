@@ -183,6 +183,7 @@ _ROWS: dict[str, _RangeRow] = {
 _CANONICAL_FAMILIES = {member.value: member for member in SlmpPlcProfile}
 _RANGE_RULE_PROFILE = {
     SlmpPlcProfile.IqRRj71En71: SlmpPlcProfile.IqR,
+    SlmpPlcProfile.MxRRj71En71: SlmpPlcProfile.MxR,
     SlmpPlcProfile.QCpuQj71E71100: SlmpPlcProfile.QCpu,
     SlmpPlcProfile.LCpuLj71E71100: SlmpPlcProfile.LCpu,
     SlmpPlcProfile.QnUQj71E71100: SlmpPlcProfile.QnU,
@@ -542,6 +543,7 @@ def device_range_model_label(plc_profile: SlmpPlcProfile | str) -> str:
         SlmpPlcProfile.IqL: "iQ-L",
         SlmpPlcProfile.MxF: "MX-F",
         SlmpPlcProfile.MxR: "MX-R",
+        SlmpPlcProfile.MxRRj71En71: "MX-R via RJ71EN71",
         SlmpPlcProfile.IqF: "IQ-F",
         SlmpPlcProfile.QCpu: "QCPU",
         SlmpPlcProfile.QCpuQj71E71100: "QCPU via QJ71E71-100",

@@ -6,7 +6,6 @@ import asyncio
 import math
 import socket
 from collections.abc import Callable, Mapping, Sequence
-from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
 
 from . import _operations
@@ -28,6 +27,7 @@ from .core import (
     SlmpExtendedDevice,
     SlmpResponse,
     SlmpTarget,
+    SlmpTrafficStats,
     TypeNameInfo,
     _apply_semantic_device_modification,
     _ExtensionSpec,
@@ -44,9 +44,9 @@ from .core import (
     encode_request,
     parse_device,
 )
-from .errors import SlmpError
+from .errors import SlmpError, SlmpTimeoutError
 
-_EXPECTED_RESPONSE_SERIAL: ContextVar[int | None] = ContextVar("slmp_async_expected_response_serial", default=None)
+_COMMUNICATION_TIMEOUT_MESSAGE = "SLMP communication timeout"
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -96,7 +96,8 @@ class AsyncSlmpClient:
 
         The standard async client route requires ``plc_profile`` and fixes the
         frame type, access profile, and address/range handling from that one
-        explicit PLC profile.
+        explicit PLC profile. ``timeout`` applies separately to connection
+        establishment and to each complete request send and matching response.
         """
         self.host = host
         if not isinstance(transport, str):
@@ -152,8 +153,22 @@ class AsyncSlmpClient:
 
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
+        self._request_count = 0
+        self._tx_bytes = 0
+        self._rx_bytes = 0
         self._udp_transport: asyncio.DatagramTransport | None = None
         self._udp_protocol: SLMPDatagramProtocol | None = None
+
+    def traffic_stats(self) -> SlmpTrafficStats:
+        """Return a read-only snapshot of cumulative traffic for this client lifetime."""
+        return SlmpTrafficStats(self._request_count, self._tx_bytes, self._rx_bytes)
+
+    def _record_send(self, frame_length: int) -> None:
+        self._request_count += 1
+        self._tx_bytes += frame_length
+
+    def _record_receive(self, frame_length: int) -> None:
+        self._rx_bytes += frame_length
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
         ref = parse_device(device, plc_profile=self.plc_profile)
@@ -305,12 +320,7 @@ class AsyncSlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        expected_serial = serial_no if self.frame_type == FrameType.FRAME_4E else None
-        token = _EXPECTED_RESPONSE_SERIAL.set(expected_serial)
-        try:
-            raw = await self._send_and_receive(frame)
-        finally:
-            _EXPECTED_RESPONSE_SERIAL.reset(token)
+        raw = await self._send_and_receive(frame)
         resp = decode_response(raw, frame_type=self.frame_type)
 
         if self._trace_hook:
@@ -1056,10 +1066,12 @@ class AsyncSlmpClient:
                 assert self._writer is not None
                 self._writer.write(frame)
                 await self._writer.drain()
+                self._record_send(len(frame))
                 await self._close_tcp_unlocked()
             else:
                 assert self._udp_transport is not None
                 self._udp_transport.sendto(frame)
+                self._record_send(len(frame))
                 self._close_udp_unlocked()
 
         await self._emit_trace(
@@ -1081,17 +1093,23 @@ class AsyncSlmpClient:
 
     async def _send_and_receive(self, frame: bytes) -> bytes:
         """Send a frame and receive the response."""
+        loop = asyncio.get_running_loop()
+        expected_identity = _request_identity(frame, frame_type=self.frame_type)
         await self.connect()
         async with self._lock:
+            deadline = loop.time() + self.timeout
             try:
-                expected_serial = _EXPECTED_RESPONSE_SERIAL.get()
                 if self.transport_type == "tcp":
                     assert self._writer is not None
                     self._writer.write(frame)
-                    await self._writer.drain()
+                    remaining = _remaining_timeout(deadline, loop=loop)
+                    await asyncio.wait_for(self._writer.drain(), timeout=remaining)
+                    self._record_send(len(frame))
                     while True:
-                        raw = await self._receive_frame()
-                        if _response_matches_serial(raw, expected_serial):
+                        raw = await self._receive_frame(deadline=deadline)
+                        if _response_matches_request(
+                            raw, frame_type=self.frame_type, expected_identity=expected_identity
+                        ):
                             return raw
                 else:
                     assert self._udp_transport is not None
@@ -1099,13 +1117,21 @@ class AsyncSlmpClient:
                     while not self._udp_protocol.queue.empty():
                         self._udp_protocol.queue.get_nowait()
                     self._udp_transport.sendto(frame)
+                    self._record_send(len(frame))
                     while True:
-                        try:
-                            raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=self.timeout)
-                        except asyncio.TimeoutError as err:
-                            raise SlmpError("UDP communication timeout") from err
-                        if _response_matches_serial(raw, expected_serial):
+                        remaining = _remaining_timeout(deadline, loop=loop)
+                        raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=remaining)
+                        self._record_receive(len(raw))
+                        if _response_matches_request(
+                            raw, frame_type=self.frame_type, expected_identity=expected_identity
+                        ):
                             return raw
+            except (TimeoutError, asyncio.TimeoutError) as err:
+                if self.transport_type == "tcp":
+                    await self._close_tcp_unlocked()
+                else:
+                    self._close_udp_unlocked()
+                raise SlmpTimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE) from err
             except BaseException:
                 if self.transport_type == "tcp":
                     await self._close_tcp_unlocked()
@@ -1113,17 +1139,25 @@ class AsyncSlmpClient:
                     self._close_udp_unlocked()
                 raise
 
-    async def _receive_frame(self) -> bytes:
+    async def _receive_frame(self, *, deadline: float) -> bytes:
         """Receive a single SLMP frame."""
         assert self._reader is not None
         head_size = 13 if self.frame_type == FrameType.FRAME_4E else 9
+        loop = asyncio.get_running_loop()
         try:
-            head = await asyncio.wait_for(self._reader.readexactly(head_size), timeout=self.timeout)
+            head_timeout = _remaining_timeout(deadline, loop=loop)
+            head = await asyncio.wait_for(self._reader.readexactly(head_size), timeout=head_timeout)
+            expected_subheader = b"\xd4\x00" if self.frame_type == FrameType.FRAME_4E else b"\xd0\x00"
+            if head[:2] != expected_subheader:
+                raise SlmpError("unexpected response frame type")
             response_data_length = int.from_bytes(head[-2:], "little")
-            tail = await asyncio.wait_for(self._reader.readexactly(response_data_length), timeout=self.timeout)
-            return head + tail
-        except (asyncio.TimeoutError, asyncio.IncompleteReadError) as err:
-            raise SlmpError("communication timeout or connection closed") from err
+            tail_timeout = _remaining_timeout(deadline, loop=loop)
+            tail = await asyncio.wait_for(self._reader.readexactly(response_data_length), timeout=tail_timeout)
+            frame = head + tail
+            self._record_receive(len(frame))
+            return frame
+        except asyncio.IncompleteReadError as err:
+            raise SlmpError("connection closed while receiving data") from err
 
     async def _emit_trace(self, trace: _SlmpTraceFrame) -> None:
         """Emit a trace event if a trace hook is registered."""
@@ -1137,9 +1171,47 @@ class AsyncSlmpClient:
                 pass
 
 
-def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
-    if expected_serial is None:
-        return True
-    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
-        raise SlmpError("unexpected response frame type")
-    return int.from_bytes(raw[2:4], "little") == expected_serial
+def _response_matches_request(
+    raw: bytes,
+    *,
+    frame_type: FrameType,
+    expected_identity: tuple[int | None, SlmpTarget],
+) -> bool:
+    """Validate one complete response and match its request identity."""
+    response = decode_response(raw, frame_type=frame_type)
+    expected_serial, expected_target = expected_identity
+    if (
+        response.target.network != expected_target.network
+        or response.target.station != expected_target.station
+        or response.target.module_io != expected_target.module_io
+        or response.target.multidrop != expected_target.multidrop
+    ):
+        return False
+    return expected_serial is None or response.serial == expected_serial
+
+
+def _request_identity(frame: bytes, *, frame_type: FrameType) -> tuple[int | None, SlmpTarget]:
+    """Extract the required response identity from one encoded request frame."""
+    if frame_type == FrameType.FRAME_4E:
+        if len(frame) < 11 or frame[:2] != b"\x54\x00":
+            raise SlmpError("invalid 4E request frame")
+        serial: int | None = int.from_bytes(frame[2:4], "little")
+        offset = 6
+    else:
+        if len(frame) < 7 or frame[:2] != b"\x50\x00":
+            raise SlmpError("invalid 3E request frame")
+        serial = None
+        offset = 2
+    return serial, SlmpTarget(
+        network=frame[offset],
+        station=frame[offset + 1],
+        module_io=int.from_bytes(frame[offset + 2 : offset + 4], "little"),
+        multidrop=frame[offset + 4],
+    )
+
+
+def _remaining_timeout(deadline: float, *, loop: asyncio.AbstractEventLoop) -> float:
+    remaining = deadline - loop.time()
+    if remaining <= 0:
+        raise TimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE)
+    return remaining

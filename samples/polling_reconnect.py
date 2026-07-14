@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, read_typed
+from slmp import SlmpConnectionOptions, SlmpTarget, open_and_connect, plc_profile_descriptors, read_typed
 from slmp.async_client import AsyncSlmpClient
 from slmp.errors import SlmpError
 
@@ -39,28 +39,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True, help="Transport protocol")
     parser.add_argument(
         "--plc-profile",
-        choices=(
-            "melsec:iq-f",
-            "melsec:iq-r",
-            "melsec:iq-r:rj71en71",
-            "melsec:iq-l",
-            "melsec:mx-f",
-            "melsec:mx-r",
-            "melsec:qcpu:qj71e71-100",
-            "melsec:lcpu",
-            "melsec:lcpu:lj71e71-100",
-            "melsec:qnu",
-            "melsec:qnu:qj71e71-100",
-            "melsec:qnudv",
-            "melsec:qnudv:qj71e71-100",
-        ),
+        choices=tuple(profile.canonical_name for profile in plc_profile_descriptors() if profile.connectable),
         required=True,
         help="Required canonical PLC profile",
     )
     parser.add_argument("--device", default="D100", help="Device to poll (default D100)")
     parser.add_argument("--dtype", choices=("BIT", "U", "S", "D", "L", "F"), default="U", help="Read type")
     parser.add_argument("--interval", type=positive_float, default=1.0, help="Polling interval in seconds")
-    parser.add_argument("--timeout", type=positive_float, default=3.0, help="Socket timeout in seconds")
+    parser.add_argument(
+        "--timeout",
+        type=positive_float,
+        default=3.0,
+        help="Per-connection timeout and absolute request deadline in seconds",
+    )
     parser.add_argument("--initial-backoff", type=positive_float, default=1.0, help="First reconnect delay")
     parser.add_argument("--max-backoff", type=positive_float, default=30.0, help="Maximum reconnect delay")
     return parser.parse_args()

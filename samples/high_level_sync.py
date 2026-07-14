@@ -36,6 +36,7 @@ from slmp import (
     normalize_address,
     open_and_connect_sync,
     parse_address,
+    plc_profile_descriptors,
     poll_sync,
     read_dwords_single_request_sync,
     read_named_sync,
@@ -78,21 +79,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--plc-profile",
-        choices=(
-            "melsec:iq-f",
-            "melsec:iq-r",
-            "melsec:iq-r:rj71en71",
-            "melsec:iq-l",
-            "melsec:mx-f",
-            "melsec:mx-r",
-            "melsec:qcpu:qj71e71-100",
-            "melsec:lcpu",
-            "melsec:lcpu:lj71e71-100",
-            "melsec:qnu",
-            "melsec:qnu:qj71e71-100",
-            "melsec:qnudv",
-            "melsec:qnudv:qj71e71-100",
-        ),
+        choices=tuple(profile.canonical_name for profile in plc_profile_descriptors() if profile.connectable),
         required=True,
         help="Required canonical high-level PLC profile",
     )
@@ -100,7 +87,7 @@ def parse_args() -> argparse.Namespace:
         "--timeout",
         type=float,
         default=3.0,
-        help="Socket timeout in seconds (default 3.0)",
+        help="Per-connection timeout and absolute request deadline in seconds (default 3.0)",
     )
     p.add_argument(
         "--monitoring-timer",
@@ -139,7 +126,7 @@ def main() -> None:
     #   port             - SLMP port; depends on PLC hardware and firmware settings
     #   transport        - required "tcp" or "udp"; use port 1035 for the
     #                      standard UDP example target in this repository
-    #   timeout          - socket timeout in seconds; increase on slow networks
+    #   timeout          - per-connection timeout and absolute request deadline
     #   monitoring_timer - how long (in 250 ms units) the PLC waits for a
     #                      response before aborting; 0x0010 = 4 s
     options = SlmpConnectionOptions(

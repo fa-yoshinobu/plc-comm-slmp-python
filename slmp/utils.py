@@ -80,7 +80,8 @@ class SlmpConnectionOptions:
             application-level PLC selector for the recommended helper layer.
         port: Required TCP or UDP port used by the SLMP endpoint.
         transport: Transport name such as ``"tcp"`` or ``"udp"``.
-        timeout: Socket timeout in seconds.
+        timeout: Timeout for each connection attempt and absolute deadline for
+            each request exchange, in seconds.
         default_target: Optional routing target applied to requests.
         monitoring_timer: SLMP monitoring timer encoded into frames.
         raise_on_error: Whether protocol errors raise exceptions immediately.

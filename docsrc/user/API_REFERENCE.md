@@ -91,7 +91,20 @@ there is no implicit own-station route in the public connection API.
 | `ModuleIONo.CONTROL_SYSTEM_REMOTE_HEAD` / `ModuleIONo.STANDBY_SYSTEM_REMOTE_HEAD` | `0x03D0` / `0x03D1` |
 | `ModuleIONo.OWN_STATION` | `0x03FF` |
 
+## Errors
+
+`SlmpTimeoutError` identifies request-exchange deadline expiry and is a subclass of
+`SlmpError`. Other `SlmpError` instances represent malformed protocol data or PLC
+end-code responses; inspect `end_code` and `error_info` for PLC errors.
+
 ## Generated API Details
 
 The docs site also renders the installed package with mkdocstrings so class,
 function, and dataclass signatures are searchable from the site API reference.
+
+## Traffic Statistics
+
+`SlmpClient.traffic_stats()` and `AsyncSlmpClient.traffic_stats()` return an immutable
+`SlmpTrafficStats(request_count, tx_bytes, rx_bytes)` snapshot. The queued async wrapper
+delegates the same method to its inner client. Counters are cumulative for the client lifetime
+and are not reset by close or reconnect.
