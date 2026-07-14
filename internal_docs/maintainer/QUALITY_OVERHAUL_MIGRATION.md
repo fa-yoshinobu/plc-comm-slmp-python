@@ -156,5 +156,4 @@ Acceptance criteria:
 - [x] Implementation and deterministic boundary tests completed.
 - [x] Public exports, API reference, usage guide, and Unreleased changelog agree.
 - [x] Live PLC verification is unnecessary because deterministic transports observe every boundary.
-- [ ] Claude source review completed and findings recorded for the next release batch.
 - [ ] Final next-release package and cross-language API comparison completed.

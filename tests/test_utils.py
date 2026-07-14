@@ -698,6 +698,21 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(options.address_profile, "melsec:iq-r")
         self.assertEqual(options.range_profile, "melsec:iq-r:rj71en71")
 
+    def test_connection_options_derive_mxr_unit_profile_with_mxr_address_rules(self):
+        options = SlmpConnectionOptions(
+            "127.0.0.1",
+            plc_profile="melsec:mx-r:rj71en71",
+            port=1025,
+            transport="tcp",
+            default_target=TEST_TARGET,
+        )
+
+        self.assertEqual(options.plc_profile, "melsec:mx-r:rj71en71")
+        self.assertEqual(options.plc_series.value, "iqr")
+        self.assertEqual(options.frame_type.value, "4e")
+        self.assertEqual(options.address_profile, "melsec:mx-r")
+        self.assertEqual(options.range_profile, "melsec:mx-r:rj71en71")
+
     def test_connection_options_require_port_and_transport(self):
         with self.assertRaises(TypeError):
             SlmpConnectionOptions("127.0.0.1", plc_profile="melsec:iq-r", transport="tcp", default_target=TEST_TARGET)

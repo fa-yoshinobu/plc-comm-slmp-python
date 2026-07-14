@@ -38,7 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 from slmp.async_client import AsyncSlmpClient
 from slmp.constants import Command, PLCSeries, RemoteClearMode
 from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
-from slmp.errors import SlmpProfileFeatureError
+from slmp.errors import SlmpProfileFeatureError, SlmpTimeoutError
 
 
 def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
@@ -99,7 +99,7 @@ async def test_async_traffic_stats_count_complete_exchange_and_timeout_after_sen
     client._reader = reader
     client._writer = writer
 
-    frame = b"\x01\x02\x03"
+    frame = b"\x54\x00\x00\x00\x00\x00\x00\xff\xff\x03\x00"
     assert await client._send_and_receive(frame) == response
     assert client.traffic_stats().request_count == 1
     assert client.traffic_stats().tx_bytes == len(frame)
@@ -712,7 +712,7 @@ async def test_async_udp_read() -> None:
         timeout=0.1,
     )
     await cli.connect()
-    with pytest.raises(SlmpError, match="UDP communication timeout"):
+    with pytest.raises(SlmpTimeoutError, match="SLMP communication timeout"):
         await cli.read_devices("D100", 1, bit_unit=False)
     assert cli._udp_transport is None
     assert cli._udp_protocol is None

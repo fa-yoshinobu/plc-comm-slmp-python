@@ -91,6 +91,12 @@ there is no implicit own-station route in the public connection API.
 | `ModuleIONo.CONTROL_SYSTEM_REMOTE_HEAD` / `ModuleIONo.STANDBY_SYSTEM_REMOTE_HEAD` | `0x03D0` / `0x03D1` |
 | `ModuleIONo.OWN_STATION` | `0x03FF` |
 
+## Errors
+
+`SlmpTimeoutError` identifies request-exchange deadline expiry and is a subclass of
+`SlmpError`. Other `SlmpError` instances represent malformed protocol data or PLC
+end-code responses; inspect `end_code` and `error_info` for PLC errors.
+
 ## Generated API Details
 
 The docs site also renders the installed package with mkdocstrings so class,

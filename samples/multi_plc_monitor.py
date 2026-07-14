@@ -49,7 +49,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--port", type=int, default=None, help="Default port when a --plc omits it")
     parser.add_argument("--transport", choices=("tcp", "udp"), default=None, help="Default transport")
-    parser.add_argument("--timeout", type=positive_float, default=3.0, help="Socket timeout in seconds")
+    parser.add_argument(
+        "--timeout",
+        type=positive_float,
+        default=3.0,
+        help="Per-connection timeout and absolute request deadline in seconds",
+    )
     parser.add_argument("--interval", type=positive_float, default=1.0, help="Polling interval in seconds")
     parser.add_argument(
         "--cycles", type=positive_int, default=None, help="Stop after this many successful reads per PLC"

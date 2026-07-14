@@ -242,8 +242,24 @@ class TestSyncDeviceRanges(unittest.TestCase):
         self.assertEqual(entries["D"].point_count, 0x00010034)
         self.assertEqual(entries["D"].address_range, "D0-D65587")
 
+    def test_mxr_unit_uses_mxr_rules_but_reports_unit_profile(self) -> None:
+        registers = {register: 0 for register in range(260, 310)}
+        registers[280] = 0x0034
+        registers[281] = 0x0001
+
+        catalog = build_device_range_catalog_for_plc_profile(
+            SlmpPlcProfile.MxRRj71En71,
+            registers,
+        )
+
+        self.assertEqual(catalog.plc_profile, SlmpPlcProfile.MxRRj71En71)
+        self.assertEqual(catalog.model, "MX-R via RJ71EN71")
+        entries = {entry.device: entry for entry in catalog.entries}
+        self.assertEqual(entries["D"].point_count, 0x00010034)
+        self.assertEqual(entries["D"].address_range, "D0-D65587")
+
     def test_mx_profiles_keep_s_supported_from_sd276(self) -> None:
-        for plc_profile in (SlmpPlcProfile.MxF, SlmpPlcProfile.MxR):
+        for plc_profile in (SlmpPlcProfile.MxF, SlmpPlcProfile.MxR, SlmpPlcProfile.MxRRj71En71):
             with self.subTest(plc_profile=plc_profile):
                 registers = {register: 0 for register in range(260, 310)}
                 registers[276] = 123

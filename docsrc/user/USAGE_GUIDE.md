@@ -228,14 +228,19 @@ module configuration.
 
 When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
 Read `end_code` for the PLC response code and `error_info` when the PLC returned the structured error-information block.
+Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` subclass, in both clients. The configured
+`timeout` is one send/receive deadline; discarding a valid response for another route or 4E serial does not restart it.
+Connection establishment is a separate operation with its own timeout.
 
 ```python
-from slmp import SlmpError
+from slmp import SlmpError, SlmpTimeoutError
 
 
 try:
     value = await read_typed(client, "D100", "U")
     print(f"D100={value}")
+except SlmpTimeoutError:
+    print("SLMP request deadline expired")
 except SlmpError as exc:
     if exc.end_code is not None:
         print(f"SLMP end_code=0x{exc.end_code:04X}")

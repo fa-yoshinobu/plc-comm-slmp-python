@@ -68,6 +68,7 @@ from .errors import (
     SlmpErrorInfo,
     SlmpPracticalPathWarning,
     SlmpProfileFeatureError,
+    SlmpTimeoutError,
     SlmpUnsupportedDeviceError,
 )
 from .utils import (
@@ -143,6 +144,7 @@ __all__ = [
     "available_plc_profiles",
     "SlmpProfileFeatureError",
     "SlmpPracticalPathWarning",
+    "SlmpTimeoutError",
     "SlmpUnsupportedDeviceError",
     "SlmpResponse",
     "SlmpTarget",

@@ -149,6 +149,7 @@ class SlmpPlcProfile(str, Enum):
     IqL = "melsec:iq-l"
     MxF = "melsec:mx-f"
     MxR = "melsec:mx-r"
+    MxRRj71En71 = "melsec:mx-r:rj71en71"
     QCpu = "melsec:qcpu"
     QCpuQj71E71100 = "melsec:qcpu:qj71e71-100"
     LCpu = "melsec:lcpu"
@@ -199,6 +200,9 @@ _PLC_PROFILE_DEFAULTS: dict[str, _PlcProfileDefaults] = {
     "melsec:iq-l": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:iq-l", "melsec:iq-l"),
     "melsec:mx-f": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-f", "melsec:mx-f"),
     "melsec:mx-r": _PlcProfileDefaults(FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-r", "melsec:mx-r"),
+    "melsec:mx-r:rj71en71": _PlcProfileDefaults(
+        FrameType.FRAME_4E, PLCSeries.IQR, "melsec:mx-r", "melsec:mx-r:rj71en71"
+    ),
     "melsec:qcpu": _PlcProfileDefaults(FrameType.FRAME_3E, PLCSeries.QL, "melsec:qcpu", "melsec:qcpu"),
     "melsec:qcpu:qj71e71-100": _PlcProfileDefaults(
         FrameType.FRAME_4E,
@@ -236,6 +240,7 @@ _PLC_PROFILE_BASES: dict[str, str | None] = {
     "melsec:iq-l": None,
     "melsec:mx-f": "melsec:iq-r",
     "melsec:mx-r": "melsec:iq-r",
+    "melsec:mx-r:rj71en71": "melsec:mx-r",
     "melsec:qcpu": "melsec:qnu",
     "melsec:qcpu:qj71e71-100": "melsec:qcpu",
     "melsec:lcpu": None,

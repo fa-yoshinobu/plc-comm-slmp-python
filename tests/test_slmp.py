@@ -55,7 +55,7 @@ from slmp.core import (
     parse_device,
     unpack_bit_values,
 )
-from slmp.errors import SlmpProfileFeatureError
+from slmp.errors import SlmpProfileFeatureError, SlmpTimeoutError
 
 _SELF_ROUTE_ARGS = [
     "--network",
@@ -678,7 +678,7 @@ class TestReceiveHelpers(unittest.TestCase):
 
         sock = _TimeoutUdpSocket()
         client._sock = sock  # type: ignore[attr-defined]
-        with self.assertRaises(TimeoutError):
+        with self.assertRaisesRegex(SlmpTimeoutError, "SLMP communication timeout"):
             client.read_devices("D0", 1, bit_unit=False)
         stats = client.traffic_stats()
         self.assertEqual(stats.request_count, 1)
@@ -3114,7 +3114,7 @@ class TestDeviceApi(unittest.TestCase):
         )
         client._sock = sock  # type: ignore[attr-defined]
 
-        with self.assertRaises(socket.timeout):
+        with self.assertRaisesRegex(SlmpTimeoutError, "SLMP communication timeout"):
             client.read_devices("D0", 1, bit_unit=False)
 
         self.assertTrue(sock.closed)

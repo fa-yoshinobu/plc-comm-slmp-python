@@ -1,8 +1,16 @@
 from slmp import (
     SlmpError,
+    SlmpTimeoutError,
     get_end_code_name,
     is_remote_password_end_code,
 )
+
+
+def test_timeout_error_is_a_public_slmp_error_subtype() -> None:
+    error = SlmpTimeoutError("SLMP communication timeout")
+
+    assert isinstance(error, SlmpError)
+    assert error.end_code is None
 
 
 def test_end_code_names_are_code_derived() -> None:

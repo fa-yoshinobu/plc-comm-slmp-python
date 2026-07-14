@@ -233,6 +233,14 @@ BUILTIN_CAPABILITY_PROFILES: dict[str, CapabilityProfile] = {
         limits=_iqr_limits(),
         write_policy=_write_policy("S"),
     ),
+    "melsec:mx-r:rj71en71": CapabilityProfile(
+        profile_id="melsec:mx-r:rj71en71",
+        frame="4E",
+        compat="iQ-R",
+        features=_iqr_common_features("blocked"),
+        limits=_iqr_limits(),
+        write_policy=_write_policy("S"),
+    ),
     "melsec:mx-f": CapabilityProfile(
         profile_id="melsec:mx-f",
         frame="4E",
@@ -331,6 +339,7 @@ _PROFILE_DISPLAY_NAMES = {
     "melsec:iq-r:rj71en71": "MELSEC iQ-R (RJ71EN71)",
     "melsec:iq-l": "MELSEC iQ-L (built-in)",
     "melsec:mx-r": "MELSEC MX-R (built-in)",
+    "melsec:mx-r:rj71en71": "MELSEC MX-R (RJ71EN71)",
     "melsec:mx-f": "MELSEC MX-F (built-in)",
     "melsec:iq-f": "MELSEC iQ-F (built-in)",
     "melsec:qcpu": "MELSEC-Q (base profile)",

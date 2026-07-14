@@ -20,6 +20,7 @@ For cross-profile capability and device-range details, see the [SLMP Profile Ref
 | `melsec:iq-l` | MELSEC iQ-L (built-in) | 4E | iQR `iqr` | Use for MELSEC iQ-L targets. |
 | `melsec:mx-f` | MELSEC MX-F (built-in) | 4E | iQR `iqr` | Use for MELSEC MX-F targets. |
 | `melsec:mx-r` | MELSEC MX-R (built-in) | 4E | iQR `iqr` | Use for MELSEC MX-R targets. |
+| `melsec:mx-r:rj71en71` | MELSEC MX-R (RJ71EN71) | 4E | iQR `iqr` | Ethernet-unit profile using MX-R address rules. |
 | `melsec:lcpu` | MELSEC-L (built-in) | 3E | Legacy `ql` | Legacy L CPU profile. |
 | `melsec:lcpu:lj71e71-100` | MELSEC-L (LJ71E71-100) | 4E | Legacy `ql` | Ethernet-unit profile. |
 | `melsec:qnu` | MELSEC QnU (built-in) | 3E | Legacy `ql` | QnU profile. Use direct or random device commands for normal access. |

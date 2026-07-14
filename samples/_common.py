@@ -10,7 +10,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from slmp import SlmpClient, SlmpTarget
+from slmp import SlmpClient, SlmpTarget, plc_profile_descriptors
+
+PLC_PROFILES = tuple(profile.canonical_name for profile in plc_profile_descriptors() if profile.connectable)
 
 
 def int_auto(value: str) -> int:
@@ -26,25 +28,16 @@ def add_connection_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--transport", choices=("tcp", "udp"), required=True, help="Transport protocol")
     parser.add_argument(
         "--plc-profile",
-        choices=(
-            "melsec:iq-f",
-            "melsec:iq-r",
-            "melsec:iq-r:rj71en71",
-            "melsec:iq-l",
-            "melsec:mx-f",
-            "melsec:mx-r",
-            "melsec:qcpu:qj71e71-100",
-            "melsec:lcpu",
-            "melsec:lcpu:lj71e71-100",
-            "melsec:qnu",
-            "melsec:qnu:qj71e71-100",
-            "melsec:qnudv",
-            "melsec:qnudv:qj71e71-100",
-        ),
+        choices=PLC_PROFILES,
         required=True,
         help="Required canonical PLC profile used to derive frame/profile defaults",
     )
-    parser.add_argument("--timeout", type=float, default=3.0, help="Socket timeout in seconds")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=3.0,
+        help="Per-connection timeout and absolute request deadline in seconds",
+    )
     parser.add_argument(
         "--monitoring-timer",
         type=int_auto,

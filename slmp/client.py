@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 import socket
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
-from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from . import _operations
@@ -46,9 +46,9 @@ from .core import (
     encode_request,
     parse_device,
 )
-from .errors import SlmpError
+from .errors import SlmpError, SlmpTimeoutError
 
-_EXPECTED_RESPONSE_SERIAL: ContextVar[int | None] = ContextVar("slmp_expected_response_serial", default=None)
+_COMMUNICATION_TIMEOUT_MESSAGE = "SLMP communication timeout"
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -89,7 +89,8 @@ class SlmpClient:
             host: PLC IP address.
             port: Required PLC port number in range 1..65535.
             transport: Required transport protocol (``"tcp"`` or ``"udp"``).
-            timeout: Socket timeout in seconds. Defaults to 3.0.
+            timeout: Timeout for each connection attempt and absolute
+                send-and-response deadline for each request. Defaults to 3.0.
             plc_profile: Canonical high-level PLC profile. The standard client
                 route requires this and derives frame type, access profile,
                 and address/range handling from it.
@@ -298,7 +299,9 @@ class SlmpClient:
             Decoded response from the PLC.
 
         Raises:
-            SlmpError: If the PLC returns a non-zero end code and error raising is enabled.
+            SlmpTimeoutError: If the request-exchange deadline expires.
+            SlmpError: If the PLC returns a non-zero end code and error raising
+                is enabled.
             socket.error: If a communication error occurs.
         """
         serial_no = self._next_serial() if serial is None else serial
@@ -315,12 +318,7 @@ class SlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        expected_serial = serial_no if self.frame_type == FrameType.FRAME_4E else None
-        token = _EXPECTED_RESPONSE_SERIAL.set(expected_serial)
-        try:
-            raw = self._send_and_receive(frame)
-        finally:
-            _EXPECTED_RESPONSE_SERIAL.reset(token)
+        raw = self._send_and_receive(frame)
         resp = decode_response(raw, frame_type=self.frame_type)
         self._emit_trace(
             _SlmpTraceFrame(
@@ -1452,54 +1450,55 @@ class SlmpClient:
         return serial
 
     def _send_and_receive(self, frame: bytes) -> bytes:
+        expected_identity = _request_identity(frame, frame_type=self.frame_type)
         self.connect()
-        assert self._sock is not None
-        expected_serial = _EXPECTED_RESPONSE_SERIAL.get()
+        deadline = time.monotonic() + self.timeout
+        try:
+            assert self._sock is not None
+            sock = self._sock
+            sock.settimeout(_remaining_timeout(deadline))
 
-        if self.transport == "tcp":
-            try:
+            if self.transport == "tcp":
                 self._sock.sendall(frame)
                 self._record_send(len(frame))
                 while True:
-                    raw = self._receive_frame()
-                    if _response_matches_serial(raw, expected_serial):
+                    raw = self._receive_frame(deadline=deadline)
+                    if _response_matches_request(raw, frame_type=self.frame_type, expected_identity=expected_identity):
+                        if self._sock is sock:
+                            sock.settimeout(self.timeout)
                         return raw
-            except BaseException:
-                self.close()
-                raise
 
-        try:
             if self._sock.send(frame) != len(frame):
                 raise OSError("UDP send did not accept the complete SLMP datagram")
             self._record_send(len(frame))
             while True:
-                raw = self._receive_frame()
-                if _response_matches_serial(raw, expected_serial):
+                raw = self._receive_frame(deadline=deadline)
+                if _response_matches_request(raw, frame_type=self.frame_type, expected_identity=expected_identity):
+                    if self._sock is sock:
+                        sock.settimeout(self.timeout)
                     return raw
+        except TimeoutError as err:
+            self.close()
+            raise SlmpTimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE) from err
         except BaseException:
             self.close()
             raise
 
-    def _receive_frame(self, *, timeout: float | None = None) -> bytes:
+    def _receive_frame(self, *, deadline: float) -> bytes:
         self.connect()
         assert self._sock is not None
-        previous_timeout = self._sock.gettimeout()
-        if timeout is not None:
-            self._sock.settimeout(timeout)
         sock = self._sock
         try:
             if self.transport == "tcp":
-                frame = _recv_tcp_frame(sock, frame_type=self.frame_type)
+                frame = _recv_tcp_frame(sock, frame_type=self.frame_type, deadline=deadline)
             else:
+                sock.settimeout(_remaining_timeout(deadline))
                 frame = sock.recv(65535)
             self._record_receive(len(frame))
             return frame
         except (OSError, SlmpError):
             self.close()
             raise
-        finally:
-            if timeout is not None and self._sock is sock:
-                sock.settimeout(previous_timeout)
 
     def _emit_trace(self, trace: _SlmpTraceFrame) -> None:
         if self._trace_hook is None:
@@ -1511,40 +1510,80 @@ class SlmpClient:
             pass
 
 
-def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType) -> bytes:
+def _recv_tcp_frame(sock: socket.socket, *, frame_type: FrameType, deadline: float | None = None) -> bytes:
     # 4E response header up to data length: Subheader(2) + Serial(2) + Reserved(2) + Target(5) + Len(2) = 13 bytes.
     # 3E response header up to data length: Subheader(2) + Target(5) + Len(2) = 9 bytes.
     head_size = 13 if frame_type == FrameType.FRAME_4E else 9
     head = bytearray(head_size)
-    _recv_exact_into(sock, memoryview(head))
+    _recv_exact_into(sock, memoryview(head), deadline=deadline)
     expected_subheader = b"\xd4\x00" if frame_type == FrameType.FRAME_4E else b"\xd0\x00"
     if head[:2] != expected_subheader:
         raise SlmpError("unexpected response frame type")
     response_data_length = int.from_bytes(head[-2:], "little")
     frame = bytearray(head_size + response_data_length)
     frame[:head_size] = head
-    _recv_exact_into(sock, memoryview(frame)[head_size:])
+    _recv_exact_into(sock, memoryview(frame)[head_size:], deadline=deadline)
     return bytes(frame)
 
 
-def _response_matches_serial(raw: bytes, expected_serial: int | None) -> bool:
-    if expected_serial is None:
-        return True
-    if len(raw) < 4 or raw[:2] != b"\xd4\x00":
-        raise SlmpError("unexpected response frame type")
-    return int.from_bytes(raw[2:4], "little") == expected_serial
+def _response_matches_request(
+    raw: bytes,
+    *,
+    frame_type: FrameType,
+    expected_identity: tuple[int | None, SlmpTarget],
+) -> bool:
+    """Validate one complete response and match its request identity."""
+    response = decode_response(raw, frame_type=frame_type)
+    expected_serial, expected_target = expected_identity
+    if (
+        response.target.network != expected_target.network
+        or response.target.station != expected_target.station
+        or response.target.module_io != expected_target.module_io
+        or response.target.multidrop != expected_target.multidrop
+    ):
+        return False
+    return expected_serial is None or response.serial == expected_serial
 
 
-def _recv_exact(sock: socket.socket, size: int) -> bytes:
+def _request_identity(frame: bytes, *, frame_type: FrameType) -> tuple[int | None, SlmpTarget]:
+    """Extract the required response identity from one encoded request frame."""
+    if frame_type == FrameType.FRAME_4E:
+        if len(frame) < 11 or frame[:2] != b"\x54\x00":
+            raise SlmpError("invalid 4E request frame")
+        serial: int | None = int.from_bytes(frame[2:4], "little")
+        offset = 6
+    else:
+        if len(frame) < 7 or frame[:2] != b"\x50\x00":
+            raise SlmpError("invalid 3E request frame")
+        serial = None
+        offset = 2
+    return serial, SlmpTarget(
+        network=frame[offset],
+        station=frame[offset + 1],
+        module_io=int.from_bytes(frame[offset + 2 : offset + 4], "little"),
+        multidrop=frame[offset + 4],
+    )
+
+
+def _remaining_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE)
+    return remaining
+
+
+def _recv_exact(sock: socket.socket, size: int, *, deadline: float | None = None) -> bytes:
     buf = bytearray(size)
-    _recv_exact_into(sock, memoryview(buf))
+    _recv_exact_into(sock, memoryview(buf), deadline=deadline)
     return bytes(buf)
 
 
-def _recv_exact_into(sock: socket.socket, view: memoryview) -> None:
+def _recv_exact_into(sock: socket.socket, view: memoryview, *, deadline: float | None = None) -> None:
     recv_into = getattr(sock, "recv_into", None)
     if callable(recv_into):
         while len(view) > 0:
+            if deadline is not None:
+                sock.settimeout(_remaining_timeout(deadline))
             read = recv_into(view)
             if read == 0:
                 raise SlmpError("connection closed while receiving data")
@@ -1554,6 +1593,8 @@ def _recv_exact_into(sock: socket.socket, view: memoryview) -> None:
     offset = 0
     total = len(view)
     while offset < total:
+        if deadline is not None:
+            sock.settimeout(_remaining_timeout(deadline))
         chunk = sock.recv(total - offset)
         if not chunk:
             raise SlmpError("connection closed while receiving data")
