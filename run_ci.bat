@@ -32,7 +32,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [5/5] Running Tests...
-python -m unittest discover -s tests -v
+python -m pytest tests -v
 if %errorlevel% neq 0 (
     echo [ERROR] Tests failed.
     exit /b %errorlevel%

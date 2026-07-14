@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tooling: Refreshed canonical SLMP profile fixtures for 2026-07-14, including `melsec:mx-r:rj71en71` and its device-range rules.
 - Tooling: Updated the canonical profile import default from `v2.0.0` to `v2.1.0` so drift checks reproduce the checked-in fixtures.
 
+### CI
+
+- CI: Invoke pytest through `python -m pytest` in both local and GitHub gates so project-root imports and pytest-only tests behave consistently across platforms.
+
 ## [3.1.0] - 2026-07-13
 
 - Library: Added fixed semantic `clear_error` APIs to sync and async clients.
