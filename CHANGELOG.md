@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-17
+
+- Release: Bumped package metadata and `slmp.__version__` to `4.0.0`.
+
 ### BREAKING
 
 - Library: Request-exchange deadline expiry now raises the public `SlmpTimeoutError` subclass of `SlmpError`. The synchronous client no longer exposes the socket's `TimeoutError`, and asynchronous callers that compare exact exception types must accept the new subtype.
@@ -45,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI
 
 - CI: Invoke pytest through `python -m pytest` in both local and GitHub gates so project-root imports and pytest-only tests behave consistently across platforms.
+- CI: Corrected tagged-source import paths across every release-workflow version check.
 
 ## [3.1.0] - 2026-07-13
 
