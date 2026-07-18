@@ -31,7 +31,7 @@ complete. Next-release publication remains a separate explicitly authorized acti
 - [x] Python static checks, unit tests, documentation checks, and package/build checks passed.
 - [x] Codex self-review completed against the Python diff, public API, error/state behavior, statistics, timeout, tests,
   documentation, and packaging.
-- [x] Claude source review completed and findings recorded in `D:\APP\claude_review_findings_20260714.md`.
+- [x] Claude source review completed and findings preserved in the archived workspace record `claude_review_findings_20260714.md`.
 - [x] Codex dispositioned every Claude finding and reran affected checks.
 - [x] Live PLC verification is not required; deterministic response headers fully expose the identity comparison.
 - [x] Python documentation, migration note, changelog, and generated API checks agree with the implementation.
@@ -70,7 +70,7 @@ complete. Next-release publication remains a separate explicitly authorized acti
 - [x] Python static checks, unit tests, documentation checks, and package/build checks passed.
 - [x] Codex self-review completed against deadline arithmetic, send/receive boundaries, cancellation, state invalidation,
   error taxonomy, tests, documentation, and packaging.
-- [x] Claude source review completed and findings recorded in `D:\APP\claude_review_findings_20260714.md`.
+- [x] Claude source review completed and findings preserved in the archived workspace record `claude_review_findings_20260714.md`.
 - [x] Codex dispositioned every Claude finding and reran affected checks.
 - [x] Live PLC verification is not required; deterministic timing transports fully expose deadline behavior.
 - [x] Python documentation, migration note, changelog, and generated API checks agree with the implementation.
