@@ -35,8 +35,8 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 
     pytest = _PytestFallback()
 
-from slmp.async_client import AsyncSlmpClient
-from slmp.constants import Command, PLCSeries, RemoteClearMode
+from slmp.async_client import AsyncSlmpClient, SLMPDatagramProtocol
+from slmp.constants import Command, FrameType, PLCSeries, RemoteClearMode
 from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
 from slmp.errors import SlmpProfileFeatureError, SlmpTimeoutError
 
@@ -680,6 +680,127 @@ async def test_async_concurrency() -> None:
                 assert r == [1]
     finally:
         await mock.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_read_and_close_share_one_connection_ownership_order() -> None:
+    mock = MockSLMPServer()
+    await mock.start()
+    cli = AsyncSlmpClient(
+        mock.host,
+        mock.port,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    lock_held = False
+
+    try:
+        await cli.connect()
+        await cli._lock.acquire()
+        lock_held = True
+        read_task = asyncio.create_task(cli.read_devices("D0", 1, bit_unit=False))
+        await asyncio.sleep(0)
+        close_task = asyncio.create_task(cli.close())
+        await asyncio.sleep(0)
+        cli._lock.release()
+        lock_held = False
+
+        assert await read_task == [1]
+        await close_task
+        assert cli._writer is None
+        assert cli._reader is None
+    finally:
+        if lock_held:
+            cli._lock.release()
+        await cli.close()
+        await mock.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_udp_read_and_close_share_one_connection_ownership_order() -> None:
+    protocol = SLMPDatagramProtocol(frame_type=FrameType.FRAME_4E)
+
+    class FakeDatagramTransport:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def sendto(self, frame: bytes) -> None:
+            serial = int.from_bytes(frame[2:4], "little")
+            protocol.queue.put_nowait(_build_4e_response(serial, b"\x01\x00"))
+
+        def close(self) -> None:
+            self.closed = True
+
+    cli = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="udp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    transport = FakeDatagramTransport()
+    cli._udp_protocol = protocol
+    cli._udp_transport = transport  # type: ignore[assignment]
+    lock_held = False
+
+    try:
+        await cli._lock.acquire()
+        lock_held = True
+        read_task = asyncio.create_task(cli.read_devices("D0", 1, bit_unit=False))
+        await asyncio.sleep(0)
+        close_task = asyncio.create_task(cli.close())
+        await asyncio.sleep(0)
+        cli._lock.release()
+        lock_held = False
+
+        assert await read_task == [1]
+        await close_task
+        assert transport.closed
+        assert cli._udp_transport is None
+        assert cli._udp_protocol is None
+    finally:
+        if lock_held:
+            cli._lock.release()
+        await cli.close()
+
+
+@pytest.mark.asyncio
+async def test_async_send_only_and_close_share_one_connection_ownership_order() -> None:
+    cli = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    cli._reader = MagicMock()
+    cli._writer = writer
+    lock_held = False
+
+    try:
+        await cli._lock.acquire()
+        lock_held = True
+        reset_task = asyncio.create_task(cli.remote_reset())
+        await asyncio.sleep(0)
+        close_task = asyncio.create_task(cli.close())
+        await asyncio.sleep(0)
+        cli._lock.release()
+        lock_held = False
+
+        await reset_task
+        await close_task
+        writer.write.assert_called_once()
+        writer.drain.assert_awaited_once()
+        assert cli._writer is None
+        assert cli._reader is None
+    finally:
+        if lock_held:
+            cli._lock.release()
+        await cli.close()
 
 
 @pytest.mark.asyncio
