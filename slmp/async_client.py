@@ -208,46 +208,49 @@ class AsyncSlmpClient:
     async def connect(self) -> None:
         """Open the connection to the PLC."""
         async with self._lock:
-            if self.transport_type == "tcp":
-                if self._writer is not None:
-                    return
-                fut = asyncio.open_connection(self.host, self.port)
+            await self._connect_unlocked()
+
+    async def _connect_unlocked(self) -> None:
+        if self.transport_type == "tcp":
+            if self._writer is not None:
+                return
+            fut = asyncio.open_connection(self.host, self.port)
+            try:
+                reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
+            except asyncio.TimeoutError as err:
+                raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
+            try:
+                raw_socket = writer.get_extra_info("socket")
+                if raw_socket is None:
+                    raise ConnectionError("TCP socket is unavailable; required keepalive policy cannot be applied")
+                raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                configure_tcp_keepalive(raw_socket, idle_seconds=30)
+            except BaseException:
                 try:
-                    reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
-                except asyncio.TimeoutError as err:
-                    raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
-                try:
-                    raw_socket = writer.get_extra_info("socket")
-                    if raw_socket is None:
-                        raise ConnectionError("TCP socket is unavailable; required keepalive policy cannot be applied")
-                    raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                    configure_tcp_keepalive(raw_socket, idle_seconds=30)
-                except BaseException:
+                    writer.close()
+                except Exception:
+                    pass
+                else:
                     try:
-                        writer.close()
-                    except Exception:
+                        await writer.wait_closed()
+                    except BaseException:
                         pass
-                    else:
-                        try:
-                            await writer.wait_closed()
-                        except BaseException:
-                            pass
-                    raise
-                self._reader = reader
-                self._writer = writer
-            else:
-                if self._udp_transport is not None:
-                    return
-                loop = asyncio.get_running_loop()
-                try:
-                    self._udp_transport, self._udp_protocol = await asyncio.wait_for(
-                        loop.create_datagram_endpoint(
-                            lambda: SLMPDatagramProtocol(self.frame_type), remote_addr=(self.host, self.port)
-                        ),
-                        timeout=self.timeout,
-                    )
-                except asyncio.TimeoutError as err:
-                    raise ConnectionError(f"UDP endpoint creation timed out for {self.host}:{self.port}") from err
+                raise
+            self._reader = reader
+            self._writer = writer
+        else:
+            if self._udp_transport is not None:
+                return
+            loop = asyncio.get_running_loop()
+            try:
+                self._udp_transport, self._udp_protocol = await asyncio.wait_for(
+                    loop.create_datagram_endpoint(
+                        lambda: SLMPDatagramProtocol(self.frame_type), remote_addr=(self.host, self.port)
+                    ),
+                    timeout=self.timeout,
+                )
+            except asyncio.TimeoutError as err:
+                raise ConnectionError(f"UDP endpoint creation timed out for {self.host}:{self.port}") from err
 
     async def close(self) -> None:
         """Close the connection to the PLC."""
@@ -1060,16 +1063,18 @@ class AsyncSlmpClient:
             data=data,
         )
 
-        await self.connect()
         async with self._lock:
+            await self._connect_unlocked()
             if self.transport_type == "tcp":
-                assert self._writer is not None
+                if self._writer is None:
+                    raise ConnectionError("TCP connection is not open")
                 self._writer.write(frame)
                 await self._writer.drain()
                 self._record_send(len(frame))
                 await self._close_tcp_unlocked()
             else:
-                assert self._udp_transport is not None
+                if self._udp_transport is None:
+                    raise ConnectionError("UDP endpoint is not open")
                 self._udp_transport.sendto(frame)
                 self._record_send(len(frame))
                 self._close_udp_unlocked()
@@ -1095,12 +1100,13 @@ class AsyncSlmpClient:
         """Send a frame and receive the response."""
         loop = asyncio.get_running_loop()
         expected_identity = _request_identity(frame, frame_type=self.frame_type)
-        await self.connect()
         async with self._lock:
+            await self._connect_unlocked()
             deadline = loop.time() + self.timeout
             try:
                 if self.transport_type == "tcp":
-                    assert self._writer is not None
+                    if self._writer is None:
+                        raise ConnectionError("TCP connection is not open")
                     self._writer.write(frame)
                     remaining = _remaining_timeout(deadline, loop=loop)
                     await asyncio.wait_for(self._writer.drain(), timeout=remaining)
@@ -1112,8 +1118,8 @@ class AsyncSlmpClient:
                         ):
                             return raw
                 else:
-                    assert self._udp_transport is not None
-                    assert self._udp_protocol is not None
+                    if self._udp_transport is None or self._udp_protocol is None:
+                        raise ConnectionError("UDP endpoint is not open")
                     while not self._udp_protocol.queue.empty():
                         self._udp_protocol.queue.get_nowait()
                     self._udp_transport.sendto(frame)

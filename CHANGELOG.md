@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Library: Async TCP and UDP connection establishment now shares one client-lock ownership period with send/receive or send-only processing. Concurrent `close()` can no longer clear transport state between `connect()` and exchange startup, and public calls report `ConnectionError` instead of leaking internal `AssertionError` or `None`-state failures.
+
+### Tests
+
+- Tests: Added deterministic TCP request/response, UDP request/response, and TCP send-only races against `close()`.
+
 ## [4.0.0] - 2026-07-17
 
 - Release: Bumped package metadata and `slmp.__version__` to `4.0.0`.
