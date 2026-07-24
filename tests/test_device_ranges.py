@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
 from pathlib import Path
@@ -19,10 +20,32 @@ from slmp.core import (
 )
 from slmp.device_ranges import (
     SlmpDeviceRangeNotation,
+    _can_read_one_word_async,
+    _can_read_one_word_sync,
     build_device_range_catalog_for_plc_profile,
     normalize_plc_profile,
 )
-from slmp.errors import SlmpError
+from slmp.errors import SlmpError, SlmpTimeoutError
+
+
+class _TimeoutRangeClient:
+    def read_devices(self, address, points, *, bit_unit):
+        raise SlmpTimeoutError("injected timeout")
+
+
+class _AsyncTimeoutRangeClient:
+    async def read_devices(self, address, points, *, bit_unit):
+        raise SlmpTimeoutError("injected timeout")
+
+
+def test_runtime_range_probe_does_not_classify_sync_timeout_as_out_of_range() -> None:
+    with unittest.TestCase().assertRaises(SlmpTimeoutError):
+        _can_read_one_word_sync(_TimeoutRangeClient(), "ZR0")
+
+
+def test_runtime_range_probe_does_not_classify_async_timeout_as_out_of_range() -> None:
+    with unittest.TestCase().assertRaises(SlmpTimeoutError):
+        asyncio.run(_can_read_one_word_async(_AsyncTimeoutRangeClient(), "ZR0"))
 
 
 def _pack_words(values: list[int]) -> bytes:

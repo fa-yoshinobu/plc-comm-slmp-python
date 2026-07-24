@@ -468,15 +468,13 @@ class TestReceiveHelpers(unittest.TestCase):
     def test_random_read_ext_preserves_complete_routes_and_rejects_result_key_collisions(self) -> None:
         client = FakeClient()
 
-        client.next_response_data = b"".join(value.to_bytes(2, "little") for value in range(1, 7))
+        client.next_response_data = b"".join(value.to_bytes(2, "little") for value in range(1, 5))
         result = client.read_random_ext(
             word_devices=[
                 r"U3E0\HG100",
                 r"U3E1\HG100",
                 r"U1\G0",
                 r"U2\G0",
-                r"J1\W0",
-                r"J2\W0",
             ]
         )
         self.assertEqual(
@@ -486,10 +484,12 @@ class TestReceiveHelpers(unittest.TestCase):
                 r"U3E1\HG100": 2,
                 r"U1\G0": 3,
                 r"U2\G0": 4,
-                r"J1\W0": 5,
-                r"J2\W0": 6,
             },
         )
+
+        client.next_response_data = b"".join(value.to_bytes(2, "little") for value in range(5, 7))
+        link_result = client.read_random_ext(word_devices=[r"J1\W0", r"J2\W0"])
+        self.assertEqual(link_result.word, {r"J1\W0": 5, r"J2\W0": 6})
 
         client.next_response_data = b"\x33\x33"
         modified = client.read_random_ext(word_devices=[SlmpExtendedDevice(r"U3E0\D100", SlmpIndexZ(4))])
@@ -945,10 +945,14 @@ class TestCodec(unittest.TestCase):
             parse_device("Y220", plc_profile="iqf")
         with self.assertRaisesRegex(ValueError, "device code 'D'"):
             parse_device("DFFFF", plc_profile="melsec:iq-r")
-        with self.assertRaises(ValueError):
-            encode_device_spec("R32768", series=PLCSeries.QL, plc_profile="melsec:iq-r")
-        with self.assertRaises(ValueError):
-            encode_device_spec("R32768", series=PLCSeries.IQR, plc_profile="melsec:iq-r")
+        self.assertEqual(
+            encode_device_spec("R32768", series=PLCSeries.QL, plc_profile="melsec:iq-r"),
+            b"\x00\x80\x00\xaf",
+        )
+        self.assertEqual(
+            encode_device_spec("R32768", series=PLCSeries.IQR, plc_profile="melsec:iq-r"),
+            b"\x00\x80\x00\x00\xaf\x00",
+        )
 
         raw = pack_bit_values([1, 0, 1, 1, 0])
         self.assertEqual(raw, b"\x10\x11\x00")
@@ -2711,6 +2715,37 @@ class TestDeviceApi(unittest.TestCase):
             client.register_monitor_devices_ext(word_devices=read_devices)
         self.assertIsNone(client.last_request)
 
+    def test_link_direct_random_and_monitor_ext_use_ql_subcommands(self) -> None:
+        client = FakeClient()
+        client.next_response_data = b"\x34\x12"
+        client.read_random_ext(word_devices=[r"J1\W0"])
+        self.assertEqual(client.last_request[1], 0x0080)
+
+        client.next_response_data = b""
+        client.write_random_words_ext(word_values=[(r"J1\W0", 1)])
+        self.assertEqual(client.last_request[1], 0x0080)
+
+        client.write_random_bits_ext(bit_values=[(r"J1\B0", True)])
+        self.assertEqual(client.last_request[1], 0x0081)
+        self.assertEqual(client.last_request[2][-1:], b"\x01")
+
+        client.register_monitor_devices_ext(word_devices=[r"J1\W0"])
+        self.assertEqual(client.last_request[1], 0x0080)
+
+    def test_link_direct_extended_apis_reject_mixed_ql_and_iqr_layouts(self) -> None:
+        client = FakeClient()
+
+        with self.assertRaisesRegex(ValueError, "cannot mix J link-direct"):
+            client.read_random_ext(word_devices=[r"J1\W0", r"U1\D0"])
+        with self.assertRaisesRegex(ValueError, "cannot mix J link-direct"):
+            client.write_random_words_ext(word_values=[(r"J1\W0", 1), (r"U1\D0", 2)])
+        with self.assertRaisesRegex(ValueError, "cannot mix J link-direct"):
+            client.write_random_bits_ext(bit_values=[(r"J1\B0", True), (r"U1\M0", False)])
+        with self.assertRaisesRegex(ValueError, "cannot mix J link-direct"):
+            client.register_monitor_devices_ext(word_devices=[r"J1\W0", r"U1\D0"])
+
+        self.assertIsNone(client.last_request)
+
     def test_extended_random_profile_limits_follow_canonical_profile_values(self) -> None:
         """Extended routes use the selected profile's canonical 008x limits."""
         client = FakeClient(plc_profile="melsec:iq-f")
@@ -2766,13 +2801,14 @@ class TestDeviceApi(unittest.TestCase):
             client.write_devices("LZ1", [0], bit_unit=False)
         self.assertIsNone(client.last_request)
 
-    def test_r_device_fixed_upper_limit(self) -> None:
-        """Test test_r_device_fixed_upper_limit."""
+    def test_r_device_profile_upper_limit_is_not_a_send_guard(self) -> None:
         client = FakeClient()
-        with self.assertRaises(ValueError):
-            client.read_devices("R32768", 1, bit_unit=False)
-        with self.assertRaises(ValueError):
-            client.write_devices("R32768", [1], bit_unit=False)
+        client.next_response_data = b"\x34\x12"
+        self.assertEqual(client.read_devices("R32768", 1, bit_unit=False), [0x1234])
+        self.assertEqual(client.last_request[2][:6], b"\x00\x80\x00\x00\xaf\x00")
+        client.next_response_data = b""
+        client.write_devices("R32768", [1], bit_unit=False)
+        self.assertEqual(client.last_request[2][:6], b"\x00\x80\x00\x00\xaf\x00")
 
     def test_write_random_bits(self) -> None:
         """Test test_write_random_bits."""

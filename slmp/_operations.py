@@ -99,6 +99,20 @@ def _effective_series(series: PLCSeries | str | None, default_series: PLCSeries)
     return PLCSeries(series) if series is not None else default_series
 
 
+def _extended_subcommand_series(
+    effective_series: PLCSeries,
+    *,
+    has_link_direct: bool,
+    has_other_layout: bool,
+    operation: str,
+) -> PLCSeries:
+    if effective_series == PLCSeries.IQR and has_link_direct and has_other_layout:
+        raise ValueError(
+            f"{operation} cannot mix J link-direct Q/L entries with 13-byte iQ-R extended entries in one request"
+        )
+    return PLCSeries.QL if has_link_direct else effective_series
+
+
 def _validate_random_result_keys(word_keys: Sequence[str], dword_keys: Sequence[str]) -> None:
     """Reject collisions before a dict-shaped random-read result can lose values."""
     if len(set(word_keys)) != len(word_keys):
@@ -481,21 +495,38 @@ def build_register_monitor_devices_ext_request(
         plc_profile=address_profile,
         limit_key="monitor_register_word",
     )
-    subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_devices), len(dword_devices)])
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
+    link_direct = False
+    other_layout = False
     for dev, ext in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for dev, ext in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_monitor_register_devices(word_refs, dword_refs)
+    subcommand = resolve_device_subcommand(
+        bit_unit=False,
+        series=_extended_subcommand_series(
+            effective_series,
+            has_link_direct=link_direct,
+            has_other_layout=other_layout,
+            operation="register_monitor_devices_ext",
+        ),
+        extension=True,
+    )
     return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, bytes(payload))
 
 
@@ -697,27 +728,43 @@ def build_read_random_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
-
     payload = bytearray([len(word_devices), len(dword_devices)])
     words: list[DeviceRef] = []
     dwords: list[DeviceRef] = []
     word_keys: list[str] = []
     dword_keys: list[str] = []
+    link_direct = False
+    other_layout = False
     for device, extension, result_key in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         words.append(ref)
         word_keys.append(result_key)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for device, extension, result_key in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dwords.append(ref)
         dword_keys.append(result_key)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_random_read_devices(words, dwords)
     _validate_random_result_keys(word_keys, dword_keys)
+    subcommand = resolve_device_subcommand(
+        bit_unit=False,
+        series=_extended_subcommand_series(
+            effective_series,
+            has_link_direct=link_direct,
+            has_other_layout=other_layout,
+            operation="read_random_ext",
+        ),
+        extension=True,
+    )
     return RandomReadOperation(
         request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
         word_refs=tuple(words),
@@ -810,17 +857,21 @@ def build_write_random_words_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=True)
     payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
     word_extensions: list[_ExtensionSpec] = []
     dword_extensions: list[_ExtensionSpec] = []
+    link_direct = False
+    other_layout = False
     for index, (device, value, extension) in enumerate(word_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         word_refs.append(ref)
         word_extensions.append(effective_extension)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += _require_write_u16(value, f"word_values[{index}]").to_bytes(2, "little", signed=False)
     for index, (device, value, extension) in enumerate(dword_values):
@@ -828,6 +879,9 @@ def build_write_random_words_ext_request(
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         dword_refs.append(ref)
         dword_extensions.append(effective_extension)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += _require_write_u32(value, f"dword_values[{index}]").to_bytes(4, "little", signed=False)
     _validate_random_write_word_devices(
@@ -836,6 +890,16 @@ def build_write_random_words_ext_request(
         plc_profile=address_profile,
         word_namespaces=word_extensions,
         dword_namespaces=dword_extensions,
+    )
+    subcommand = resolve_device_subcommand(
+        bit_unit=False,
+        series=_extended_subcommand_series(
+            effective_series,
+            has_link_direct=link_direct,
+            has_other_layout=other_layout,
+            operation="write_random_words_ext",
+        ),
+        extension=True,
     )
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
@@ -896,22 +960,36 @@ def build_write_random_bits_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    subcommand = resolve_device_subcommand(bit_unit=True, series=effective_series, extension=True)
     payload = bytearray([len(bit_values)])
     refs: list[DeviceRef] = []
     extensions: list[_ExtensionSpec] = []
+    link_direct = False
+    other_layout = False
     for index, (device, state, extension) in enumerate(bit_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         refs.append(ref)
         extensions.append(effective_extension)
+        is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
+        link_direct = link_direct or is_link_direct
+        other_layout = other_layout or not is_link_direct
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         encoded_state = _require_write_bit(state, f"bit_values[{index}]")
-        if effective_series == PLCSeries.IQR:
+        if effective_series == PLCSeries.IQR and not is_link_direct:
             payload += b"\x01\x00" if encoded_state else b"\x00\x00"
         else:
             payload += b"\x01" if encoded_state else b"\x00"
     _validate_random_write_bit_devices(refs, plc_profile=address_profile, namespaces=extensions)
+    subcommand = resolve_device_subcommand(
+        bit_unit=True,
+        series=_extended_subcommand_series(
+            effective_series,
+            has_link_direct=link_direct,
+            has_other_layout=other_layout,
+            operation="write_random_bits_ext",
+        ),
+        extension=True,
+    )
     return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
 
 

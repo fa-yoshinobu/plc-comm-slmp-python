@@ -17,9 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- Library: Addresses that exceed legacy or link-direct wire fields are now rejected rather than silently truncated.
+
 ### Fixed
 
 - Library: Async TCP and UDP connection establishment now shares one client-lock ownership period with send/receive or send-only processing. Concurrent `close()` can no longer clear transport state between `connect()` and exchange startup, and public calls report `ConnectionError` instead of leaking internal `AssertionError` or `None`-state failures.
+- Library: J link-direct extended random read/write and monitor registration now use Q/L subcommands and Q/L bit-value encoding; requests that mix J and iQ-R entry layouts are rejected before transport, and typed random writes route LZ and floating-point values through dword entries.
+- Library: Range-probe timeouts retain their timeout classification, and profile device-range upper bounds no longer reject transport sends.
 
 ### Tests
 
