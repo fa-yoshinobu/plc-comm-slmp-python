@@ -22,7 +22,7 @@ jobs:
         shell: pwsh
         run: ./scripts/update_slmp_profile_jsons.ps1 -FailIfChanged
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
