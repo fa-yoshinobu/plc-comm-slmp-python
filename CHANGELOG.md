@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-07-29
+
+- Release: Bumped package metadata and `slmp.__version__` to `4.0.1`.
+- Release: GitHub Release drafts now prepend this version's changelog section to generated notes and repair a missing section on workflow reruns.
+
 ### BREAKING
 
 - Library: Addresses that exceed legacy or link-direct wire fields are now rejected rather than silently truncated.
