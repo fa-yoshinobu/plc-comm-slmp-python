@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, cast
 
 from .core import DeviceRef, SlmpPlcProfile
-from .errors import SlmpError
+from .errors import SlmpError, SlmpTimeoutError
 
 
 class SlmpDeviceRangeCategory(str, Enum):
@@ -773,6 +773,8 @@ def _can_read_one_word_sync(client: Any, address: str) -> bool:
     try:
         client.read_devices(address, 1, bit_unit=False)
         return True
+    except SlmpTimeoutError:
+        raise
     except SlmpError:
         return False
 
@@ -781,6 +783,8 @@ async def _can_read_one_word_async(client: Any, address: str) -> bool:
     try:
         await client.read_devices(address, 1, bit_unit=False)
         return True
+    except SlmpTimeoutError:
+        raise
     except SlmpError:
         return False
 

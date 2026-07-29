@@ -1008,8 +1008,9 @@ def encode_device_spec(
         ref = device
     else:
         ref = parse_device(device, plc_profile=plc_profile)
-    if ref.code == "R" and ref.number > 32767:
-        raise ValueError(f"R device number out of supported range (0..32767): {ref.number}")
+    # PROFILE_RANGE_NOT_A_TRANSPORT_GUARD: PLC profile device ranges are
+    # application-layer metadata. Validate syntax, device support, and only
+    # the selected wire representation width in the communication library.
     dev = DEVICE_CODES[ref.code]
 
     if series == PLCSeries.QL:
@@ -1089,7 +1090,13 @@ def _encode_link_direct_device_spec(
     Format: reserved(2) + dev_no(3) + dev_code(1) + reserved(2) + j_net(1) + reserved(1) + 0xF9(1)
     Always uses QL (3-byte device number) format.
     """
-    j_net = extension.extension_specification & 0xFF
+    if ref.number < 0 or ref.number > 0xFFFFFF:
+        raise ValueError(f"link-direct device number out of range for Q/L format: {ref.number}")
+    if extension.extension_specification > 0xFF:
+        raise ValueError(
+            f"link-direct network number must fit the 8-bit wire field: {extension.extension_specification}"
+        )
+    j_net = extension.extension_specification
     dev = DEVICE_CODES[ref.code]
     payload = bytearray()
     payload += b"\x00\x00"

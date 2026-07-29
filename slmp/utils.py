@@ -265,9 +265,9 @@ async def write_typed(
     if key == "BIT":
         await client.write_devices(device, [_require_typed_bool(value)], bit_unit=True)
         return
-    if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+    if key in {"D", "L", "F"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         await client.write_random_words(
-            dword_values={ref: _encode_typed_dword(value, key)},
+            dword_values={ref: _encode_typed_float32(value) if key == "F" else _encode_typed_dword(value, key)},
         )
         return
     if key not in {"D", "L", "F"}:
@@ -329,9 +329,9 @@ def write_typed_sync(
     if key == "BIT":
         client.write_devices(device, [_require_typed_bool(value)], bit_unit=True)
         return
-    if key in {"D", "L"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
+    if key in {"D", "L", "F"} and ref.code in _RANDOM_DWORD_SCALAR_DEVICE_CODES:
         client.write_random_words(
-            dword_values={ref: _encode_typed_dword(value, key)},
+            dword_values={ref: _encode_typed_float32(value) if key == "F" else _encode_typed_dword(value, key)},
         )
         return
     if key not in {"D", "L", "F"}:

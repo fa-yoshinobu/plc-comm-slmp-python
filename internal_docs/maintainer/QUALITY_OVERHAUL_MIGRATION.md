@@ -160,3 +160,28 @@ Acceptance criteria:
   tag equals repository HEAD, the GitHub Release and PyPI `plc-comm-slmp` `4.0.0` package are public,
   tag-commit checks passed, and the final five-implementation source/API comparison was completed
   on 2026-07-18.
+
+## BH-LIVE-SLMP-20260729 — Supplemental bug-hunt live verification
+
+Scope: commit `ab729d3b53cbe49690c25e46669f0ad11714cd51`, profile `melsec:iq-r`, TCP
+`192.168.250.100:1025`.
+
+Target contract: the library sends profile-catalog range exceedances that fit the wire format, uses
+the Q/L layout for J link-direct extended random and monitor operations, and leaves every test
+device in its documented final state.
+
+Acceptance evidence:
+
+- [x] `D100` one-word read succeeded with value `0`.
+- [x] `R32768` reached the PLC and surfaced `slmp.errors.SlmpError` end code `0x4031` for command
+  `0x0401`, subcommand `0x0002`; no pre-send profile-range rejection occurred.
+- [x] Extended random read of `J1\W10` succeeded with value `0`.
+- [x] Extended random word write changed `J1\W10` from `0` to `0x4A71`, read back `0x4A71`,
+  restored `0`, and confirmed the restoration.
+- [x] Extended random bit write changed `J1\B10` to ON, read ON, reset it to OFF, and confirmed OFF.
+- [x] Extended monitor registration for `J1\W10` and one monitor cycle succeeded with value `0`;
+  the TCP session was then closed.
+- [x] The repository working tree was clean after the live probes.
+
+Disposition: all supplemental live checks passed. The `R32768` result is PLC-side address evidence,
+not authority to add a communication-library profile-range guard.

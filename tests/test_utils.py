@@ -256,6 +256,18 @@ class TestWriteTypedSync(unittest.TestCase):
         expected = list(struct.unpack("<HH", raw))
         client.write_devices.assert_called_once_with("D100", expected, bit_unit=False)
 
+    def test_write_float32_lz_uses_random_dword_route(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+
+        write_typed_sync(client, "LZ0", "F", 1.0)
+
+        expected = struct.unpack("<I", struct.pack("<f", 1.0))[0]
+        client.write_random_words.assert_called_once()
+        kwargs = client.write_random_words.call_args.kwargs
+        self.assertEqual(list(kwargs["dword_values"].values()), [expected])
+        client.write_devices.assert_not_called()
+
     def test_write_signed_32(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
