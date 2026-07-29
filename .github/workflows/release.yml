@@ -68,8 +68,28 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.release.outputs.tag }}"
+          version="${tag#v}"
+          header="## [${version}]"
+          if ! changelog_notes="$(
+            awk -v header="${header}" '
+              index($0, header) == 1 { capture = 1 }
+              capture && /^## \[/ && index($0, header) != 1 { exit }
+              capture { print }
+              END { if (!capture) exit 1 }
+            ' CHANGELOG.md
+          )"; then
+            echo "::error::CHANGELOG.md is missing release section ${header}."
+            exit 1
+          fi
+          test -n "${changelog_notes}"
           if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            current_body="$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body)"
+            if ! grep -Fq -- "${header}" <<<"${current_body}"; then
+              notes_file="${RUNNER_TEMP}/release-notes-${version}.md"
+              printf '%s\n\n%s\n' "${changelog_notes}" "${current_body}" > "${notes_file}"
+              gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --title "Release ${tag}" --notes-file "${notes_file}"
+            fi
             gh release upload "${tag}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
           else
-            gh release create "${tag}" dist/* --repo "${GITHUB_REPOSITORY}" --verify-tag --title "Release ${tag}" --generate-notes --draft
+            gh release create "${tag}" dist/* --repo "${GITHUB_REPOSITORY}" --verify-tag --title "Release ${tag}" --notes "${changelog_notes}" --generate-notes --draft
           fi
