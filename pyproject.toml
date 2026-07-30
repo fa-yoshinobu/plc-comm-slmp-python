@@ -13,7 +13,7 @@ authors = [{ name = "fa-yoshinobu" }]
 license = "MIT"
 
 license-files = ["LICENSE"]
-keywords = ["plc-comm", "slmp", "melsec", "mitsubishi", "plc", "3e", "4e", "binary"]
+keywords = ["plc-comm", "slmp", "melsec", "mitsubishi", "mitsubishi-plc", "plc", "industrial-automation", "3e", "4e", "binary"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -31,6 +31,7 @@ classifiers = [
 Homepage = "https://github.com/fa-yoshinobu/plc-comm-slmp-python"
 Repository = "https://github.com/fa-yoshinobu/plc-comm-slmp-python"
 Issues = "https://github.com/fa-yoshinobu/plc-comm-slmp-python/issues"
+Documentation = "https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/GETTING_STARTED/"
 
 [project.optional-dependencies]
 dev = [

@@ -55,9 +55,15 @@ asyncio.run(main())
 | [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
 | [Getting started](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/GETTING_STARTED/) | Install the package, connect to your PLC, and run your first SLMP read/write. |
 | [Usage guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/USAGE_GUIDE/) | Use the high-level API and common SLMP workflows. |
+| [API reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/API_REFERENCE/) | Find public client methods, helpers, profile APIs, and error types. |
 | [SLMP profile reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/) | Check profile parameters, device families, address syntax, and numbering rules. |
 | [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/PROFILES/) | Choose the canonical MELSEC profile and frame behavior. |
+| [Gotchas](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/GOTCHAS/) | Check whether this library has any current library-specific caveats. |
+| [Performance](https://fa-yoshinobu.github.io/plc-comm-docs-site/performance/) | See measured latency, throughput, and long-run soak results from real PLC hardware. |
+| [Choosing a Language](https://fa-yoshinobu.github.io/plc-comm-docs-site/choosing-a-language/) | Compare the .NET, Python, Rust, C++, and Node-RED implementations before you pick one. |
 | [Examples](https://github.com/fa-yoshinobu/plc-comm-slmp-python/blob/main/samples/README.md) | Run maintained Python samples. |
+
+For a zero-code connectivity check, see [PLC Scope](https://github.com/fa-yoshinobu/plc-scope-dotnet) (Windows).
 
 ## License and registry
 
