@@ -36,11 +36,13 @@ from .core import (
     _format_semantic_extended_device_key,
     _parse_extended_device,
     _raise_response_error,
+    _request_payload_limit,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     _resolve_extended_device_and_extension,
     _resolve_port,
     _SlmpTraceFrame,
+    _validate_request_payload_length,
     decode_cpu_operation_state,
     decode_response,
     encode_request,
@@ -261,6 +263,7 @@ class SlmpClient:
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         if raise_on_error is not None and type(raise_on_error) is not bool:
             raise ValueError("raise_on_error must be a boolean when provided")
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
         with self._request_lock:
             return self._request_unlocked(
@@ -304,6 +307,7 @@ class SlmpClient:
                 is enabled.
             socket.error: If a communication error occurs.
         """
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
         monitor = self.monitoring_timer if monitoring_timer is None else monitoring_timer
@@ -1268,9 +1272,10 @@ class SlmpClient:
             List of LabelArrayReadResult.
 
         """
-        request = _operations.build_read_array_labels_request(points, abbreviation_labels=abbreviation_labels)
+        requested_points = tuple(points)
+        request = _operations.build_read_array_labels_request(requested_points, abbreviation_labels=abbreviation_labels)
         data = self._request(request.command, request.subcommand, request.payload).data
-        return _operations.parse_array_label_read_response(data, expected_points=len(points))
+        return _operations.parse_array_label_read_response(data, requested_points=requested_points)
 
     def write_array_labels(
         self,
@@ -1304,9 +1309,12 @@ class SlmpClient:
             List of LabelRandomReadResult.
 
         """
-        request = _operations.build_read_random_labels_request(labels, abbreviation_labels=abbreviation_labels)
+        requested_labels = tuple(labels)
+        request = _operations.build_read_random_labels_request(
+            requested_labels, abbreviation_labels=abbreviation_labels
+        )
         data = self._request(request.command, request.subcommand, request.payload).data
-        return _operations.parse_label_read_random_response(data, expected_points=len(labels))
+        return _operations.parse_label_read_random_response(data, expected_points=len(requested_labels))
 
     def write_random_labels(
         self,
@@ -1391,6 +1399,7 @@ class SlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
     ) -> None:
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
         monitor = self.monitoring_timer if monitoring_timer is None else monitoring_timer

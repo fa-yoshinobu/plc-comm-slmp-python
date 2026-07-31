@@ -37,6 +37,7 @@ from .core import (
     _encode_resolved_extended_device_spec,
     _ExtensionSpec,
     _label_array_data_bytes,
+    _label_array_wire_data_bytes,
     _normalize_items,
     _require_explicit_plc_profile_for_xy,
     _require_write_bit,
@@ -53,6 +54,7 @@ from .core import (
     _validate_random_read_devices,
     _validate_random_write_bit_devices,
     _validate_random_write_word_devices,
+    _validate_request_payload_length,
     _warn_boundary_behavior,
     _warn_practical_device_path,
     decode_device_dwords,
@@ -1317,6 +1319,13 @@ def _validate_abbreviation_references(label: str, abbreviation_count: int) -> No
         index = digit_end
 
 
+def _append_label_payload_part(parts: list[bytes], payload_length: int, part: bytes) -> int:
+    next_length = payload_length + len(part)
+    _validate_request_payload_length(next_length)
+    parts.append(part)
+    return next_length
+
+
 def build_array_label_read_payload(
     points: Sequence[LabelArrayReadPoint],
     *,
@@ -1328,20 +1337,19 @@ def build_array_label_read_payload(
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
     abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
-    payload = bytearray()
-    payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviations).to_bytes(2, "little")
+    parts = [len(points).to_bytes(2, "little"), len(abbreviations).to_bytes(2, "little")]
+    payload_length = 4
     for name in abbreviations:
-        payload += _encode_label_name(name)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(name))
     for point in points:
         _validate_abbreviation_references(point.label, len(abbreviations))
-        _check_label_unit_specification(point.unit_specification, "unit_specification")
-        _check_u16(point.array_data_length, "array_data_length")
-        payload += _encode_label_name(point.label)
-        payload += point.unit_specification.to_bytes(1, "little")
-        payload += b"\x00"
-        payload += point.array_data_length.to_bytes(2, "little")
-    return bytes(payload)
+        _label_array_data_bytes(point.unit_specification, point.array_data_length)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(point.label))
+        metadata = (
+            point.unit_specification.to_bytes(1, "little") + b"\x00" + point.array_data_length.to_bytes(2, "little")
+        )
+        payload_length = _append_label_payload_part(parts, payload_length, metadata)
+    return b"".join(parts)
 
 
 def build_array_label_write_payload(
@@ -1355,11 +1363,10 @@ def build_array_label_write_payload(
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of array points")
     abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
-    payload = bytearray()
-    payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviations).to_bytes(2, "little")
+    parts = [len(points).to_bytes(2, "little"), len(abbreviations).to_bytes(2, "little")]
+    payload_length = 4
     for name in abbreviations:
-        payload += _encode_label_name(name)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(name))
     for point in points:
         _validate_abbreviation_references(point.label, len(abbreviations))
         _check_label_unit_specification(point.unit_specification, "unit_specification")
@@ -1372,12 +1379,15 @@ def build_array_label_write_payload(
                 f"expected={expected}, actual={len(raw)}, unit_specification={point.unit_specification}, "
                 f"array_data_length={point.array_data_length}"
             )
-        payload += _encode_label_name(point.label)
-        payload += point.unit_specification.to_bytes(1, "little")
-        payload += b"\x00"
-        payload += point.array_data_length.to_bytes(2, "little")
-        payload += raw
-    return bytes(payload)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(point.label))
+        metadata_and_data = (
+            point.unit_specification.to_bytes(1, "little")
+            + b"\x00"
+            + point.array_data_length.to_bytes(2, "little")
+            + raw
+        )
+        payload_length = _append_label_payload_part(parts, payload_length, metadata_and_data)
+    return b"".join(parts)
 
 
 def build_label_read_random_payload(
@@ -1391,15 +1401,14 @@ def build_label_read_random_payload(
         raise ValueError("labels must not be empty")
     _check_u16(len(labels), "number of read data points")
     abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
-    payload = bytearray()
-    payload += len(labels).to_bytes(2, "little")
-    payload += len(abbreviations).to_bytes(2, "little")
+    parts = [len(labels).to_bytes(2, "little"), len(abbreviations).to_bytes(2, "little")]
+    payload_length = 4
     for name in abbreviations:
-        payload += _encode_label_name(name)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(name))
     for label in labels:
         _validate_abbreviation_references(label, len(abbreviations))
-        payload += _encode_label_name(label)
-    return bytes(payload)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(label))
+    return b"".join(parts)
 
 
 def build_label_write_random_payload(
@@ -1413,19 +1422,19 @@ def build_label_write_random_payload(
         raise ValueError("points must not be empty")
     _check_u16(len(points), "number of write data points")
     abbreviations = _normalize_abbreviation_labels(abbreviation_labels)
-    payload = bytearray()
-    payload += len(points).to_bytes(2, "little")
-    payload += len(abbreviations).to_bytes(2, "little")
+    parts = [len(points).to_bytes(2, "little"), len(abbreviations).to_bytes(2, "little")]
+    payload_length = 4
     for name in abbreviations:
-        payload += _encode_label_name(name)
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(name))
     for point in points:
         _validate_abbreviation_references(point.label, len(abbreviations))
         raw = bytes(point.data)
         _check_u16(len(raw), "write data length")
-        payload += _encode_label_name(point.label)
-        payload += len(raw).to_bytes(2, "little")
-        payload += raw
-    return bytes(payload)
+        if len(raw) == 0 or len(raw) % 2 != 0:
+            raise ValueError(f"write data length must be positive and even: {len(raw)}")
+        payload_length = _append_label_payload_part(parts, payload_length, _encode_label_name(point.label))
+        payload_length = _append_label_payload_part(parts, payload_length, len(raw).to_bytes(2, "little") + raw)
+    return b"".join(parts)
 
 
 def build_read_array_labels_request(
@@ -1475,26 +1484,36 @@ def build_write_random_labels_request(
 def parse_array_label_read_response(
     data: bytes,
     *,
-    expected_points: int | None = None,
+    requested_points: Sequence[LabelArrayReadPoint],
 ) -> list[LabelArrayReadResult]:
     """Parse an array label read response payload."""
 
     if len(data) < 2:
         raise SlmpError(f"array label read response too short: {len(data)}")
     points = int.from_bytes(data[:2], "little")
-    if expected_points is not None and points != expected_points:
-        raise SlmpError(f"array label read point count mismatch: expected={expected_points}, actual={points}")
+    if points != len(requested_points):
+        raise SlmpError(f"array label read point count mismatch: expected={len(requested_points)}, actual={points}")
     offset = 2
     out: list[LabelArrayReadResult] = []
-    for _ in range(points):
+    for index in range(points):
         if offset + 4 > len(data):
             raise SlmpError("array label read response truncated before metadata")
         data_type_id = data[offset]
         unit_specification = data[offset + 1]
-        _check_label_unit_specification(unit_specification, "response unit_specification")
         array_data_length = int.from_bytes(data[offset + 2 : offset + 4], "little")
         offset += 4
-        data_size = _label_array_data_bytes(unit_specification, array_data_length)
+        if unit_specification not in {0, 1}:
+            raise SlmpError(f"array label read response has invalid unit_specification: {unit_specification}")
+        if array_data_length == 0:
+            raise SlmpError("array label read response has zero array_data_length")
+        requested = requested_points[index]
+        if unit_specification != requested.unit_specification or array_data_length != requested.array_data_length:
+            raise SlmpError(
+                f"array label read metadata mismatch at index {index}: "
+                f"expected unit={requested.unit_specification}, length={requested.array_data_length}; "
+                f"actual unit={unit_specification}, length={array_data_length}"
+            )
+        data_size = _label_array_wire_data_bytes(unit_specification, array_data_length)
         if offset + data_size > len(data):
             raise SlmpError(
                 "array label read response truncated in data payload: "
@@ -1518,7 +1537,7 @@ def parse_array_label_read_response(
 def parse_label_read_random_response(
     data: bytes,
     *,
-    expected_points: int | None = None,
+    expected_points: int,
 ) -> list[LabelRandomReadResult]:
     """Parse a random label read response payload."""
 
@@ -1536,6 +1555,8 @@ def parse_label_read_random_response(
         spare = data[offset + 1]
         read_data_length = int.from_bytes(data[offset + 2 : offset + 4], "little")
         offset += 4
+        if read_data_length == 0 or read_data_length % 2 != 0:
+            raise SlmpError(f"label random read response data length must be positive and even: {read_data_length}")
         if offset + read_data_length > len(data):
             raise SlmpError(
                 "label random read response truncated in data payload: "

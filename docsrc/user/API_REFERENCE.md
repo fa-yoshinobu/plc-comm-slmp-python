@@ -49,6 +49,15 @@ plain canonical device addresses.
 | Remote CPU control | `remote_run`, `remote_stop`, `remote_pause`, `remote_latch_clear`, `remote_reset` |
 | Remote password | `remote_password_unlock`, `remote_password_lock` |
 
+Array label `unit_specification` is `0` for a logical bit count and `1` for a
+logical byte count. Both forms occupy whole two-byte wire units: bit counts use
+`ceil(array_data_length / 16) * 2` bytes and byte counts use
+`ceil(array_data_length / 2) * 2` bytes. The logical length must be positive,
+and `write_array_labels` requires the exact padded buffer length. Random label
+read and write data lengths must also be positive and even. Read responses must
+match the requested count and, for array labels, each requested unit and
+logical length; malformed or trailing data raises `SlmpError`.
+
 ## High-Level Helpers
 
 | Operation | Public API |
@@ -101,6 +110,14 @@ end-code responses; inspect `end_code` and `error_info` for PLC errors.
 
 The docs site also renders the installed package with mkdocstrings so class,
 function, and dataclass signatures are searchable from the site API reference.
+
+## Request payload limits
+
+TCP command payloads are limited to 65,529 bytes. UDP command payloads are limited to 65,492 bytes
+for 3E and 65,488 bytes for 4E so the complete frame fits one datagram. Oversized sync and async
+requests fail with `ValueError` before transport, trace publication, or 4E serial allocation and
+are never truncated or split automatically. Label builders enforce their aggregate size; their
+largest protocol-representable even payload is 65,528 bytes.
 
 ## Traffic Statistics
 

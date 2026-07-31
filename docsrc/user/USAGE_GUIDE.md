@@ -564,6 +564,17 @@ closes the transport. This prevents a possible reset NG response from being
 mistaken for the next 3E response. Open a new connection and verify the PLC
 state before continuing; the return value confirms transmission, not PLC
 execution.
+## Request payload limits
+
+One SLMP request can carry at most 65,529 command-payload bytes over TCP. UDP must also fit one
+complete datagram, so the command-payload maximum is 65,492 bytes for 3E and 65,488 bytes for 4E.
+Array and random label requests use even-sized payloads and therefore have a largest
+protocol-representable payload of 65,528 bytes before the lower UDP limit is applied.
+
+Sync and async clients raise `ValueError` before connection, send, traffic counters, trace state,
+or 4E serial allocation. Requests are never truncated or split automatically; applications that
+issue several requests must define ordering, partial-success, and write-atomicity behavior.
+
 ## Traffic statistics
 
 Call `client.traffic_stats()` for an immutable client-lifetime snapshot of `request_count`,

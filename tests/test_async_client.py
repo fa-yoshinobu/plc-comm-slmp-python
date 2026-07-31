@@ -117,6 +117,36 @@ async def test_async_traffic_stats_count_complete_exchange_and_timeout_after_sen
 
 
 @pytest.mark.asyncio
+async def test_async_udp_payload_limit_rejects_before_serial_or_connection() -> None:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="udp",
+        default_target=target,
+        plc_profile="melsec:iq-r",
+    )
+    frames: list[bytes] = []
+
+    async def exchange(frame: bytes) -> bytes:
+        frames.append(frame)
+        return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+
+    client._send_and_receive = exchange  # type: ignore[method-assign]
+    await client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=bytes(65488))
+    assert len(frames[0]) == 65507
+
+    serial_before = client._serial
+    stats_before = client.traffic_stats()
+    with pytest.raises(ValueError, match="actual=65489, maximum=65488"):
+        await client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=bytes(65489))
+    assert client._serial == serial_before
+    assert client.traffic_stats() == stats_before
+    assert client._writer is None
+    assert client._udp_transport is None
+
+
+@pytest.mark.asyncio
 async def test_async_raise_on_error_requires_real_booleans_before_transport() -> None:
     target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
     with pytest.raises(ValueError, match="raise_on_error must be a boolean"):

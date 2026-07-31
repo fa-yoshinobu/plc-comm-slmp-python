@@ -685,6 +685,54 @@ class TestReceiveHelpers(unittest.TestCase):
         self.assertGreater(stats.tx_bytes, 0)
         self.assertEqual(stats.rx_bytes, 0)
 
+    def test_request_payload_boundaries_precede_transport_trace_and_serial(self) -> None:
+        target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+        cases = (
+            ("tcp", "melsec:qnu", 65529, 65544),
+            ("tcp", "melsec:iq-r", 65529, 65548),
+            ("udp", "melsec:qnu", 65492, 65507),
+            ("udp", "melsec:iq-r", 65488, 65507),
+        )
+        for transport, profile, maximum, frame_length in cases:
+            with self.subTest(transport=transport, profile=profile):
+                traces: list[object] = []
+                client = SlmpClient(
+                    "127.0.0.1",
+                    1025,
+                    transport=transport,
+                    default_target=target,
+                    plc_profile=profile,
+                    _maintainer_trace_hook=traces.append,
+                )
+                frames: list[bytes] = []
+
+                def exchange(
+                    frame: bytes,
+                    *,
+                    captured_frames: list[bytes] = frames,
+                    current_frame_type: FrameType = client.frame_type,
+                ) -> bytes:
+                    captured_frames.append(frame)
+                    if current_frame_type == FrameType.FRAME_4E:
+                        return _build_4e_response(int.from_bytes(frame[2:4], "little"), b"")
+                    return _build_3e_response(b"")
+
+                client._send_and_receive = exchange  # type: ignore[method-assign]
+                client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=bytes(maximum))
+                self.assertEqual(len(frames[0]), frame_length)
+                length_offset = 11 if client.frame_type == FrameType.FRAME_4E else 7
+                self.assertEqual(int.from_bytes(frames[0][length_offset : length_offset + 2], "little"), maximum + 6)
+
+                serial_before = client._serial
+                stats_before = client.traffic_stats()
+                trace_count_before = len(traces)
+                with self.assertRaisesRegex(ValueError, f"actual={maximum + 1}, maximum={maximum}"):
+                    client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=bytes(maximum + 1))
+                self.assertEqual(client._serial, serial_before)
+                self.assertEqual(client.traffic_stats(), stats_before)
+                self.assertEqual(len(traces), trace_count_before)
+                self.assertIsNone(client._sock)
+
     def test_sync_interrupt_after_send_closes_transport_generation(self) -> None:
         sock = _InterruptSocket([])
         client = SlmpClient(
@@ -3759,10 +3807,63 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "abbreviation points"):
             _operations.build_label_read_random_payload(["FullLabel"], abbreviation_labels=["Root"] * 65536)
 
+    def test_label_payload_builders_enforce_aggregate_protocol_boundary(self) -> None:
+        payloads = (
+            _operations.build_array_label_read_payload(
+                [LabelArrayReadPoint(label="A" * 32759, unit_specification=1, array_data_length=1)]
+            ),
+            _operations.build_array_label_write_payload(
+                [
+                    LabelArrayWritePoint(
+                        label="A",
+                        unit_specification=1,
+                        array_data_length=65516,
+                        data=bytes(65516),
+                    )
+                ]
+            ),
+            _operations.build_label_read_random_payload(["A" * 32761]),
+            _operations.build_label_write_random_payload([LabelRandomWritePoint(label="A", data=bytes(65518))]),
+        )
+        self.assertEqual([len(payload) for payload in payloads], [65528] * 4)
+
+        oversized_builders = (
+            lambda: _operations.build_array_label_read_payload(
+                [LabelArrayReadPoint(label="A" * 32760, unit_specification=1, array_data_length=1)]
+            ),
+            lambda: _operations.build_array_label_write_payload(
+                [
+                    LabelArrayWritePoint(
+                        label="A",
+                        unit_specification=1,
+                        array_data_length=65518,
+                        data=bytes(65518),
+                    )
+                ]
+            ),
+            lambda: _operations.build_label_read_random_payload(["A" * 32762]),
+            lambda: _operations.build_label_write_random_payload([LabelRandomWritePoint(label="A", data=bytes(65520))]),
+            lambda: _operations.build_label_read_random_payload(["A", "B"], abbreviation_labels=["R" * 32761]),
+            lambda: _operations.build_label_read_random_payload(["A" * 16381, "B" * 16381]),
+        )
+        for build in oversized_builders:
+            with self.subTest(build=build), self.assertRaisesRegex(ValueError, r"maximum=65529"):
+                build()
+
+        for length in (65536, 65537):
+            with self.subTest(length=length), self.assertRaisesRegex(ValueError, "write data length"):
+                _operations.build_label_write_random_payload([LabelRandomWritePoint(label="A", data=bytes(length))])
+
     def test_label_response_parsers(self) -> None:
         """Test test_label_response_parsers."""
         array_resp = b"\x02\x00" + b"\x02\x01\x02\x00\x44\x00" + b"\x01\x00\x01\x00\x01\x00"
-        parsed_array = _operations.parse_array_label_read_response(array_resp, expected_points=2)
+        parsed_array = _operations.parse_array_label_read_response(
+            array_resp,
+            requested_points=[
+                LabelArrayReadPoint(label="Byte2", unit_specification=1, array_data_length=2),
+                LabelArrayReadPoint(label="Bit1", unit_specification=0, array_data_length=1),
+            ],
+        )
         self.assertEqual(len(parsed_array), 2)
         self.assertIsInstance(parsed_array[0], LabelArrayReadResult)
         self.assertEqual(parsed_array[0].data_type_id, 0x02)
@@ -3780,6 +3881,104 @@ class TestDeviceApi(unittest.TestCase):
         self.assertEqual(parsed_random[0].data, b"\x01\x00")
         self.assertEqual(parsed_random[1].data_type_id, 0x02)
         self.assertEqual(parsed_random[1].data, b"\x31\x00")
+
+    def test_label_array_lengths_use_padded_two_byte_wire_units(self) -> None:
+        """Array label logical lengths must map to the protocol's padded wire units."""
+        cases = (
+            (0, 1, 2),
+            (0, 6, 2),
+            (0, 16, 2),
+            (0, 17, 4),
+            (0, 32, 4),
+            (1, 1, 2),
+            (1, 2, 2),
+            (1, 3, 4),
+            (1, 4, 4),
+        )
+        for unit, logical_length, wire_bytes in cases:
+            with self.subTest(unit=unit, logical_length=logical_length):
+                self.assertEqual(slmp.core._label_array_data_bytes(unit, logical_length), wire_bytes)
+                payload = _operations.build_array_label_write_payload(
+                    [
+                        LabelArrayWritePoint(
+                            label="LabelA",
+                            unit_specification=unit,
+                            array_data_length=logical_length,
+                            data=bytes(wire_bytes),
+                        )
+                    ]
+                )
+                self.assertTrue(payload.endswith(bytes(wire_bytes)))
+
+        official_six_bit = b"\x01\x00\x01\x00\x06\x00\x00\x00"
+        result = _operations.parse_array_label_read_response(
+            official_six_bit,
+            requested_points=[LabelArrayReadPoint(label="Bit6", unit_specification=0, array_data_length=6)],
+        )
+        self.assertEqual(result[0].data, b"\x00\x00")
+
+    def test_invalid_label_write_shapes_are_rejected_before_transport(self) -> None:
+        """Invalid logical and wire lengths do not issue requests."""
+        client = FakeClient()
+        invalid_calls = (
+            lambda: client.read_array_labels(
+                [LabelArrayReadPoint(label="Zero", unit_specification=0, array_data_length=0)]
+            ),
+            lambda: client.read_array_labels(
+                [LabelArrayReadPoint(label="BadUnit", unit_specification=2, array_data_length=1)]
+            ),
+            lambda: client.write_array_labels(
+                [LabelArrayWritePoint(label="BadUnit", unit_specification=2, array_data_length=1, data=bytes(2))]
+            ),
+            lambda: client.write_array_labels(
+                [LabelArrayWritePoint(label="Bit6", unit_specification=0, array_data_length=6, data=bytes(12))]
+            ),
+            lambda: client.write_array_labels(
+                [LabelArrayWritePoint(label="Byte3", unit_specification=1, array_data_length=3, data=bytes(3))]
+            ),
+            lambda: client.write_random_labels([LabelRandomWritePoint(label="Empty", data=b"")]),
+            lambda: client.write_random_labels([LabelRandomWritePoint(label="Odd", data=bytes(3))]),
+        )
+        for call in invalid_calls:
+            with self.subTest(call=call), self.assertRaises(ValueError):
+                call()
+        self.assertIsNone(client.last_request)
+
+    def test_label_response_parsers_reject_uncorrelated_or_malformed_payloads(self) -> None:
+        """Malformed label payloads are consistently surfaced as protocol errors."""
+        requested = [LabelArrayReadPoint(label="Bit6", unit_specification=0, array_data_length=6)]
+        array_cases = (
+            b"\x00\x00",
+            b"\x01\x00\x01\x02\x06\x00\x00\x00",
+            b"\x01\x00\x01\x00\x06",
+            b"\x01\x00\x01\x00\x00\x00",
+            b"\x01\x00\x01\x00\x02",
+            b"\x01\x00\x01\x01\x06\x00" + bytes(6),
+            b"\x01\x00\x01\x00\x05\x00\x00\x00",
+            b"\x01\x00\x01\x00\x06\x00\x00",
+            b"\x01\x00\x01\x00\x06\x00\x00\x00\xff",
+        )
+        for payload in array_cases:
+            with self.subTest(payload=payload), self.assertRaises(SlmpError):
+                _operations.parse_array_label_read_response(payload, requested_points=requested)
+
+        random_cases = (
+            b"\x00\x00",
+            b"\x01\x00\x01\x00\x00\x00",
+            b"\x01\x00\x01\x00\x03\x00\x00\x00\x00",
+            b"\x01\x00\x01\x00\x02\x00\x00",
+            b"\x01\x00\x01\x00\x02\x00\x00\x00\xff",
+        )
+        for payload in random_cases:
+            with self.subTest(payload=payload), self.assertRaises(SlmpError):
+                _operations.parse_label_read_random_response(payload, expected_points=1)
+
+        preserved = _operations.parse_label_read_random_response(
+            b"\x01\x00\xfe\xff\x02\x00\x31\x00",
+            expected_points=1,
+        )
+        self.assertEqual(preserved[0].data_type_id, 0xFE)
+        self.assertEqual(preserved[0].spare, 0xFF)
 
     def test_label_typed_methods_issue_requests(self) -> None:
         """Test test_label_typed_methods_issue_requests."""

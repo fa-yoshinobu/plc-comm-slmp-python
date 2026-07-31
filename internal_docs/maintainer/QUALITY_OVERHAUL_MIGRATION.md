@@ -185,3 +185,90 @@ Acceptance evidence:
 
 Disposition: all supplemental live checks passed. The `R32768` result is PLC-side address evidence,
 not authority to add a communication-library profile-range guard.
+
+## PY-LABEL-001 — Deterministic label-command wire contract
+
+Scope: sync and async array/random label read and write APIs.
+
+Target contract: implement `GOAL-SLMP-LABEL-001` from the workspace decision record. Unit `0` is a
+logical bit count padded per 16 bits, unit `1` is a logical byte count padded per two bytes, caller
+write buffers are exact and even, and response count/metadata/length/trailing data are validated.
+The sync and async APIs snapshot request metadata before communication so correlation is stable.
+
+Compatibility impact: zero lengths, odd random-label data, unpadded array data, and malformed or
+uncorrelated responses that were previously tolerated now fail before transport or as `SlmpError`.
+
+Acceptance criteria:
+
+1. The shared bit and byte boundary vectors produce the approved padded wire lengths.
+2. Invalid caller data produces no request in the typed sync API and uses the same builder in async.
+3. Response count, array metadata, positive/even length, truncation, and full consumption are checked.
+4. Unknown data type IDs and random spare values remain observable.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added for every local acceptance criterion.
+- [x] Ruff, mypy, complete tests, build, and package checks passed.
+- [x] Codex self-review completed and accepted findings corrected.
+- [x] Live PLC verification is not required for deterministic arithmetic and injected response vectors.
+- [x] Documentation, migration note, changelog, and package contents agree.
+- [x] Final acceptance verified.
+
+Verification evidence:
+
+- Ruff lint/format, mypy over 13 source files, and the public-documentation coverage check passed.
+- Pytest passed 418 tests and 257 subtests.
+- The final source state produced both sdist and wheel; Twine accepted both artifacts.
+- The no-auto-publish guard and `git diff --check` passed.
+
+Self-review disposition:
+
+- Accepted: request and response code duplicated the same wire-length arithmetic. One pure
+  calculator now owns the formula and both paths use it.
+- Accepted: invalid request-unit and truncated item-header cases were missing from the first test
+  draft. Those cases were added and reverified.
+- Rejected: a shallow-snapshot mutation concern does not apply because label request points are
+  frozen dataclasses; tuple conversion snapshots the sequence and the element state is immutable.
+- No duplicate or deferred finding changes this contract.
+
+## PY-REQUEST-001 — Representable and transport-safe request payloads
+
+Scope: sync and async request submission plus Array/Random Label Read/Write payload construction.
+
+Target contract: implement `GOAL-SLMP-REQUEST-001` from the workspace decision record. TCP command
+payloads are limited to 65,529 bytes. UDP 3E/4E payloads are limited to 65,492/65,488 bytes so the
+complete frame is at most 65,507 bytes. Rejection precedes connection, send, counters, trace state,
+and 4E serial allocation. Label aggregate length is checked before joining the complete payload.
+
+Compatibility impact: oversized inputs now raise `ValueError` deterministically and are never
+truncated or split automatically.
+
+Acceptance criteria:
+
+1. TCP 3E/4E and UDP 3E/4E boundary frames encode the exact request-data length and UDP datagram size.
+2. Sync and async boundary-plus-one rejection preserves serial, counters, trace, and connection state.
+3. All four label builders accept 65,528 bytes and reject 65,530-byte aggregates, including
+   abbreviation, multiple-point, and write-data cases.
+4. Random Label Write rejects individual data lengths 65,536 and 65,537 before wire conversion.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added for every local acceptance criterion.
+- [x] Ruff, mypy, complete tests, build, and package checks passed.
+- [x] Codex self-review completed and accepted findings corrected.
+- [x] Live PLC verification is not required for deterministic field/datagram arithmetic.
+- [x] Documentation, migration note, changelog, and generated API agree.
+- [x] Final acceptance verified.
+
+Verification evidence:
+
+- `run_ci.bat` passed Ruff lint/format, mypy over 13 source files, public-API documentation coverage,
+  421 tests, and 269 subtests.
+- Isolated sdist and wheel builds succeeded and Twine accepted both artifacts.
+- Canonical profile drift, the no-auto-publish guard, and `git diff --check` passed.
+
+Self-review disposition:
+
+- Accepted: sync and async send-only paths initially needed the same pre-serial guard as ordinary
+  request/response paths. The shared validator now covers all four paths and was reverified.
+- Accepted: aggregate growth must be bounded while appending chunks, not only after `b"".join`, to
+  avoid constructing an oversized complete payload. All four label builders use the bounded helper.
+- No rejected, duplicate, or deferred finding changes this contract.

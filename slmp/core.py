@@ -41,6 +41,9 @@ from .errors import (
     SlmpUnsupportedDeviceError,
 )
 
+_MAX_REQUEST_PAYLOAD_LENGTH = 0xFFFF - 6
+_MAX_IPV4_UDP_DATAGRAM_LENGTH = 65_507
+
 
 def _resolve_port(port: int | None, transport: str) -> int:
     if not isinstance(transport, str) or transport.strip().lower() not in {"tcp", "udp"}:
@@ -48,6 +51,18 @@ def _resolve_port(port: int | None, transport: str) -> int:
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("port is required and must be an integer in range 1..65535")
     return port
+
+
+def _request_payload_limit(transport: str, frame_type: FrameType) -> int:
+    if transport != "udp":
+        return _MAX_REQUEST_PAYLOAD_LENGTH
+    request_header_size = 19 if frame_type == FrameType.FRAME_4E else 15
+    return _MAX_IPV4_UDP_DATAGRAM_LENGTH - request_header_size
+
+
+def _validate_request_payload_length(payload_length: int, maximum: int = _MAX_REQUEST_PAYLOAD_LENGTH) -> None:
+    if payload_length < 0 or payload_length > maximum:
+        raise ValueError(f"request payload length out of range: actual={payload_length}, maximum={maximum}")
 
 
 @dataclass(frozen=True)
@@ -1789,9 +1804,15 @@ def _check_label_unit_specification(value: int, name: str) -> None:
 def _label_array_data_bytes(unit_specification: int, array_data_length: int) -> int:
     _check_label_unit_specification(unit_specification, "unit_specification")
     _check_u16(array_data_length, "array_data_length")
+    if array_data_length == 0:
+        raise ValueError("array_data_length must be in range 1..65535")
+    return _label_array_wire_data_bytes(unit_specification, array_data_length)
+
+
+def _label_array_wire_data_bytes(unit_specification: int, array_data_length: int) -> int:
     if unit_specification == 0:
-        return array_data_length * 2
-    return array_data_length
+        return ((array_data_length + 15) // 16) * 2
+    return ((array_data_length + 1) // 2) * 2
 
 
 def _encode_remote_password_payload(password: str, *, series: PLCSeries) -> bytes:

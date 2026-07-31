@@ -34,11 +34,13 @@ from .core import (
     _format_semantic_extended_device_key,
     _parse_extended_device,
     _raise_response_error,
+    _request_payload_limit,
     _require_explicit_plc_profile_for_xy,
     _resolve_connection_profile,
     _resolve_extended_device_and_extension,
     _resolve_port,
     _SlmpTraceFrame,
+    _validate_request_payload_length,
     decode_cpu_operation_state,
     decode_response,
     encode_request,
@@ -308,6 +310,7 @@ class AsyncSlmpClient:
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         if raise_on_error is not None and type(raise_on_error) is not bool:
             raise ValueError("raise_on_error must be a boolean when provided")
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
@@ -885,9 +888,10 @@ class AsyncSlmpClient:
         self, points: Sequence[LabelArrayReadPoint], *, abbreviation_labels: Sequence[str] = ()
     ) -> list[LabelArrayReadResult]:
         """Read array labels from the PLC."""
-        request = _operations.build_read_array_labels_request(points, abbreviation_labels=abbreviation_labels)
+        requested_points = tuple(points)
+        request = _operations.build_read_array_labels_request(requested_points, abbreviation_labels=abbreviation_labels)
         resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.parse_array_label_read_response(resp.data, expected_points=len(points))
+        return _operations.parse_array_label_read_response(resp.data, requested_points=requested_points)
 
     async def write_array_labels(
         self, points: Sequence[LabelArrayWritePoint], *, abbreviation_labels: Sequence[str] = ()
@@ -900,9 +904,12 @@ class AsyncSlmpClient:
         self, labels: Sequence[str], *, abbreviation_labels: Sequence[str] = ()
     ) -> list[LabelRandomReadResult]:
         """Read random labels from the PLC."""
-        request = _operations.build_read_random_labels_request(labels, abbreviation_labels=abbreviation_labels)
+        requested_labels = tuple(labels)
+        request = _operations.build_read_random_labels_request(
+            requested_labels, abbreviation_labels=abbreviation_labels
+        )
         resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.parse_label_read_random_response(resp.data, expected_points=len(labels))
+        return _operations.parse_label_read_random_response(resp.data, expected_points=len(requested_labels))
 
     async def write_random_labels(
         self, points: Sequence[LabelRandomWritePoint], *, abbreviation_labels: Sequence[str] = ()
@@ -1049,6 +1056,7 @@ class AsyncSlmpClient:
             or not 0 <= monitoring_timer <= 0xFFFF
         ):
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
         serial_no = self._next_serial() if serial is None else serial
         target_info = target or self.default_target
         monitor = self.monitoring_timer if monitoring_timer is None else monitoring_timer

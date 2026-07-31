@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Docs: README documentation links now include the shared Performance and Choosing a Language pages, and package registry metadata was expanded for discoverability. No functional change.
 
+### BREAKING
+
+- Library: Array label lengths now use the SLMP bit/byte logical-length contract and two-byte wire padding. Zero logical lengths, non-exact array write buffers, and zero or odd random-label write buffers are rejected before transport.
+- Library: Sync and async requests that exceed the 16-bit SLMP data-length field or one complete UDP datagram are rejected before transport and before 4E serial allocation. Oversized label aggregates now fail deterministically.
+
+### Fixed
+
+- Library: Sync and async array label reads now accept the documented six-bit/two-byte response shape and reject count, unit, logical-length, truncation, and trailing-data mismatches. Random label reads reject zero or odd result lengths while preserving unknown data type IDs and spare values.
+- Library: Enforced command-payload limits of 65,529 bytes over TCP, 65,492 bytes for UDP 3E, and 65,488 bytes for UDP 4E without truncation or automatic splitting.
+
+### Tests
+
+- Tests: Added bit and byte boundary vectors, pre-transport validation checks, and malformed label-response coverage.
+- Tests: Added sync/async transport boundaries, no-serial/no-trace/no-stat rejection checks, and aggregate limits for all four label builders.
+
 ## [4.0.1] - 2026-07-29
 
 - Release: Bumped package metadata and `slmp.__version__` to `4.0.1`.
