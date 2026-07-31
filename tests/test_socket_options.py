@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from slmp._socket_options import configure_tcp_keepalive
 from slmp.client import SlmpClient
 from slmp.core import SlmpTarget
+from slmp.errors import SlmpTransportError
 
 
 class _CaptureSocket:
@@ -52,8 +53,9 @@ def test_tcp_connect_closes_socket_when_required_keepalive_setup_fails() -> None
     ):
         try:
             client.connect()
-        except OSError as error:
-            assert str(error) == "keepalive unavailable"
+        except SlmpTransportError as error:
+            assert str(error) == "SLMP connection failed: keepalive unavailable"
+            assert isinstance(error.__cause__, OSError)
         else:  # pragma: no cover - protects the fail-closed contract
             raise AssertionError("keepalive setup failure was not raised")
 

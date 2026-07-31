@@ -1239,14 +1239,15 @@ def decode_device_dwords(data: bytes) -> list[int]:
     return [int.from_bytes(data[i : i + 4], "little") for i in range(0, len(data), 4)]
 
 
-def pack_bit_values(values: Iterable[bool | int]) -> bytes:
+def pack_bit_values(values: Iterable[bool]) -> bytes:
     """Pack a sequence of bit values into binary format.
 
     In SLMP binary bit-unit access, each byte contains two points.
     The high nibble stores the first point, and the low nibble stores the second.
 
     Args:
-        values: An iterable of boolean or integer (0/1) values.
+        values: An iterable of Boolean values. Integers, including 0 and 1,
+            are rejected.
 
     Returns:
         Packed binary data.
@@ -1271,18 +1272,23 @@ def unpack_bit_values(data: bytes, count: int) -> list[bool]:
         A list of boolean values.
 
     Raises:
-        SlmpError: If the data length is insufficient for the requested count.
+        SlmpError: If the data length or any used bit nibble is invalid.
     """
+    expected_bytes = (count + 1) // 2
+    if len(data) != expected_bytes:
+        raise SlmpError(f"bit data length mismatch: expected={expected_bytes}, actual={len(data)}")
+
     result: list[bool] = []
     for byte in data:
-        result.append(bool((byte >> 4) & 0x1))  # Upper 4 bits = first device
-        if len(result) >= count:
-            return result
-        result.append(bool(byte & 0x1))  # Lower 4 bits = second device
-        if len(result) >= count:
-            return result
-    if len(result) != count:
-        raise SlmpError(f"bit data too short: needed {count}, got {len(result)}")
+        high = (byte >> 4) & 0x0F
+        if high not in (0, 1):
+            raise SlmpError(f"bit data contains non-binary high nibble: 0x{high:X}")
+        result.append(high == 1)
+        if len(result) < count:
+            low = byte & 0x0F
+            if low not in (0, 1):
+                raise SlmpError(f"bit data contains non-binary low nibble: 0x{low:X}")
+            result.append(low == 1)
     return result
 
 
@@ -1316,12 +1322,10 @@ def _require_write_u32(value: object, name: str = "value") -> int:
 
 
 def _require_write_bit(value: object, name: str = "value") -> int:
-    """Return 0/1 for an explicit boolean or exact integer bit value."""
+    """Return 0/1 for an explicit native Boolean bit value."""
     if type(value) is bool:
         return 1 if value else 0
-    if type(value) is int and value in (0, 1):
-        return value
-    raise ValueError(f"{name} must be bool or the integer 0 or 1: {value!r}")
+    raise ValueError(f"{name} must be bool: {value!r}")
 
 
 def _check_points_u16(points: int, name: str) -> None:

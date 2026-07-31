@@ -30,7 +30,13 @@ from slmp import SlmpConnectionOptions, SlmpTarget
 
 
 def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     print(options.plc_profile)
 
 
@@ -45,7 +51,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_typed, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         value = await read_typed(client, "D100", "U")
         print(f"D100={value}")
@@ -72,7 +84,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_type
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         original = await read_typed(client, "D100", "U")
         try:

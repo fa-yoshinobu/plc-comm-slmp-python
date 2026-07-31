@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 from .error_codes import get_end_code_name, is_remote_password_end_code
 
@@ -64,8 +65,39 @@ class SlmpError(Exception):
         return self.end_code is not None and is_remote_password_end_code(self.end_code)
 
 
-class SlmpTimeoutError(SlmpError):
+class SlmpTimeoutError(SlmpError, TimeoutError):
     """Raised when one SLMP request exchange reaches its absolute deadline."""
+
+
+class SlmpClosedError(SlmpError, ConnectionError):
+    """Raised when a local close rejects an active or queued operation."""
+
+
+class SlmpNotConnectedError(SlmpError, ConnectionError):
+    """Raised when a required transport is unexpectedly unavailable."""
+
+
+class SlmpTransportError(SlmpError, ConnectionError):
+    """Raised for transport failures that are not local-close or timeout events."""
+
+
+class SlmpOutcomeUnknownReason(str, Enum):
+    """Machine-readable reasons why a state-changing outcome is unknown."""
+
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+    CLOSED = "closed"
+    TRANSPORT = "transport"
+    PROTOCOL = "protocol"
+
+
+class SlmpOutcomeUnknownError(SlmpError):
+    """Raised when a state-changing request may have reached the PLC."""
+
+    def __init__(self, message: str, *, reason: SlmpOutcomeUnknownReason, cause: BaseException) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.cause = cause
 
 
 class SlmpUnsupportedDeviceError(ValueError):

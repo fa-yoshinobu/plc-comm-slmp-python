@@ -12,7 +12,7 @@ from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from typing import Any, NoReturn
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import slmp.core
 from slmp import _operations, cli
@@ -55,7 +55,7 @@ from slmp.core import (
     parse_device,
     unpack_bit_values,
 )
-from slmp.errors import SlmpProfileFeatureError, SlmpTimeoutError
+from slmp.errors import SlmpOutcomeUnknownError, SlmpOutcomeUnknownReason, SlmpProfileFeatureError, SlmpTimeoutError
 
 _SELF_ROUTE_ARGS = [
     "--network",
@@ -542,13 +542,19 @@ class TestReceiveHelpers(unittest.TestCase):
             with self.subTest(path="block-word", value=value):
                 with self.assertRaises(ValueError):
                     client.write_block(word_blocks=[("D0", [value])])  # type: ignore[list-item]
-        for value in ("false", "0", 2, -1, 0.5, object()):
+        for value in (0, 1, "false", "0", 2, -1, 0.5, None, b"\x00", object()):
             with self.subTest(path="direct-bit", value=value):
                 with self.assertRaises(ValueError):
                     client.write_devices("M0", [value], bit_unit=True)  # type: ignore[list-item]
             with self.subTest(path="random-bit", value=value):
                 with self.assertRaises(ValueError):
                     client.write_random_bits([("M0", value)])  # type: ignore[list-item]
+            with self.subTest(path="extended-direct-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_devices_ext(r"U3E0\M0", [value], bit_unit=True)  # type: ignore[list-item]
+            with self.subTest(path="extended-random-bit", value=value):
+                with self.assertRaises(ValueError):
+                    client.write_random_bits_ext([(r"U3E0\M0", value)])  # type: ignore[list-item]
         for value in (-1, 0x1_0000_0000, 1.5, "1", True):
             with self.subTest(path="dword", value=value):
                 with self.assertRaises(ValueError):
@@ -1002,7 +1008,7 @@ class TestCodec(unittest.TestCase):
             b"\x00\x80\x00\x00\xaf\x00",
         )
 
-        raw = pack_bit_values([1, 0, 1, 1, 0])
+        raw = pack_bit_values([True, False, True, True, False])
         self.assertEqual(raw, b"\x10\x11\x00")
         bits = unpack_bit_values(raw, 5)
         self.assertEqual(bits, [True, False, True, True, False])
@@ -3185,6 +3191,25 @@ class TestDeviceApi(unittest.TestCase):
 
         self.assertEqual(len(sock.sent), 1)
         self.assertTrue(sock.closed)
+        self.assertIsNone(client._sock)  # type: ignore[attr-defined]
+
+    def test_remote_reset_send_failure_still_closes_transport(self) -> None:
+        sock = MagicMock()
+        sock.sendall.side_effect = OSError("send failed")
+        client = SlmpClient(
+            "127.0.0.1",
+            1025,
+            transport="tcp",
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+        )
+        client._sock = sock  # type: ignore[attr-defined]
+
+        with self.assertRaisesRegex(SlmpOutcomeUnknownError, "outcome is unknown") as raised:
+            client.remote_reset()
+        self.assertIs(raised.exception.reason, SlmpOutcomeUnknownReason.TRANSPORT)
+
+        sock.close.assert_called_once()
         self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_udp_timeout_discards_socket_generation(self) -> None:

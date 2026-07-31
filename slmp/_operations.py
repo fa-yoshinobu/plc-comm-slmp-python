@@ -6,6 +6,7 @@ import math
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, PLCSeries
 from .core import (
@@ -206,6 +207,13 @@ def decode_read_devices_response(
 ) -> list[int] | list[bool]:
     """Decode a direct device read response into word or bit values."""
 
+    if response.end_code != 0:
+        raise SlmpError(
+            f"device read failed with end_code=0x{response.end_code:04X}",
+            end_code=response.end_code,
+            data=response.data,
+            error_info=response.error_info,
+        )
     if bit_unit:
         return unpack_bit_values(response.data, points)
     words = decode_device_words(response.data)
@@ -253,7 +261,10 @@ def build_write_devices_request(
     payload += encode_device_spec(ref, series=effective_series)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
-        payload += pack_bit_values(values)
+        # pack_bit_values performs the exact-bool runtime check; this cast only
+        # narrows the shared word/bit builder's static type after bit_unit chose
+        # the Boolean branch.
+        payload += pack_bit_values(cast(Sequence[bool], values))
     else:
         for index, value in enumerate(values):
             payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
@@ -424,7 +435,7 @@ def build_write_devices_ext_request(
     payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
-        payload += pack_bit_values(values)
+        payload += pack_bit_values(cast(Sequence[bool], values))
     else:
         for index, value in enumerate(values):
             payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
@@ -907,7 +918,7 @@ def build_write_random_words_ext_request(
 
 
 def build_write_random_bits_request(
-    bit_values: Mapping[str | DeviceRef, bool | int] | Sequence[tuple[str | DeviceRef, bool | int]],
+    bit_values: Mapping[str | DeviceRef, bool] | Sequence[tuple[str | DeviceRef, bool]],
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,
@@ -942,7 +953,7 @@ def build_write_random_bits_request(
 
 
 def build_write_random_bits_ext_request(
-    bit_values: Sequence[tuple[str | DeviceRef, bool | int, _ExtensionSpec]],
+    bit_values: Sequence[tuple[str | DeviceRef, bool, _ExtensionSpec]],
     *,
     series: PLCSeries | str | None,
     default_series: PLCSeries,

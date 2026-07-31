@@ -66,7 +66,11 @@ Specify choices that change the command meaning or destination: `bit_unit`, remo
 
 Replace chunked helpers and automatic mixed-block splitting with explicit application-controlled requests. If a logical read spans requests, the application must define snapshot/version checks. If a logical write spans requests, it must define partial-success and retry handling.
 
-Named reads, polling cycles, and named writes are also single-request-or-reject. A named read/poll accepts only entries that fit one random-read request. A named write accepts one word/DWord random family or one random-bit family. Other routes must be called explicitly by the application.
+Named reads and polling cycles may split only at independent entry boundaries
+under `PY-AGGREGATE-002`; they preserve declared order and execute under one
+exclusive ordinary-client turn. Named writes remain single-request-or-reject:
+one word/DWord random family or one random-bit family. Other routes must be
+called explicitly by the application.
 
 Random read may omit either the word or DWord device collection. At least one valid device is required across both categories; all-empty and invalid supplied collections fail before transport. The result always contains both mappings, with the unused category represented by an empty mapping. The same rule applies to semantic Extended Device random reads.
 
@@ -271,4 +275,267 @@ Self-review disposition:
   request/response paths. The shared validator now covers all four paths and was reverified.
 - Accepted: aggregate growth must be bounded while appending chunks, not only after `b"".join`, to
   avoid constructing an oversized complete payload. All four label builders use the bounded helper.
+- No rejected, duplicate, or deferred finding changes this contract.
+
+## PY-PACKAGE-001 — Consumer-real package and worktree source gates
+
+Scope: wheel/sdist construction and inspection, isolated consumer validation,
+and self-contained source-archive validation.
+
+Target contract: package evidence must come from a real wheel installed into a
+fresh virtual environment while checkout and `PYTHONPATH` imports are disabled.
+The source-archive script must construct its own synthetic Git tree from the
+current worktree, including modified, untracked, and deleted paths, and the
+extracted result must pass both the full repository gate and installed-wheel
+consumer gate.
+
+Compatibility impact: no runtime or public API behavior changes. Maintainer and
+CI failures are stricter because build-only evidence, checkout imports, or an
+incomplete current-worktree archive can no longer satisfy the release gate.
+
+Acceptance criteria:
+
+1. One real wheel and one sdist are built; consumer-only wheel and sdist
+   inventories reject root maintainer/runner files, credential-like files,
+   caches, and build/release output without excluding intended runtime source.
+2. A fresh virtual environment installs the wheel with no dependencies, and an
+   isolated interpreter proves `slmp` resolves inside that environment while
+   checking public API types and both public RMW FIFO/no-retry docstrings from a
+   generated UTF-8 Python smoke file.
+3. `check_source_archive.ps1 -IncludeWorktree` internally creates a synthetic
+   tree covering modified, untracked, and deleted Git worktree paths without
+   changing the real index.
+4. The extracted source runs the full repository gate and installed-wheel
+   consumer gate under Python 3.10/current.
+
+- [x] Implementation completed in this repository.
+- [x] Tests and gates cover every acceptance criterion.
+- [x] Python 3.10/current repository, package, and source-archive gates passed.
+- [x] Codex self-review completed against artifact boundaries and the actual diff.
+- [x] Live PLC verification is not required for deterministic packaging and archive mechanics.
+- [x] Maintainer notes, changelog, CI, and gate behavior agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+Verification evidence:
+
+- Python 3.10.20 and 3.14.3 each passed the 100-file current-worktree
+  source-archive gate after extraction: Ruff lint/format, mypy over 15 source
+  files, public API doc coverage, 446 tests, and 305 subtests.
+- Each extracted archive built one 22-file wheel and one 28-file sdist. A fresh
+  virtual environment installed the wheel, and isolated mode resolved `slmp`
+  from that environment while reproducing the public API/RMW docstring checks.
+- The no-auto-publish guard, `git diff --check`, temporary-index cleanup, and
+  overhaul-branch check passed.
+
+Self-review disposition:
+
+- Accepted: build and inventory inspection did not prove the built wheel was an
+  importable consumer artifact. The gate now installs it into a fresh virtual
+  environment and uses isolated mode with `PYTHONPATH` removed.
+- Accepted: the public RMW documentation contract was not reproduced by the
+  package gate. Both installed helper docstrings are now checked for FIFO-turn
+  ownership and the no-automatic-retry rule.
+- Accepted: caller-built synthetic tree state was not an enforceable archive
+  mode. The archive script now creates and removes its own temporary index.
+- Accepted: extracted-source validation did not execute the installed-package
+  contract. It now runs the package gate after the full source gate.
+- Accepted: passing a here-string directly to native `python -I -c` on Windows
+  did not preserve the Python quoting, so process success did not prove the
+  intended assertions ran. The gate now writes UTF-8 Python under its disposable
+  work root and executes that file in isolated mode.
+- Accepted: the wheel/sdist inventory guard did not cover all AC9/DIST AC7
+  negative categories. It now also rejects root maintainer/runner files,
+  credential-like files, caches, and build/release output while retaining the
+  intended runtime source and package metadata.
+- No rejected, duplicate, or deferred finding remains for this item.
+
+## PY-SERIAL-002 — Ordinary-client FIFO and close generations
+
+Scope: synchronous and asynchronous ordinary clients; removal of the queued wrapper.
+
+Target contract: every valid operation joins one re-entrant FIFO queue owned by
+the ordinary client. Queue wait does not consume the request exchange deadline.
+Async cancellation before activation removes the waiter without sending.
+`close()` rejects the active and queued transport generation. No second public
+queue wrapper remains.
+
+Compatibility impact: `QueuedAsyncSlmpClient` is removed and
+`open_and_connect()` returns `AsyncSlmpClient`. Operations overtaken by close now
+fail as `SlmpClosedError` instead of running on an implicitly reopened transport.
+
+Acceptance criteria:
+
+1. Five sync and four async arrivals execute in FIFO order; a cancelled async waiter sends nothing.
+2. Local close rejects both active and queued work from the prior generation.
+3. A multi-request helper owns one re-entrant turn without deadlock or interleaving.
+4. Request timeout begins after queue activation and remains one absolute send/response deadline.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required for this deterministic queue/lifecycle contract.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-ERROR-002 — Stable transport and outcome-unknown taxonomy
+
+Scope: sync/async transport exchange and all known state-changing commands.
+
+Target contract: timeout, caller cancellation, local close, not-connected state,
+transport I/O, malformed protocol data, and PLC NG remain distinguishable. If a
+state-changing frame may have been sent and completion is not known, raise
+`SlmpOutcomeUnknownError` with `SlmpOutcomeUnknownReason` and the original cause.
+Do not retry automatically.
+
+Compatibility impact: post-send write/reset failures no longer surface as a
+plain `OSError` or timeout. Callers must verify PLC state before retry.
+
+Acceptance criteria:
+
+1. Public exception types are exported and pairwise machine distinguishable.
+2. Pre-send failures never become outcome-unknown.
+3. Timeout, cancellation, close, transport, and malformed response after possible state-changing send preserve reason and cause.
+4. PLC NG remains a structured `SlmpError`; no automatic retry is introduced.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required for this deterministic error-classification contract.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-AGGREGATE-002 — Read-only entry-boundary aggregation
+
+Scope: `read_named`, `read_named_sync`, and `poll`.
+
+Target contract: snapshot and preflight the full plan before send. An oversized
+read may split only between independent entries, never within a scalar/DWord or
+future string/structure/array/coherence unit. Preserve declared input and wire
+order, hold one ordinary-client turn, stop on first failure, and expose no
+partial normal result. The chunks are explicitly non-atomic. A write requiring
+multiple protocol requests is rejected before send.
+
+Compatibility impact: large named reads previously rejected can now execute as
+ordered chunks. Mixed word/DWord input may use more requests to preserve wire
+timing order. Duplicate result keys are rejected as ambiguous.
+
+Acceptance criteria:
+
+1. Selected-profile maximum and maximum-plus-one vectors produce one and two requests respectively.
+2. Internal request order and result insertion order exactly match declared input order without sorting.
+3. Full validation and request construction completes before the first send.
+4. No operation interleaves between chunks and a later failure returns no partial dictionary.
+5. All write aggregates that need more than one request fail before transport.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required for this deterministic planner/aggregation contract.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+Verification evidence for `PY-SERIAL-002`, `PY-ERROR-002`, and
+`PY-AGGREGATE-002`:
+
+- The source-archive CI gate passed Ruff lint and formatting, mypy over 15
+  source files, public API documentation coverage, 442 tests, and 305 subtests.
+- Python 3.10.20 passed the same 442 tests and 305 subtests.
+- Wheel and sdist construction, package-content validation, Twine checks, and
+  an isolated Python 3.10 wheel import/export/type-marker check passed.
+- The no-auto-publish guard and `git diff --check` passed.
+
+Self-review disposition:
+
+- Accepted: an active request overtaken by local close could initially surface
+  as a transport failure. Generation rechecks now classify it as local close.
+- Accepted: connection failures initially bypassed the exchange classifier.
+  Connection establishment is now inside the classified operation scope.
+- Accepted: send-only tracing initially happened outside the FIFO turn and
+  before transport invalidation. Transport is invalidated first and tracing
+  remains inside the operation turn.
+- Accepted: the first named-read split used only the wire count field instead
+  of the selected profile limit. Planning now uses the profile limit.
+- Accepted: grouping mixed word/DWord entries by protocol category reordered
+  the declared wire sequence. Category transitions now form chunk boundaries.
+- Accepted: sync transport subclass ordering could classify a transport error
+  as malformed protocol data. The classifier order was corrected.
+- Accepted: user documentation and public helper docstrings still called a
+  potentially multi-request named result a snapshot. They now use
+  collection/result terminology while retaining explicit non-atomic timing.
+- Not applicable: the synchronous API has no caller cancellation token; async
+  queued and active cancellation are covered explicitly.
+- No rejected, duplicate, or deferred finding changes these contracts.
+
+## PY-RMW-001 — Explicit bit-in-word read-modify-write turn
+
+Scope: sync/async `write_bit_in_word`, the ordinary-client operation queues,
+public helper docstrings, samples, user docs, and package-consumer behavior.
+
+Target contract: bind and validate the complete device, exact integer bit index,
+exact Boolean value, selected profile, and both direct request paths before the
+first send. Hold one re-entrant ordinary-client FIFO turn across the word read
+and word write in both sync and async clients. This is same-client exclusion,
+not PLC atomicity: another connection or PLC program logic can race, the two
+requests can occur in different PLC scans, a possibly-sent write remains
+outcome-unknown, and no automatic retry is allowed.
+
+Compatibility impact: both public helper names and signatures remain. They now
+reject coercible values and invalid targets before reading, and another
+operation on the same client waits until the complete RMW operation finishes.
+The removed queued wrapper is not reintroduced; samples use ordinary
+`AsyncSlmpClient` FIFO ownership.
+
+Acceptance criteria:
+
+1. Non-integer/Boolean bit indexes, non-Boolean values, non-word devices,
+   profile mismatch, unsupported direct routes, and write policy fail before the
+   first read request.
+2. Sync and async normal-client order is read, write, then any later queued
+   operation, with no nested-queue deadlock.
+3. A possibly-sent write uses `SlmpOutcomeUnknownError`; no automatic retry is
+   introduced.
+4. Public API/usage docs, public helper docstrings, sample language, and
+   changelog state the two-request/non-atomic race and ordinary-client FIFO turn.
+5. Python 3.10/current source gates and an installed wheel consumer reproduce
+   the contract.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required for this deterministic queue/validation contract; existing direct read/write protocol behavior is unchanged.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+Verification evidence:
+
+- The current Python 3.10.20 environment and an isolated Python 3.10 gate passed
+  Ruff lint/format, mypy over 15 source files, public API docstring coverage for
+  206 definitions and 127 methods, 446 tests, and 305 subtests.
+- Wheel/sdist content validation, Twine checks, MkDocs strict, and the
+  no-auto-publish guard passed. An installed Python 3.10 wheel consumer reproduced
+  RMW ordering and rendered the public FIFO/no-retry docstring.
+- A synthetic Git tree containing the complete uncommitted worktree passed the
+  100-file source-archive gate and its extracted full validation.
+- `git diff --check` passed.
+
+Self-review disposition:
+
+- Accepted: sync and async RMW previously acquired a separate ordinary-client
+  turn for each public read/write call. Both now hold one re-entrant aggregate
+  turn around those calls.
+- Accepted: bit indexes accepted `bool` through Python integer subtyping and the
+  value used general truthiness. Exact integer and exact Boolean validation now
+  completes before the first read.
+- Accepted: the async sample still described the removed queued wrapper. It now
+  demonstrates the FIFO owned by ordinary `AsyncSlmpClient`, with a source-level
+  regression test.
+- Accepted: user error/deadline text omitted dedicated transport/lifecycle types,
+  decode coverage, and transport-generation retirement. API, usage, changelog,
+  and public helper docstrings now agree.
+- Accepted: the full format gate exposed pre-existing Markdown code-fence drift;
+  Ruff formatting corrected it without changing the documented contracts.
 - No rejected, duplicate, or deferred finding changes this contract.

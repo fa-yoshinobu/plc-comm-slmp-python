@@ -17,22 +17,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- CI: The package gate now installs the real wheel into an isolated virtual environment with checkout and `PYTHONPATH` imports disabled, runs public API/RMW assertions from a generated UTF-8 Python file, and rejects root maintainer/runner files, credentials, caches, and build/release output from wheel and sdist inventories.
+- Tooling: The source-archive gate can synthesize a Git tree from the complete current worktree, including modified, untracked, and deleted paths, then runs both the full extracted-source gate and installed-wheel consumer gate.
+- BREAKING: Removed `QueuedAsyncSlmpClient`; ordinary sync and async clients now own the FIFO operation queue, and `open_and_connect` returns `AsyncSlmpClient` directly.
+- BREAKING: Local close, not-connected state, transport failure, request timeout, and possibly-applied state changes now have distinct public exception types. `SlmpOutcomeUnknownError` carries a machine-readable reason and original cause; callers must verify state instead of blindly retrying.
+- Library: `close()` rejects the active and queued transport generation. Async cancellation while queued removes the operation without sending, and request deadlines begin only after FIFO activation.
+- Library: `read_named` and `poll` may split oversized read-only aggregates only between independent entries. They preserve declared wire order, hold one exclusive client turn, return only a complete result, and remain explicitly non-atomic across chunks. Multi-request writes remain preflight rejections.
+- Library: `write_bit_in_word` now validates and binds the complete operation before FIFO admission and holds one ordinary-client turn across its read and write. It remains a two-request, non-atomic PLC operation, never retries automatically, and reports possibly-sent writes through `SlmpOutcomeUnknownError`.
+- Docs: Clarified the dedicated closed, not-connected, transport, timeout, and outcome-unknown errors. FIFO wait is outside the request deadline; one absolute deadline covers first send through decode, and timeout retires the transport generation.
+- Tests: Added FIFO, queued cancellation, close-generation, outcome-unknown, aggregate boundary, input-order, and non-interleaving contract coverage.
+
+- Release: Aligned artifact roles so the registry package contains consumer runtime, native API metadata, license, README, and ecosystem-native examples where applicable while excluding repository tests and maintainer tooling; the GitHub source archive retains tracked non-hardware validation and maintainer inputs.
+- Library: Audited every live API that accepts a profile-bound `DeviceRef`: its exact canonical profile, including unit-specific profiles, must equal the client profile before request construction, counters, trace state, serial allocation, or transport activity.
+- Tests: Profile-mismatch coverage verifies pre-transport rejection for sync and async paths without reducing unit profiles to their base family.
 - Docs: README documentation links now include the shared Performance and Choosing a Language pages, and package registry metadata was expanded for discoverability. No functional change.
 
 ### BREAKING
 
+- Library: Every individual bit-write API now accepts native `bool` values only. Integers including `0` and `1`, strings, bytes, `None`, and truthy objects are rejected before request construction or transport; applications must convert their data explicitly.
+- Library: Device-range catalog reads no longer probe candidate addresses or infer a smaller range from PLC errors. Catalogs use only canonical fixed rules and the selected profile's SD-register block, and acquisition errors propagate to the caller.
+- Library: Sync and async TCP/UDP connections are now IPv4-only. IPv6 literals are rejected before socket creation, hostnames use the first IPv4 resolver result, and callers using IPv6 must migrate to IPv4.
 - Library: Array label lengths now use the SLMP bit/byte logical-length contract and two-byte wire padding. Zero logical lengths, non-exact array write buffers, and zero or odd random-label write buffers are rejected before transport.
 - Library: Sync and async requests that exceed the 16-bit SLMP data-length field or one complete UDP datagram are rejected before transport and before 4E serial allocation. Oversized label aggregates now fail deterministically.
+- Library: Semantic device-read helpers no longer decode nonzero-end-code responses when `raise_on_error=False`, and malformed packed-bit payloads that were previously tolerated now raise `SlmpError`.
 
 ### Fixed
 
 - Library: Sync and async array label reads now accept the documented six-bit/two-byte response shape and reject count, unit, logical-length, truncation, and trailing-data mismatches. Random label reads reject zero or odd result lengths while preserving unknown data type IDs and spare values.
 - Library: Enforced command-payload limits of 65,529 bytes over TCP, 65,492 bytes for UDP 3E, and 65,488 bytes for UDP 4E without truncation or automatic splitting.
+- Library: Semantic device reads now reject nonzero PLC end codes before decoding payload data, even when the low-level client is configured with `raise_on_error=False`.
+- Library: Bit reads now require the exact packed-byte count and reject every used nibble other than `0` or `1`.
+- Library: Sync and async send-only operations, including Remote RESET, now clear and close their transport in failure paths as well as after successful transmission.
 
 ### Tests
 
+- Tests: Added sync, async, direct, extended, random, typed, named, and codec coverage for Boolean-only individual bit writes, including pre-transport rejection of integer `0` and `1`.
+- Tests: Device-range catalog coverage now proves that exactly one canonical SD-register read is used and no runtime address probing occurs.
+- Tests: Added IPv6-literal rejection, IPv4 resolver ordering, and sync/async TCP/UDP endpoint-selection coverage.
 - Tests: Added bit and byte boundary vectors, pre-transport validation checks, and malformed label-response coverage.
 - Tests: Added sync/async transport boundaries, no-serial/no-trace/no-stat rejection checks, and aggregate limits for all four label builders.
+- Tests: Added regressions for error-response decode ordering, trailing and non-binary packed-bit data, and sync/async Remote RESET send failures.
 
 ## [4.0.1] - 2026-07-29
 

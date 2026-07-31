@@ -40,3 +40,13 @@ jobs:
 
       - name: Build package
         run: python -m build
+
+      - name: Validate wheel and sdist contents
+        if: matrix.python-version == '3.14'
+        shell: pwsh
+        run: ./scripts/check_package_contents.ps1
+
+      - name: Verify self-contained source archive
+        if: matrix.python-version == '3.14'
+        shell: pwsh
+        run: ./scripts/check_source_archive.ps1 -IncludeWorktree

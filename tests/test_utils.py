@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from slmp.core import DeviceRef, LongTimerResult, RandomReadResult, SlmpTarget
 from slmp.utils import (
-    QueuedAsyncSlmpClient,
     SlmpConnectionOptions,
     _compile_read_plan,
     _parse_address,
@@ -292,18 +291,41 @@ class TestWriteBitInWordSync(unittest.TestCase):
     def test_set_bit(self):
         client = _make_sync_client([0x0000])
         write_bit_in_word_sync(client, "D0", 3, True)
-        client.write_devices.assert_called_once_with("D0", [0x0008], bit_unit=False)
+        client.write_devices.assert_called_once_with(
+            DeviceRef("D", 0, "melsec:iq-r"),
+            [0x0008],
+            bit_unit=False,
+        )
 
     def test_clear_bit(self):
         client = _make_sync_client([0x00FF])
         write_bit_in_word_sync(client, "D0", 0, False)
-        client.write_devices.assert_called_once_with("D0", [0x00FE], bit_unit=False)
+        client.write_devices.assert_called_once_with(
+            DeviceRef("D", 0, "melsec:iq-r"),
+            [0x00FE],
+            bit_unit=False,
+        )
 
     def test_invalid_bit_index(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         with self.assertRaises(ValueError):
             write_bit_in_word_sync(client, "D0", 16, True)
+
+    def test_arguments_are_validated_before_read(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        invalid_calls = (
+            lambda: write_bit_in_word_sync(client, "D0", True, True),
+            lambda: write_bit_in_word_sync(client, "D0", 0, 1),
+            lambda: write_bit_in_word_sync(client, "M0", 0, True),
+        )
+
+        for call in invalid_calls:
+            with self.assertRaises(ValueError):
+                call()
+        client.read_devices.assert_not_called()
+        client.write_devices.assert_not_called()
 
     def test_write_named_requires_explicit_bit_index(self):
         client = MagicMock()
@@ -323,17 +345,22 @@ class TestReadNamedSync(unittest.TestCase):
         dword = struct.unpack("<I", raw_f)[0]
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-        client.read_random.return_value = RandomReadResult(
-            word={"D100": 10, "D0": 0x00FF},
-            dword={"D101": dword},
-        )
+        client.read_random.side_effect = [
+            RandomReadResult(word={"D100": 10}, dword={}),
+            RandomReadResult(word={}, dword={"D101": dword}),
+            RandomReadResult(word={"D0": 0x00FF}, dword={}),
+        ]
         result = read_named_sync(client, ["D100:U", "D101:F", "D0.3"])
         self.assertEqual(result["D100:U"], 10)
         self.assertAlmostEqual(result["D101:F"], 2.5, places=5)
         self.assertEqual(result["D0.3"], bool((0x00FF >> 3) & 1))
-        client.read_random.assert_called_once_with(
-            word_devices=[DeviceRef("D", 100, "melsec:iq-r"), DeviceRef("D", 0, "melsec:iq-r")],
-            dword_devices=[DeviceRef("D", 101, "melsec:iq-r")],
+        self.assertEqual(
+            client.read_random.call_args_list,
+            [
+                unittest.mock.call(word_devices=[DeviceRef("D", 100, "melsec:iq-r")], dword_devices=[]),
+                unittest.mock.call(word_devices=[], dword_devices=[DeviceRef("D", 101, "melsec:iq-r")]),
+                unittest.mock.call(word_devices=[DeviceRef("D", 0, "melsec:iq-r")], dword_devices=[]),
+            ],
         )
 
     def test_bit_in_word_false(self):
@@ -374,14 +401,18 @@ class TestReadNamedSync(unittest.TestCase):
         )
         client.read_devices.assert_not_called()
 
-    def test_more_than_255_word_devices_is_rejected_without_splitting(self):
+    def test_more_than_255_word_devices_splits_at_entry_boundary(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
+        client.read_random.side_effect = [
+            RandomReadResult(word={f"D{index}": index for index in range(start, min(start + 96, 256))}, dword={})
+            for start in range(0, 256, 96)
+        ]
 
-        with self.assertRaisesRegex(ValueError, "at most 255 word devices"):
-            read_named_sync(client, [f"D{index}:U" for index in range(256)])
+        result = read_named_sync(client, [f"D{index}:U" for index in range(256)])
 
-        client.read_random.assert_not_called()
+        self.assertEqual(result["D255:U"], 255)
+        self.assertEqual(client.read_random.call_count, 3)
 
     def test_bit_device_bit_suffix_raises(self):
         client = MagicMock()
@@ -647,21 +678,8 @@ class TestReadPlan(unittest.TestCase):
             _compile_read_plan(["LTN10:D", "LTS10:BIT", "LCN30:D"], address_profile="melsec:iq-r")
 
 
-class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
-    async def test_context_manager_connects_and_closes_inner_client(self):
-        inner = MagicMock()
-        inner.connect = AsyncMock()
-        inner.close = AsyncMock()
-        queued = QueuedAsyncSlmpClient(inner)
-
-        entered = await queued.__aenter__()
-        await queued.__aexit__(None, None, None)
-
-        self.assertIs(entered, queued)
-        inner.connect.assert_awaited_once()
-        inner.close.assert_awaited_once()
-
-    async def test_open_and_connect_returns_queued_client(self):
+class TestAsyncClientFactory(unittest.IsolatedAsyncioTestCase):
+    async def test_open_and_connect_returns_ordinary_client(self):
         options = SlmpConnectionOptions(
             "127.0.0.1", plc_profile="melsec:iq-f", port=1025, transport="tcp", default_target=TEST_TARGET
         )
@@ -670,9 +688,9 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
             inner.connect = AsyncMock()
             client_cls.return_value = inner
 
-            queued = await open_and_connect(options)
+            connected = await open_and_connect(options)
 
-        self.assertIsInstance(queued, QueuedAsyncSlmpClient)
+        self.assertIs(connected, inner)
         inner.connect.assert_awaited_once()
         client_cls.assert_called_once()
         self.assertEqual(client_cls.call_args.kwargs["plc_profile"], "melsec:iq-f")
@@ -773,15 +791,20 @@ class TestQueuedAsyncSlmpClient(unittest.IsolatedAsyncioTestCase):
 
 
 class TestWriteNamedAsync(unittest.IsolatedAsyncioTestCase):
-    async def test_read_named_more_than_255_word_devices_is_rejected_without_splitting(self):
+    async def test_read_named_more_than_255_word_devices_splits_at_entry_boundary(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-        client.read_random = AsyncMock()
+        client.read_random = AsyncMock(
+            side_effect=[
+                RandomReadResult(word={f"D{index}": index for index in range(start, min(start + 96, 256))}, dword={})
+                for start in range(0, 256, 96)
+            ]
+        )
 
-        with self.assertRaisesRegex(ValueError, "at most 255 word devices"):
-            await read_named(client, [f"D{index}:U" for index in range(256)])
+        result = await read_named(client, [f"D{index}:U" for index in range(256)])
 
-        client.read_random.assert_not_awaited()
+        self.assertEqual(result["D255:U"], 255)
+        self.assertEqual(client.read_random.await_count, 3)
 
     async def test_write_multiple(self):
         client = MagicMock()

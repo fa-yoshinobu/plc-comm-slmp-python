@@ -102,7 +102,7 @@ def parse_args() -> argparse.Namespace:
         "--poll-count",
         type=int,
         default=3,
-        help="Number of poll snapshots to capture (default 3)",
+        help="Number of poll results to capture (default 3)",
     )
     return p.parse_args()
 
@@ -216,7 +216,7 @@ def main() -> None:
         # Use case: reading the current state of a multi-type parameter block
         #           (speed as float, counts as int, alarm bit as bool).
         # ---------------------------------------------------------------
-        snapshot = read_named_sync(
+        named_values = read_named_sync(
             client,
             [
                 "D100:U",
@@ -225,7 +225,7 @@ def main() -> None:
                 "D50.3",
             ],
         )
-        for addr, value in snapshot.items():
+        for addr, value in named_values.items():
             print(f"[read_named_sync]  {addr} = {value!r}")
 
         try:
@@ -240,19 +240,19 @@ def main() -> None:
             )
             print("[write_named_sync] Wrote mixed-type values to D100:U, D200:F, D202:L, D50.3")
         finally:
-            write_named_sync(client, snapshot)
+            write_named_sync(client, named_values)
             print("[write_named_sync] Restored mixed-type values")
 
         # ---------------------------------------------------------------
         # 5. poll_sync
         #
-        # Yields a snapshot dict every *interval* seconds.
+        # Yields a read-result dict every *interval* seconds.
         # Use break or Ctrl+C to stop.
         #
         # Use case: lightweight periodic logging of process values from a
         #           script without a full monitoring framework.
         # ---------------------------------------------------------------
-        print(f"\nPolling {args.poll_count} snapshots (press Ctrl+C to abort):")
+        print(f"\nPolling {args.poll_count} read results (press Ctrl+C to abort):")
         try:
             for i, snap in enumerate(poll_sync(client, ["D100:U", "D200:F", "D50.3"], interval=1.0)):
                 print(f"  [{i + 1}] {snap}")

@@ -3,7 +3,7 @@
 SLMP High-Level Asynchronous Utilities Sample
 ==============================================
 Demonstrates every high-level *async* helper shipped with the slmp package,
-including explicit `plc_profile` selection and QueuedAsyncSlmpClient for concurrent-safe multi-task usage.
+including explicit `plc_profile` selection and the ordinary AsyncSlmpClient FIFO for concurrent-safe multi-task usage.
 
 Usage
 -----
@@ -25,7 +25,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import cast
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -96,7 +95,7 @@ def parse_args() -> argparse.Namespace:
         "--poll-count",
         type=int,
         default=3,
-        help="Number of poll snapshots to capture (default 3)",
+        help="Number of poll results to capture (default 3)",
     )
     return p.parse_args()
 
@@ -174,7 +173,7 @@ async def demo_contiguous_reads(client: AsyncSlmpClient) -> None:
 
     `*_single_request` keeps one logical read on one PLC request.
     Requests larger than the protocol limit are rejected. Applications that
-    intentionally need multiple snapshots must issue and label those requests.
+    intentionally need multiple observations must issue and label those requests.
     """
     words = await read_words_single_request(client, "D0", 10)
     print(f"[read_words_single_request]  D0-D9 = {words}")
@@ -220,7 +219,7 @@ async def demo_named_rw(client: AsyncSlmpClient) -> None:
     Use case: dashboard-style read of a heterogeneous parameter set
               (speed as float, error code as int, alarm bit as bool) in one call.
     """
-    snapshot = await read_named(
+    named_values = await read_named(
         client,
         [
             "D100:U",
@@ -229,7 +228,7 @@ async def demo_named_rw(client: AsyncSlmpClient) -> None:
             "D50.3",
         ],
     )
-    for addr, value in snapshot.items():
+    for addr, value in named_values.items():
         print(f"[read_named]  {addr} = {value!r}")
 
     try:
@@ -244,23 +243,23 @@ async def demo_named_rw(client: AsyncSlmpClient) -> None:
         )
         print("[write_named] Wrote mixed-type values")
     finally:
-        await write_named(client, snapshot)
+        await write_named(client, named_values)
         print("[write_named] Restored mixed-type values")
 
 
 async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
     """
-    poll - async generator that yields a snapshot dict every *interval* seconds.
+    poll - async generator that yields a read-result dict every *interval* seconds.
 
     Use case: background monitoring loop in an asyncio application where the
               main coroutine can concurrently process PLC data while the
               poll generator handles timing.
     """
-    print(f"\nPolling {count} snapshots (Ctrl+C to abort early):")
+    print(f"\nPolling {count} read results (Ctrl+C to abort early):")
     try:
         i = 0
-        async for snap in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
-            print(f"  [{i + 1}] {snap}")
+        async for read_result in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
+            print(f"  [{i + 1}] {read_result}")
             i += 1
             if i >= count:
                 break
@@ -268,27 +267,26 @@ async def demo_poll(client: AsyncSlmpClient, count: int) -> None:
         pass
 
 
-async def demo_queued_client(host: str, port: int, transport: str, timeout: float, plc_profile: str) -> None:
+async def demo_shared_fifo_client(host: str, port: int, transport: str, timeout: float, plc_profile: str) -> None:
     """
-    QueuedAsyncSlmpClient - thread-safe wrapper for shared async use.
+    AsyncSlmpClient - one ordinary client shared safely by asyncio tasks.
 
-    Returns a queued client that serializes all helper calls so that multiple
-    coroutines (e.g. a background poller + a foreground writer) can share one
-    TCP connection without interleaving protocol frames.
+    The ordinary client owns a FIFO operation queue. Multiple coroutines (for
+    example, a background poller and a foreground writer) can share one TCP
+    connection without interleaving protocol frames. No queue wrapper is used.
 
     Use case: any asyncio application where more than one task needs to
               issue SLMP requests on the same connection simultaneously.
     """
-    async with await open_and_connect(build_options(host, port, transport, timeout, plc_profile)) as queued:
-        queued_view = cast(AsyncSlmpClient, queued)
+    async with await open_and_connect(build_options(host, port, transport, timeout, plc_profile)) as client:
 
         async def task_a() -> None:
-            first = await read_named(queued_view, ["D100:U", "D200:F"])
-            print(f"[queued task-A] {first}")
+            first = await read_named(client, ["D100:U", "D200:F"])
+            print(f"[FIFO task-A] {first}")
 
         async def task_b() -> None:
-            second = await read_named(queued_view, ["D202:L", "D50.3"])
-            print(f"[queued task-B] {second}")
+            second = await read_named(client, ["D202:L", "D50.3"])
+            print(f"[FIFO task-B] {second}")
 
         await asyncio.gather(task_a(), task_b())
 
@@ -311,15 +309,14 @@ async def run(args: argparse.Namespace) -> None:
     async with await open_and_connect(
         build_options(args.host, args.port, args.transport, args.timeout, args.plc_profile)
     ) as client:
-        client_view = cast(AsyncSlmpClient, client)
-        await demo_typed_rw(client_view)
-        await demo_contiguous_reads(client_view)
-        await demo_bit_in_word(client_view)
-        await demo_named_rw(client_view)
-        await demo_poll(client_view, args.poll_count)
+        await demo_typed_rw(client)
+        await demo_contiguous_reads(client)
+        await demo_bit_in_word(client)
+        await demo_named_rw(client)
+        await demo_poll(client, args.poll_count)
 
-    # 6. QueuedAsyncSlmpClient
-    await demo_queued_client(args.host, args.port, args.transport, args.timeout, args.plc_profile)
+    # 6. Ordinary AsyncSlmpClient FIFO shared by concurrent tasks
+    await demo_shared_fifo_client(args.host, args.port, args.transport, args.timeout, args.plc_profile)
 
     print("Done.")
 

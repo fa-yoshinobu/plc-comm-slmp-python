@@ -7,7 +7,16 @@ operation name for a specific SLMP command family.
 The sync `SlmpClient` and async `AsyncSlmpClient` expose the same semantic
 operation names unless noted otherwise.
 
+All TCP and UDP clients are IPv4-only. A host may be an IPv4 literal or a
+hostname with an IPv4 result. IPv6 literals and hostnames without an IPv4
+result are rejected without IPv6 fallback.
+
 ## Direct And Random Device Operations
+
+Individual bit-write values must be actual Python `bool` objects. Numeric `0`
+and `1`, strings, bytes, `None`, and other truthy/falsy objects are rejected
+before request construction. Packed bit-block words are a distinct wire-level
+API and remain unsigned 16-bit integers.
 
 | Operation | Public API |
 | --- | --- |
@@ -62,10 +71,10 @@ logical length; malformed or trailing data raises `SlmpError`.
 
 | Operation | Public API |
 | --- | --- |
-| Connection helper | `open_and_connect`, `open_and_connect_sync`, `QueuedAsyncSlmpClient` |
+| Connection helper | `open_and_connect`, `open_and_connect_sync` |
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
 | Typed values | `read_typed`, `write_typed` |
-| Named mixed snapshots | `read_named`, `write_named`, `poll` |
+| Named read/write collections | `read_named`, `write_named`, `poll` |
 | Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
 | Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
 | Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
@@ -74,14 +83,20 @@ logical length; malformed or trailing data raises `SlmpError`.
 `write_named` emits exactly one random-write request. It rejects mixed
 bit/word command families and bit-in-word read-modify-write entries. The
 dedicated `write_bit_in_word` helper visibly performs the required read and
-write requests.
+write requests. It snapshots and validates the complete operation before FIFO
+admission, then holds one ordinary-client FIFO turn across both requests. This
+prevents same-client interleaving only. The operation is not atomic at the PLC:
+another connection or PLC program logic can change the word in the race window,
+and the requests can run in different PLC scans. A possibly-sent write uses the
+outcome-unknown error contract. The helper never retries automatically.
 
-The contiguous helpers, `read_named`, and `write_named` never split one call
-into multiple protocol requests. Named entries that require another command
-family are rejected before transport. Counts above the applicable
-single-request limit are rejected before transport. Applications that need
-larger logical ranges must issue explicit requests and define their own
-snapshot/version and partial-write handling.
+The contiguous and write helpers never split one call into multiple protocol
+requests. `read_named` and `poll` are the read-only exception: after full-plan
+validation they may split only between independent entries, preserve input and
+wire order, and hold one exclusive client turn. They return the complete result
+or raise without a partial dictionary. The chunks are not an atomic PLC
+snapshot. Named entries requiring another command family are rejected before
+transport. Writes that would require multiple requests are rejected before send.
 
 ## Target Module I/O Constants
 
@@ -102,9 +117,24 @@ there is no implicit own-station route in the public connection API.
 
 ## Errors
 
-`SlmpTimeoutError` identifies request-exchange deadline expiry and is a subclass of
-`SlmpError`. Other `SlmpError` instances represent malformed protocol data or PLC
-end-code responses; inspect `end_code` and `error_info` for PLC errors.
+`SlmpClosedError`, `SlmpNotConnectedError`, `SlmpTransportError`, and
+`SlmpTimeoutError` distinguish local lifecycle, missing connection, I/O, and
+request-deadline failures. They are dedicated `SlmpError` subclasses;
+`SlmpTimeoutError` is also a `TimeoutError`. A state-changing request whose
+result cannot be known after possible send raises
+`SlmpOutcomeUnknownError(reason=..., cause=...)`; reasons are defined by
+`SlmpOutcomeUnknownReason`, and automatic retry is not performed.
+
+FIFO queue wait is outside the request deadline. After activation, one absolute
+deadline covers first send, complete transmit, receive, route/4E-serial
+correlation, and response decode; foreign responses do not restart it. Timeout
+retires the current transport generation, so another operation must establish a
+new generation and cannot consume a late response from the timed-out exchange.
+Connection establishment has its own timeout.
+
+Device-range catalog reads use the canonical profile rules and the profile's
+documented SD-register block only. They do not probe candidate device addresses
+or translate PLC errors into inferred range boundaries.
 
 ## Generated API Details
 
@@ -116,12 +146,39 @@ function, and dataclass signatures are searchable from the site API reference.
 TCP command payloads are limited to 65,529 bytes. UDP command payloads are limited to 65,492 bytes
 for 3E and 65,488 bytes for 4E so the complete frame fits one datagram. Oversized sync and async
 requests fail with `ValueError` before transport, trace publication, or 4E serial allocation and
-are never truncated or split automatically. Label builders enforce their aggregate size; their
-largest protocol-representable even payload is 65,528 bytes.
+are never truncated. Only read-only named aggregates may split under their
+documented entry-boundary contract. Label builders enforce their aggregate
+size; their largest protocol-representable even payload is 65,528 bytes.
+
+| Operation category | Effective one-request capacity |
+| --- | --- |
+| Direct bit/word read and write | Selected profile's direct limit, count field, request payload, and read-response size |
+| Random read | Selected profile's combined random-read limit and each 8-bit category count |
+| Random word/DWord or bit write | Selected profile's total/weighted or bit limit, category count fields, and request payload |
+| Monitor registration/cycle | Selected profile's registration total and weighted limits; cycle counts must match one registration |
+| Block read/write | Selected profile block count and weighted point limits plus encoded request/response size |
+| Memory and extend unit | Command-specific manual maximum, count field, and encoded request/response size |
+| Array/random labels | Per-item field validity plus aggregate request/response payload size |
+
+All categories accept their computed maximum as one request and reject maximum
+plus one before send. Python allocates decoded response storage dynamically; it
+does not expose a caller buffer that can truncate a valid response.
 
 ## Traffic Statistics
 
 `SlmpClient.traffic_stats()` and `AsyncSlmpClient.traffic_stats()` return an immutable
-`SlmpTrafficStats(request_count, tx_bytes, rx_bytes)` snapshot. The queued async wrapper
-delegates the same method to its inner client. Counters are cumulative for the client lifetime
-and are not reset by close or reconnect.
+`SlmpTrafficStats(request_count, tx_bytes, rx_bytes)` snapshot. Counters are cumulative for the
+client lifetime and are not reset by close or reconnect.
+
+## Operation ordering and errors
+
+Ordinary `SlmpClient` and `AsyncSlmpClient` instances own a re-entrant FIFO
+operation queue. `QueuedAsyncSlmpClient` has been removed. A queued async task
+cancelled before activation sends nothing. `close()` rejects the active and
+queued generation; a later operation may establish a new transport generation.
+
+Public communication classifications are `SlmpTimeoutError`,
+`SlmpClosedError`, `SlmpNotConnectedError`, and `SlmpTransportError`. A
+state-changing request that may have been sent raises
+`SlmpOutcomeUnknownError(reason=..., cause=...)` when its final result cannot be
+known. Reasons are defined by `SlmpOutcomeUnknownReason`.

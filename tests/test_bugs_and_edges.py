@@ -1,8 +1,10 @@
 import unittest
 
+from slmp import _operations
 from slmp.constants import ModuleIONo
 from slmp.core import (
     SlmpError,
+    SlmpResponse,
     SlmpTarget,
     unpack_bit_values,
 )
@@ -17,7 +19,29 @@ class TestBugsAndEdges(unittest.TestCase):
         data = b"\x11"
         with self.assertRaises(SlmpError) as cm:
             unpack_bit_values(data, 3)
-        self.assertIn("bit data too short", str(cm.exception))
+        self.assertIn("bit data length mismatch", str(cm.exception))
+
+    def test_unpack_bit_values_rejects_trailing_bytes_and_non_binary_nibbles(self) -> None:
+        with self.assertRaisesRegex(SlmpError, "length mismatch"):
+            unpack_bit_values(b"\x10\x00", 1)
+        with self.assertRaisesRegex(SlmpError, "high nibble"):
+            unpack_bit_values(b"\x20", 1)
+        with self.assertRaisesRegex(SlmpError, "low nibble"):
+            unpack_bit_values(b"\x12", 2)
+        self.assertEqual(unpack_bit_values(b"\x1f", 1), [True])
+
+    def test_device_read_decoder_rejects_nonzero_end_code_before_payload_decode(self) -> None:
+        response = SlmpResponse(
+            serial=0,
+            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            end_code=0xC051,
+            data=b"\x00",
+            raw=b"",
+        )
+
+        with self.assertRaises(SlmpError) as cm:
+            _operations.decode_read_devices_response(response, points=1, bit_unit=True)
+        self.assertEqual(cm.exception.end_code, 0xC051)
 
     def test_slmp_target_module_io_keywords(self) -> None:
         """Test SlmpTarget module_io keywords."""

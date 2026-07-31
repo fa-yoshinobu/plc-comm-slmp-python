@@ -5,27 +5,31 @@
 | Entry point | Signature | Use |
 | --- | --- | --- |
 | `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int, transport: str, default_target: SlmpTarget, timeout: float = 3.0, monitoring_timer: int = 16, raise_on_error: bool = True)` | Store stable connection settings. Port, transport, profile, and the complete four-field route are required. |
-| `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> QueuedAsyncSlmpClient` | Open one queued async connection. |
+| `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> AsyncSlmpClient` | Open one async connection. The ordinary client owns its FIFO operation queue. |
 | `open_and_connect_sync` | `def open_and_connect_sync(options: SlmpConnectionOptions) -> SlmpClient` | Open one synchronous connection. |
 | `read_typed` | `async def read_typed(client, device, dtype) -> int | float | bool` | Read one typed value. |
 | `write_typed` | `async def write_typed(client, device, dtype, value: int | float | bool) -> None` | Write one typed value. |
-| `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed snapshot. |
+| `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed named collection. |
 | `write_named` | `async def write_named(client, updates) -> None` | Write one word/DWord family or one bit family in one random-write request. |
 | `read_words_single_request` | `async def read_words_single_request(client, device, count) -> list[int]` | Read one contiguous 16-bit range in one request. |
 | `read_dwords_single_request` | `async def read_dwords_single_request(client, device, count) -> list[int]` | Read one contiguous 32-bit range in one request. |
 | `write_bit_in_word` | `async def write_bit_in_word(client, device, bit_index, value) -> None` | Set or clear one bit in a word device. |
-| `poll` | `async def poll(client, addresses, interval)` | Yield repeated mixed snapshots. |
+| `poll` | `async def poll(client, addresses, interval)` | Yield repeated named read results. |
 | `SlmpClient.read_devices` | `read_devices(device, count, *, bit_unit)` | Generic direct read; an explicit Boolean bit/word unit is mandatory. |
-| `SlmpClient.write_devices` | `write_devices(device, values, *, bit_unit)` | Generic direct write; an explicit Boolean bit/word unit is mandatory. |
+| `SlmpClient.write_devices` | `write_devices(device, values, *, bit_unit)` | Generic direct write; an explicit Boolean bit/word unit is mandatory. With `bit_unit=True`, every value must be an actual `bool`; integer `0` and `1` are rejected. |
 | `SlmpClient.read_devices_ext` | `read_devices_ext(qualified_device, count, *, bit_unit)` | Read routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
 | `SlmpClient.write_devices_ext` | `write_devices_ext(qualified_device, values, *, bit_unit)` | Write routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
 
 The synchronous helpers use the same names with `_sync`.
 
-`read_named` sends exactly one random-read request. Every entry must be
-representable in that request; direct/block/long-timer fallback routes and
-oversized batches are rejected before transport. Use the explicit typed or
-long-device API when another command family is required.
+`read_named` validates and snapshots the complete address plan before transport.
+It preserves the declared entry order and may split an oversized read only
+between independent entries. A scalar/DWord entry is never divided. All chunks
+hold one exclusive client turn, so another operation cannot interleave. The
+result is returned only after every chunk succeeds. This is not one atomic PLC
+observation: later chunks are acquired later and an error returns no partial
+dictionary. Direct/block/long-timer fallback routes remain rejected; use their
+explicit APIs.
 
 `write_named` also has a one-request contract. Word and DWord entries may be
 combined in one random-word request, or bit entries may be combined in one
@@ -152,7 +156,13 @@ buffer memory.
 from slmp import SlmpClient, SlmpTarget
 
 
-with SlmpClient("192.168.250.100", 1025, transport="tcp", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0), plc_profile="melsec:iq-r") as client:
+with SlmpClient(
+    "192.168.250.100",
+    1025,
+    transport="tcp",
+    default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    plc_profile="melsec:iq-r",
+) as client:
     values = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
     client.write_devices_ext("U3\\G100", [1, 2, 3, 4], bit_unit=False)
     print(values)
@@ -213,7 +223,13 @@ through the connected PLC.
 from slmp import SlmpClient, SlmpTarget
 
 
-with SlmpClient("192.168.250.100", 1025, transport="tcp", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0), plc_profile="melsec:iq-r") as client:
+with SlmpClient(
+    "192.168.250.100",
+    1025,
+    transport="tcp",
+    default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    plc_profile="melsec:iq-r",
+) as client:
     value = client.read_devices_ext("J2\\SW10", 1, bit_unit=False)
     bits = client.read_devices_ext("J1\\X10", 16, bit_unit=True)
     client.write_devices_ext("J1\\SW14", [2], bit_unit=False)
@@ -228,9 +244,22 @@ module configuration.
 
 When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
 Read `end_code` for the PLC response code and `error_info` when the PLC returned the structured error-information block.
-Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` subclass, in both clients. The configured
-`timeout` is one send/receive deadline; discarding a valid response for another route or 4E serial does not restart it.
-Connection establishment is a separate operation with its own timeout.
+Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` and
+`TimeoutError` subclass, in both clients. The configured
+`timeout` begins only after the request's FIFO turn becomes active. One absolute
+deadline covers first send, complete transmit, receive, route/4E-serial
+correlation, and response decode; discarding a valid response for another route
+or serial does not restart it. Timeout retires the current transport generation,
+so a later operation must establish a new generation and cannot consume a late
+response from the timed-out exchange. Connection establishment is a separate
+operation with its own timeout.
+
+`SlmpClosedError`, `SlmpNotConnectedError`, and `SlmpTransportError` distinguish
+local close, missing transport state, and other I/O failure. If a write, remote
+control, monitor registration, password operation, or other state-changing
+request may already have been sent, timeout, cancellation, close, transport, or
+malformed-response failure raises `SlmpOutcomeUnknownError`. Inspect its
+`reason` (`SlmpOutcomeUnknownReason`) and `cause`; do not retry blindly.
 
 ```python
 from slmp import SlmpError, SlmpTimeoutError
@@ -265,7 +294,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_typed, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         value = await read_typed(client, "D100", "U")
         print(f"D100={value}")
@@ -282,7 +317,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_typed, write_type
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         original = await read_typed(client, "D100", "U")
         try:
@@ -295,7 +336,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## Named snapshot
+## Named read collection
 
 ```python
 import asyncio
@@ -303,10 +344,16 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
-        snapshot = await read_named(client, ["D100:U", "D101:S", "D200:F", "D202:L", "D50.3"])
-        print(f"snapshot={snapshot}")
+        read_result = await read_named(client, ["D100:U", "D101:S", "D200:F", "D202:L", "D50.3"])
+        print(f"read_result={read_result}")
 
 
 asyncio.run(main())
@@ -325,7 +372,13 @@ from slmp import (
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         words = await read_words_single_request(client, "D0", 10)
         dwords = await read_dwords_single_request(client, "D200", 4)
@@ -356,7 +409,7 @@ at `M1000` is `0x0005`.
 | `X` | `read_named(client, ["X20:BIT"])` | `read_typed(client, "X20", "U")` | profile-dependent |
 | `Y` | `read_named(client, ["Y20:BIT"])` | `read_typed(client, "Y20", "U")` | profile-dependent |
 
-Every semantic device address is interpreted with an exact `plc_profile`.
+Every semantic `DeviceRef` is bound to the exact canonical `plc_profile` used to create it. Passing it to a client configured for any other profile is rejected before request construction or transport activity, including when a unit-specific profile shares a base family with the client. Parse the address again with the destination client's profile instead of reusing it across profiles.
 `DeviceRef(code, number, plc_profile)` therefore stores the profile as part of
 the value, and `parse_device(text, plc_profile=...)` requires it explicitly.
 A `DeviceRef` created for one profile is rejected by a client configured for a
@@ -378,7 +431,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, write_typed, SlmpTarge
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         await write_typed(client, "M1000", "U", 0x0005)
 
@@ -392,7 +451,16 @@ want individual boolean states; use packed word access when you want one
 
 ## Bit in word
 
-Use `write_bit_in_word` when a PLC stores flags inside a word register. Use `.n` notation when reading or writing mixed named values.
+Use `write_bit_in_word` when a PLC stores flags inside a word register. Use `.n`
+notation for bit-in-word named reads; `write_named` rejects that update so the
+two-request operation remains visible. `write_bit_in_word` validates and binds
+its arguments before queue admission, then holds one ordinary-client FIFO turn
+across its word read and word write. This prevents same-client interleaving, but
+does not make the update atomic at the PLC. Another connection or PLC program
+logic can change the word between requests, and the requests can run in
+different PLC scans. A failure after possible write transmission is
+outcome-unknown. The helper never retries automatically; verify PLC state before
+issuing another update.
 
 ```python
 import asyncio
@@ -400,7 +468,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_bit_
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         original = await read_named(client, ["D50.3"])
         try:
@@ -422,7 +496,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, poll, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         index = 0
         async for snapshot in poll(client, ["D100:U", "D200:F", "D50.3"], interval=1.0):
@@ -501,7 +581,7 @@ Remove `--dry-run` when you are ready to open PLC connections.
 
 ## Device range catalog
 
-`read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model.
+`read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model, probe candidate device addresses, or infer a range boundary from a PLC error. If the canonical SD-register read fails, that error is returned to the caller.
 The catalog is for diagnostics and application-layer validation. Normal read/write helpers do not use it to reject addresses by configured upper bound before sending a request.
 The source rules for this catalog are maintained in the shared [SLMP device ranges](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/device-ranges/) reference.
 
@@ -511,7 +591,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         catalog = await client.read_device_range_catalog()
         entry = next(item for item in catalog.entries if item.device == "D")
@@ -531,7 +617,13 @@ from slmp import SlmpConnectionOptions, open_and_connect, read_named, SlmpTarget
 
 
 async def main() -> None:
-    options = SlmpConnectionOptions(host="192.168.250.100", port=1025, transport="tcp", plc_profile="melsec:iq-r", default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
+    options = SlmpConnectionOptions(
+        host="192.168.250.100",
+        port=1025,
+        transport="tcp",
+        plc_profile="melsec:iq-r",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+    )
     async with await open_and_connect(options) as client:
         values = await read_named(client, ["LCN0:L", "LZ0:D"])
         print(f"values={values}")
@@ -572,8 +664,20 @@ Array and random label requests use even-sized payloads and therefore have a lar
 protocol-representable payload of 65,528 bytes before the lower UDP limit is applied.
 
 Sync and async clients raise `ValueError` before connection, send, traffic counters, trace state,
-or 4E serial allocation. Requests are never truncated or split automatically; applications that
-issue several requests must define ordering, partial-success, and write-atomicity behavior.
+or 4E serial allocation. Requests are never truncated. Direct, random, block,
+monitor, label, memory, extend-unit, and write operations do not split
+automatically. The sole automatic-split exception is `read_named`/`poll`, under
+the read-only aggregate contract described above. Applications that issue
+several other requests must define ordering, partial-success, and write-atomicity behavior.
+
+Operation-specific capacity is the minimum of the selected profile limit, the
+command count-field range, the encoded request-payload limit, and (for reads)
+the representable response size. Direct bit/word, random read/write, monitor,
+and block APIs use the canonical profile limits. Memory and extend-unit APIs
+validate their 16-bit length fields and encoded payload. Label APIs validate
+every item plus the aggregate payload. Python response storage grows to the
+validated response length; there is no caller buffer to truncate. The accepted
+maximum succeeds as one request, while maximum plus one fails before send.
 
 ## Traffic statistics
 

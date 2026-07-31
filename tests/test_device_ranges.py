@@ -20,32 +20,10 @@ from slmp.core import (
 )
 from slmp.device_ranges import (
     SlmpDeviceRangeNotation,
-    _can_read_one_word_async,
-    _can_read_one_word_sync,
     build_device_range_catalog_for_plc_profile,
     normalize_plc_profile,
 )
 from slmp.errors import SlmpError, SlmpTimeoutError
-
-
-class _TimeoutRangeClient:
-    def read_devices(self, address, points, *, bit_unit):
-        raise SlmpTimeoutError("injected timeout")
-
-
-class _AsyncTimeoutRangeClient:
-    async def read_devices(self, address, points, *, bit_unit):
-        raise SlmpTimeoutError("injected timeout")
-
-
-def test_runtime_range_probe_does_not_classify_sync_timeout_as_out_of_range() -> None:
-    with unittest.TestCase().assertRaises(SlmpTimeoutError):
-        _can_read_one_word_sync(_TimeoutRangeClient(), "ZR0")
-
-
-def test_runtime_range_probe_does_not_classify_async_timeout_as_out_of_range() -> None:
-    with unittest.TestCase().assertRaises(SlmpTimeoutError):
-        asyncio.run(_can_read_one_word_async(_AsyncTimeoutRangeClient(), "ZR0"))
 
 
 def _pack_words(values: list[int]) -> bytes:
@@ -116,12 +94,14 @@ class _FakeSyncClient(SlmpClient):
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
-        self.rejected_prefixes: tuple[str, ...] = ()
+        self.next_error: BaseException | None = None
 
     def _request(
         self, command: int | Command, subcommand: int = 0x0000, data: bytes = b"", **_: object
     ) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
+        if self.next_error is not None:
+            raise self.next_error
         return SlmpResponse(
             serial=0,
             target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
@@ -129,12 +109,6 @@ class _FakeSyncClient(SlmpClient):
             data=self.next_response_data,
             raw=b"",
         )
-
-    def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
-        text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
-        if text.startswith(self.rejected_prefixes):
-            raise SlmpError("rejected by test")
-        return super().read_devices(device, points, bit_unit=bit_unit)
 
 
 class _FakeAsyncClient(AsyncSlmpClient):
@@ -146,7 +120,7 @@ class _FakeAsyncClient(AsyncSlmpClient):
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
         self.next_response_data = b""
-        self.rejected_prefixes: tuple[str, ...] = ()
+        self.next_error: BaseException | None = None
 
     async def _request(
         self,
@@ -156,6 +130,8 @@ class _FakeAsyncClient(AsyncSlmpClient):
         **_: object,
     ) -> SlmpResponse:
         self.last_request = (int(command), subcommand, data)
+        if self.next_error is not None:
+            raise self.next_error
         return SlmpResponse(
             serial=0,
             target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
@@ -163,12 +139,6 @@ class _FakeAsyncClient(AsyncSlmpClient):
             data=self.next_response_data,
             raw=b"",
         )
-
-    async def read_devices(self, device, points: int, *, bit_unit: bool = False, series=None):  # type: ignore[no-untyped-def]
-        text = f"{device.code}{device.number}" if hasattr(device, "code") else str(device)
-        if text.startswith(self.rejected_prefixes):
-            raise SlmpError("rejected by test")
-        return await super().read_devices(device, points, bit_unit=bit_unit)
 
 
 class TestSyncDeviceRanges(unittest.TestCase):
@@ -397,11 +367,46 @@ class TestSyncDeviceRanges(unittest.TestCase):
             ),
         )
 
+    def test_device_range_catalog_propagates_original_plc_error(self) -> None:
+        client = _FakeSyncClient(plc_profile="melsec:iq-r")
+        expected = SlmpError(
+            "route error",
+            end_code=0xC061,
+            data=bytes.fromhex("01 02 03 04 05 06 07 08 09"),
+        )
+        client.next_error = expected
+
+        with self.assertRaises(SlmpError) as raised:
+            client.read_device_range_catalog()
+
+        self.assertIs(raised.exception, expected)
+
 
 class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
+    async def test_device_range_catalog_propagates_every_acquisition_failure_category(self) -> None:
+        errors: list[BaseException] = [
+            SlmpTimeoutError("deadline expired"),
+            asyncio.CancelledError("cancelled"),
+            ConnectionError("disconnected"),
+            SlmpError("malformed response"),
+            SlmpError("route error", end_code=0xC061),
+            SlmpError("password error", end_code=0xC200),
+            SlmpError("busy error", end_code=0xCEE0),
+            SlmpError("unclassified PLC error", end_code=0xD123),
+        ]
+
+        for expected in errors:
+            with self.subTest(error=repr(expected)):
+                client = _FakeAsyncClient(plc_profile="melsec:iq-r")
+                client.next_error = expected
+
+                with self.assertRaises(type(expected)) as raised:
+                    await client.read_device_range_catalog()
+
+                self.assertIs(raised.exception, expected)
+
     async def test_qnu_uses_sd300_for_st_and_fixed_z_range(self) -> None:
         client = _FakeAsyncClient(plc_profile="melsec:qnu")
-        client.rejected_prefixes = ("ZR",)
         client.next_response_data = _build_word_block(
             286,
             26,

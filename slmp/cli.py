@@ -2286,7 +2286,9 @@ def _raw_device_write(
     payload += encode_device_spec(device, series=resolved_series, plc_profile=client.plc_profile)
     payload += len(values).to_bytes(2, "little")
     if bit_unit:
-        payload += pack_bit_values(values)
+        # The packer rejects every non-bool value; this narrows only the CLI
+        # helper's shared word/bit annotation.
+        payload += pack_bit_values(cast(Sequence[bool], values))
     else:
         for value in values:
             payload += int(value).to_bytes(2, "little", signed=False)

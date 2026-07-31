@@ -22,8 +22,8 @@ python samples/07_async_sample.py 192.168.250.100:1025
 
 | File | Focus | API level |
 | --- | --- | --- |
-| `high_level_async.py` | Async connection, typed reads and writes, named snapshots, polling, queued shared connection use. | High-level helpers |
-| `high_level_sync.py` | Sync connection, typed reads and writes, named snapshots, polling, contiguous reads. | High-level helpers |
+| `high_level_async.py` | Async connection, typed reads and writes, named read collections, polling, and ordinary-client FIFO sharing. | High-level helpers |
+| `high_level_sync.py` | Sync connection, typed reads and writes, named read collections, polling, contiguous reads. | High-level helpers |
 | `polling_reconnect.py` | Read-only polling loop with automatic reconnect and backoff after transport loss. | High-level helpers |
 | `multi_plc_monitor.py` | Read-only monitoring of the same tag set across multiple PLCs, with one async task per PLC. | Operational recipe |
 | `config_polling.py` | Read-only periodic collection from a JSON or YAML config file, with optional CSV output. | Operational recipe |

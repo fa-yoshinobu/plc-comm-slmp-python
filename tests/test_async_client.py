@@ -38,7 +38,13 @@ except ModuleNotFoundError:  # pragma: no cover - lets unittest discovery import
 from slmp.async_client import AsyncSlmpClient, SLMPDatagramProtocol
 from slmp.constants import Command, FrameType, PLCSeries, RemoteClearMode
 from slmp.core import DeviceRef, SlmpError, SlmpResponse, SlmpTarget
-from slmp.errors import SlmpProfileFeatureError, SlmpTimeoutError
+from slmp.errors import (
+    SlmpClosedError,
+    SlmpOutcomeUnknownError,
+    SlmpOutcomeUnknownReason,
+    SlmpProfileFeatureError,
+    SlmpTimeoutError,
+)
 
 
 def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
@@ -237,6 +243,31 @@ async def test_async_remote_reset_closes_transport_in_same_serialized_exchange()
 
     writer.write.assert_called_once()
     writer.drain.assert_awaited_once()
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+    assert client._reader is None
+    assert client._writer is None
+
+
+@pytest.mark.asyncio
+async def test_async_remote_reset_drain_failure_still_closes_transport() -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    writer = MagicMock()
+    writer.drain = AsyncMock(side_effect=OSError("drain failed"))
+    writer.wait_closed = AsyncMock()
+    client._reader = MagicMock()
+    client._writer = writer
+
+    with pytest.raises(SlmpOutcomeUnknownError, match="outcome is unknown") as raised:
+        await client.remote_reset()
+    assert raised.value.reason is SlmpOutcomeUnknownReason.TRANSPORT
+
     writer.close.assert_called_once()
     writer.wait_closed.assert_awaited_once()
     assert client._reader is None
@@ -736,7 +767,8 @@ async def test_async_read_and_close_share_one_connection_ownership_order() -> No
         cli._lock.release()
         lock_held = False
 
-        assert await read_task == [1]
+        with pytest.raises(SlmpClosedError, match="closed while the operation was queued"):
+            await read_task
         await close_task
         assert cli._writer is None
         assert cli._reader is None
@@ -784,7 +816,8 @@ async def test_async_udp_read_and_close_share_one_connection_ownership_order() -
         cli._lock.release()
         lock_held = False
 
-        assert await read_task == [1]
+        with pytest.raises(SlmpClosedError, match="closed while the operation was queued"):
+            await read_task
         await close_task
         assert transport.closed
         assert cli._udp_transport is None
@@ -821,10 +854,11 @@ async def test_async_send_only_and_close_share_one_connection_ownership_order() 
         cli._lock.release()
         lock_held = False
 
-        await reset_task
+        with pytest.raises(SlmpClosedError, match="closed while the operation was queued"):
+            await reset_task
         await close_task
-        writer.write.assert_called_once()
-        writer.drain.assert_awaited_once()
+        writer.write.assert_not_called()
+        writer.drain.assert_not_awaited()
         assert cli._writer is None
         assert cli._reader is None
     finally:

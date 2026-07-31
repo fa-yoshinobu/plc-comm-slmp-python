@@ -10,6 +10,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from . import _operations
+from ._network import normalize_ipv4_host, resolve_ipv4_endpoint
+from ._operation_queue import _SyncFifoOperationQueue
 from ._socket_options import configure_tcp_keepalive
 from .capability_profiles import ensure_extended_profile_feature_allowed, ensure_profile_feature_allowed
 from .constants import Command, FrameType, PLCSeries, RemoteClearMode
@@ -48,7 +50,15 @@ from .core import (
     encode_request,
     parse_device,
 )
-from .errors import SlmpError, SlmpTimeoutError
+from .errors import (
+    SlmpClosedError,
+    SlmpError,
+    SlmpNotConnectedError,
+    SlmpOutcomeUnknownError,
+    SlmpOutcomeUnknownReason,
+    SlmpTimeoutError,
+    SlmpTransportError,
+)
 
 _COMMUNICATION_TIMEOUT_MESSAGE = "SLMP communication timeout"
 
@@ -88,7 +98,7 @@ class SlmpClient:
         """Initialize the SLMP client.
 
         Args:
-            host: PLC IP address.
+            host: PLC IPv4 address or hostname that resolves to IPv4. IPv6 is unsupported.
             port: Required PLC port number in range 1..65535.
             transport: Required transport protocol (``"tcp"`` or ``"udp"``).
             timeout: Timeout for each connection attempt and absolute
@@ -100,7 +110,7 @@ class SlmpClient:
             monitoring_timer: Default monitoring timer value (multiples of 250ms). Defaults to 0x0010 (4s).
             raise_on_error: Whether to raise SlmpError on non-zero end codes. Defaults to True.
         """
-        self.host = host
+        self.host = normalize_ipv4_host(host)
         if not isinstance(transport, str):
             raise ValueError("transport must be 'tcp' or 'udp'")
         self.transport = transport.strip().lower()
@@ -150,7 +160,9 @@ class SlmpClient:
         self._strict_profile = _maintainer_strict_profile
 
         self._serial = 0
-        self._request_lock = threading.RLock()
+        self._operation_queue = _SyncFifoOperationQueue()
+        self._stats_lock = threading.Lock()
+        self._active_state_changing = False
         self._sock: socket.socket | None = None
         self._request_count = 0
         self._tx_bytes = 0
@@ -158,15 +170,17 @@ class SlmpClient:
 
     def traffic_stats(self) -> SlmpTrafficStats:
         """Return a read-only snapshot of cumulative traffic for this client lifetime."""
-        with self._request_lock:
+        with self._stats_lock:
             return SlmpTrafficStats(self._request_count, self._tx_bytes, self._rx_bytes)
 
     def _record_send(self, frame_length: int) -> None:
-        self._request_count += 1
-        self._tx_bytes += frame_length
+        with self._stats_lock:
+            self._request_count += 1
+            self._tx_bytes += frame_length
 
     def _record_receive(self, frame_length: int) -> None:
-        self._rx_bytes += frame_length
+        with self._stats_lock:
+            self._rx_bytes += frame_length
 
     def _parse_device(self, device: str | DeviceRef) -> DeviceRef:
         ref = parse_device(device, plc_profile=self.plc_profile)
@@ -209,16 +223,27 @@ class SlmpClient:
         Raises:
             socket.error: If the connection fails.
         """
+        with self._operation_queue.turn():
+            try:
+                self._connect_unlocked()
+            except SlmpError:
+                raise
+            except (OSError, ConnectionError) as err:
+                raise SlmpTransportError(f"SLMP connection failed: {err}") from err
+
+    def _connect_unlocked(self) -> None:
+        self._operation_queue.ensure_current()
         if self._sock is not None:
             return
         sock_type = socket.SOCK_STREAM if self.transport == "tcp" else socket.SOCK_DGRAM
+        endpoint = resolve_ipv4_endpoint(self.host, self.port, sock_type)
         sock = socket.socket(socket.AF_INET, sock_type)
         try:
             sock.settimeout(self.timeout)
             if self.transport == "tcp":
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 configure_tcp_keepalive(sock, idle_seconds=30)
-            sock.connect((self.host, self.port))
+            sock.connect(endpoint)
         except BaseException:
             try:
                 sock.close()
@@ -226,13 +251,23 @@ class SlmpClient:
                 pass
             raise
         self._sock = sock
+        try:
+            self._operation_queue.ensure_current()
+        except SlmpClosedError:
+            self._close_transport()
+            raise
 
     def close(self) -> None:
-        """Close the connection to the PLC."""
-        if self._sock is None:
-            return
-        self._sock.close()
+        """Close transport and reject the active and queued operation generation."""
+        self._operation_queue.invalidate()
+        self._close_transport()
+
+    def _close_transport(self) -> None:
+        sock = self._sock
         self._sock = None
+        if sock is None:
+            return
+        sock.close()
 
     def __enter__(self) -> SlmpClient:
         """Enter the context manager and open the connection."""
@@ -265,7 +300,7 @@ class SlmpClient:
             raise ValueError("raise_on_error must be a boolean when provided")
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
-        with self._request_lock:
+        with self._operation_queue.turn():
             return self._request_unlocked(
                 command,
                 subcommand,
@@ -322,7 +357,12 @@ class SlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        raw = self._send_and_receive(frame)
+        previous_state_changing = self._active_state_changing
+        self._active_state_changing = _is_state_changing_command(cmd)
+        try:
+            raw = self._send_and_receive(frame)
+        finally:
+            self._active_state_changing = previous_state_changing
         resp = decode_response(raw, frame_type=self.frame_type)
         self._emit_trace(
             _SlmpTraceFrame(
@@ -337,6 +377,7 @@ class SlmpClient:
                 monitoring_timer=monitor,
             )
         )
+        self._operation_queue.ensure_current()
 
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
         if do_raise and resp.end_code != 0:
@@ -791,7 +832,7 @@ class SlmpClient:
 
     def write_random_bits(
         self,
-        bit_values: Mapping[str | DeviceRef, bool | int] | Sequence[tuple[str | DeviceRef, bool | int]],
+        bit_values: Mapping[str | DeviceRef, bool] | Sequence[tuple[str | DeviceRef, bool]],
     ) -> None:
         """Write multiple bit values at random.
 
@@ -810,7 +851,7 @@ class SlmpClient:
 
     def write_random_bits_ext(
         self,
-        bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool | int]],
+        bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool]],
     ) -> None:
         """Write multiple bit values at random using Extended Device extensions.
 
@@ -1379,7 +1420,7 @@ class SlmpClient:
             or not 0 <= monitoring_timer <= 0xFFFF
         ):
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
-        with self._request_lock:
+        with self._operation_queue.turn():
             self._send_no_response_unlocked(
                 command,
                 subcommand,
@@ -1413,28 +1454,34 @@ class SlmpClient:
             subcommand=subcommand,
             data=data,
         )
-        self.connect()
-        assert self._sock is not None
-        if self.transport == "tcp":
-            self._sock.sendall(frame)
-            self._record_send(len(frame))
-            self._emit_trace(
-                _SlmpTraceFrame(
-                    serial=serial_no,
-                    command=int(command),
-                    subcommand=subcommand,
-                    request_data=data,
-                    request_frame=frame,
-                    response_frame=b"",
-                    response_end_code=None,
-                    target=target_info,
-                    monitoring_timer=monitor,
-                )
-            )
-        else:
-            if self._sock.send(frame) != len(frame):
+        attempted_send = False
+        try:
+            self._connect_unlocked()
+            self._operation_queue.ensure_current()
+            assert self._sock is not None
+            attempted_send = True
+            if self.transport == "tcp":
+                self._sock.sendall(frame)
+            elif self._sock.send(frame) != len(frame):
                 raise OSError("UDP send did not accept the complete SLMP datagram")
             self._record_send(len(frame))
+            self._operation_queue.ensure_current()
+        except BaseException as err:
+            failure: BaseException = err
+            try:
+                self._operation_queue.ensure_current()
+            except SlmpClosedError as closed:
+                failure = closed
+            classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
+            if classified is failure:
+                raise
+            raise classified from failure
+        finally:
+            # A send-only command can still produce an NG response. 3E has no
+            # serial field, so retaining this transport could assign that response
+            # to the next request. Failure during send also invalidates the socket.
+            self._close_transport()
+        try:
             self._emit_trace(
                 _SlmpTraceFrame(
                     serial=serial_no,
@@ -1448,10 +1495,17 @@ class SlmpClient:
                     monitoring_timer=monitor,
                 )
             )
-        # A send-only command can still produce an NG response. 3E has no
-        # serial field, so retaining this transport could assign that response
-        # to the next request. Reconnection is therefore mandatory.
-        self.close()
+            self._operation_queue.ensure_current()
+        except BaseException as err:
+            failure = err
+            try:
+                self._operation_queue.ensure_current()
+            except SlmpClosedError as closed:
+                failure = closed
+            classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
+            if classified is failure:
+                raise
+            raise classified from failure
 
     def _next_serial(self) -> int:
         serial = self._serial & 0xFFFF
@@ -1459,42 +1513,60 @@ class SlmpClient:
         return serial
 
     def _send_and_receive(self, frame: bytes) -> bytes:
-        expected_identity = _request_identity(frame, frame_type=self.frame_type)
-        self.connect()
-        deadline = time.monotonic() + self.timeout
-        try:
-            assert self._sock is not None
-            sock = self._sock
-            sock.settimeout(_remaining_timeout(deadline))
+        with self._operation_queue.turn():
+            expected_identity = _request_identity(frame, frame_type=self.frame_type)
+            attempted_send = False
+            try:
+                self._connect_unlocked()
+                deadline = time.monotonic() + self.timeout
+                self._operation_queue.ensure_current()
+                if self._sock is None:
+                    raise SlmpNotConnectedError("SLMP transport is not connected")
+                sock = self._sock
+                sock.settimeout(_remaining_timeout(deadline))
 
-            if self.transport == "tcp":
-                self._sock.sendall(frame)
+                attempted_send = True
+                if self.transport == "tcp":
+                    sock.sendall(frame)
+                    self._record_send(len(frame))
+                    while True:
+                        raw = self._receive_frame(deadline=deadline)
+                        if _response_matches_request(
+                            raw, frame_type=self.frame_type, expected_identity=expected_identity
+                        ):
+                            self._operation_queue.ensure_current()
+                            if self._sock is sock:
+                                sock.settimeout(self.timeout)
+                            return raw
+
+                if sock.send(frame) != len(frame):
+                    raise OSError("UDP send did not accept the complete SLMP datagram")
                 self._record_send(len(frame))
                 while True:
                     raw = self._receive_frame(deadline=deadline)
                     if _response_matches_request(raw, frame_type=self.frame_type, expected_identity=expected_identity):
+                        self._operation_queue.ensure_current()
                         if self._sock is sock:
                             sock.settimeout(self.timeout)
                         return raw
-
-            if self._sock.send(frame) != len(frame):
-                raise OSError("UDP send did not accept the complete SLMP datagram")
-            self._record_send(len(frame))
-            while True:
-                raw = self._receive_frame(deadline=deadline)
-                if _response_matches_request(raw, frame_type=self.frame_type, expected_identity=expected_identity):
-                    if self._sock is sock:
-                        sock.settimeout(self.timeout)
-                    return raw
-        except TimeoutError as err:
-            self.close()
-            raise SlmpTimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE) from err
-        except BaseException:
-            self.close()
-            raise
+            except BaseException as err:
+                failure = err
+                try:
+                    self._operation_queue.ensure_current()
+                except SlmpClosedError as closed:
+                    failure = closed
+                self._close_transport()
+                classified = _classify_exchange_failure(
+                    failure,
+                    state_changing=self._active_state_changing,
+                    attempted_send=attempted_send,
+                )
+                if classified is failure:
+                    raise
+                raise classified from failure
 
     def _receive_frame(self, *, deadline: float) -> bytes:
-        self.connect()
+        self._operation_queue.ensure_current()
         assert self._sock is not None
         sock = self._sock
         try:
@@ -1506,7 +1578,7 @@ class SlmpClient:
             self._record_receive(len(frame))
             return frame
         except (OSError, SlmpError):
-            self.close()
+            self._close_transport()
             raise
 
     def _emit_trace(self, trace: _SlmpTraceFrame) -> None:
@@ -1581,6 +1653,69 @@ def _remaining_timeout(deadline: float) -> float:
     return remaining
 
 
+_STATE_CHANGING_COMMANDS = frozenset(
+    {
+        int(Command.DEVICE_WRITE),
+        int(Command.DEVICE_WRITE_RANDOM),
+        int(Command.DEVICE_ENTRY_MONITOR),
+        int(Command.DEVICE_WRITE_BLOCK),
+        int(Command.LABEL_ARRAY_WRITE),
+        int(Command.LABEL_WRITE_RANDOM),
+        int(Command.MEMORY_WRITE),
+        int(Command.EXTEND_UNIT_WRITE),
+        int(Command.REMOTE_RUN),
+        int(Command.REMOTE_STOP),
+        int(Command.REMOTE_PAUSE),
+        int(Command.REMOTE_LATCH_CLEAR),
+        int(Command.REMOTE_RESET),
+        int(Command.REMOTE_PASSWORD_LOCK),
+        int(Command.REMOTE_PASSWORD_UNLOCK),
+        int(Command.CLEAR_ERROR),
+    }
+)
+
+
+def _is_state_changing_command(command: int) -> bool:
+    return command in _STATE_CHANGING_COMMANDS
+
+
+def _classify_exchange_failure(
+    error: BaseException,
+    *,
+    state_changing: bool,
+    attempted_send: bool,
+) -> BaseException:
+    if isinstance(error, SlmpOutcomeUnknownError):
+        return error
+    if isinstance(error, SlmpClosedError):
+        reason = SlmpOutcomeUnknownReason.CLOSED
+        definite: BaseException = error
+    elif isinstance(error, (TimeoutError, SlmpTimeoutError)):
+        reason = SlmpOutcomeUnknownReason.TIMEOUT
+        definite = SlmpTimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE)
+    elif isinstance(error, (KeyboardInterrupt, InterruptedError)):
+        reason = SlmpOutcomeUnknownReason.CANCELLED
+        definite = error
+    elif isinstance(error, SlmpTransportError):
+        reason = SlmpOutcomeUnknownReason.TRANSPORT
+        definite = error
+    elif isinstance(error, SlmpError):
+        reason = SlmpOutcomeUnknownReason.PROTOCOL
+        definite = error
+    elif isinstance(error, (OSError, ConnectionError)):
+        reason = SlmpOutcomeUnknownReason.TRANSPORT
+        definite = SlmpTransportError(f"SLMP transport failure: {error}")
+    else:
+        return error
+    if state_changing and attempted_send:
+        return SlmpOutcomeUnknownError(
+            f"SLMP state-changing operation outcome is unknown ({reason.value})",
+            reason=reason,
+            cause=error,
+        )
+    return definite
+
+
 def _recv_exact(sock: socket.socket, size: int, *, deadline: float | None = None) -> bytes:
     buf = bytearray(size)
     _recv_exact_into(sock, memoryview(buf), deadline=deadline)
@@ -1595,7 +1730,7 @@ def _recv_exact_into(sock: socket.socket, view: memoryview, *, deadline: float |
                 sock.settimeout(_remaining_timeout(deadline))
             read = recv_into(view)
             if read == 0:
-                raise SlmpError("connection closed while receiving data")
+                raise SlmpTransportError("connection closed while receiving data")
             view = view[read:]
         return
 
@@ -1606,7 +1741,7 @@ def _recv_exact_into(sock: socket.socket, view: memoryview, *, deadline: float |
             sock.settimeout(_remaining_timeout(deadline))
         chunk = sock.recv(total - offset)
         if not chunk:
-            raise SlmpError("connection closed while receiving data")
+            raise SlmpTransportError("connection closed while receiving data")
         end = offset + len(chunk)
         view[offset:end] = chunk
         offset = end

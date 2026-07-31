@@ -7,13 +7,18 @@ import math
 import struct
 import time
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
+from . import _operations
+from .capability_profiles import profile_limit
 from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
     SlmpTarget,
+    _check_direct_device_points,
+    _check_temporarily_unsupported_device,
     _normalize_plc_profile_hint,
     _require_explicit_plc_profile_for_xy,
     _require_write_u16,
@@ -21,7 +26,11 @@ from .core import (
     _resolve_connection_profile,
     _resolve_port,
     _validate_direct_dword_read_device,
+    _validate_direct_read_device,
+    _validate_direct_write_device,
+    encode_device_spec,
     parse_device,
+    resolve_device_subcommand,
 )
 
 if TYPE_CHECKING:
@@ -66,8 +75,15 @@ class _ReadPlan:
 
 
 @dataclass(frozen=True)
+class _ReadPlanChunk:
+    entries: tuple[_ReadPlanEntry, ...]
+    word_devices: tuple[DeviceRef, ...]
+    dword_devices: tuple[DeviceRef, ...]
+
+
+@dataclass(frozen=True)
 class SlmpConnectionOptions:
-    """Stable connection settings for one queued SLMP session.
+    """Stable connection settings for one SLMP session.
 
     The options object is the recommended input for :func:`open_and_connect`
     and :func:`open_and_connect_sync`. It keeps transport-level settings and
@@ -355,10 +371,20 @@ async def write_bit_in_word(
 
     This helper is only for word devices such as ``D50``. Direct bit devices
     such as ``M1000`` should be written with :func:`write_typed` using
-    ``"BIT"``.
+    ``"BIT"``. It holds one client FIFO turn across a word read followed by a
+    word write. That prevents same-client interleaving but is not atomic at the
+    PLC: another connection or PLC logic can change the word between requests.
+    A possibly-sent write uses the outcome-unknown error contract. The helper
+    never retries automatically.
     """
-    words = await client.read_devices(device, 1, bit_unit=False)
-    await client.write_devices(device, [_update_bit_in_word_value(int(words[0]), bit_index, value)], bit_unit=False)
+    ref, normalized_index, normalized_value = _prepare_bit_in_word_rmw(client, device, bit_index, value)
+    from .async_client import AsyncSlmpClient
+
+    turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
+    async with turn:
+        words = await client.read_devices(ref, 1, bit_unit=False)
+        updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
+        await client.write_devices(ref, [updated], bit_unit=False)
 
 
 def write_bit_in_word_sync(
@@ -367,9 +393,20 @@ def write_bit_in_word_sync(
     bit_index: int,
     value: bool,
 ) -> None:
-    """Synchronously set or clear one bit inside one word device."""
-    words = client.read_devices(device, 1, bit_unit=False)
-    client.write_devices(device, [_update_bit_in_word_value(int(words[0]), bit_index, value)], bit_unit=False)
+    """Synchronously update one word bit while holding one client FIFO turn.
+
+    The read and write are two non-atomic PLC requests. Another connection or
+    PLC logic can race with them, possibly-sent writes use the outcome-unknown
+    error contract, and the helper never retries automatically.
+    """
+    ref, normalized_index, normalized_value = _prepare_bit_in_word_rmw(client, device, bit_index, value)
+    from .client import SlmpClient
+
+    turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
+    with turn:
+        words = client.read_devices(ref, 1, bit_unit=False)
+        updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
+        client.write_devices(ref, [updated], bit_unit=False)
 
 
 async def read_bits(
@@ -417,7 +454,7 @@ async def read_named(
     client: AsyncSlmpClient,
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
-    """Read a mixed logical snapshot by address string.
+    """Read a mixed logical collection by address string.
 
     Args:
         client: Connected async SLMP client.
@@ -439,7 +476,7 @@ def read_named_sync(
     client: SlmpClient,
     addresses: list[str],
 ) -> dict[str, int | float | bool]:
-    """Synchronously read a mixed logical snapshot by address string."""
+    """Synchronously read a mixed logical collection by address string."""
     plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     return _read_named_with_plan_sync(client, plan)
 
@@ -453,7 +490,7 @@ async def write_named(
     client: AsyncSlmpClient,
     updates: dict[str, int | float | bool],
 ) -> None:
-    """Write a mixed logical snapshot by address string.
+    """Write a mixed logical collection by address string.
 
     ``D50.3`` updates one bit inside one word. Direct bit devices such as
     ``M1000`` are normalized to ``"BIT"`` writes.
@@ -469,7 +506,7 @@ def write_named_sync(
     client: SlmpClient,
     updates: dict[str, int | float | bool],
 ) -> None:
-    """Synchronously write a mixed logical snapshot by address string."""
+    """Synchronously write a mixed logical collection by address string."""
     word_values, dword_values, bit_values = _compile_named_write(updates, _client_address_profile(client))
     if bit_values:
         client.write_random_bits(bit_values)
@@ -888,6 +925,8 @@ def _compile_read_plan(
 ) -> _ReadPlan:
     if not addresses:
         raise ValueError("addresses must not be empty")
+    if len(set(addresses)) != len(addresses):
+        raise ValueError("addresses must not contain duplicate result keys")
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
     dword_devices: list[DeviceRef] = []
@@ -955,6 +994,46 @@ def _compile_read_plan(
     return _ReadPlan(tuple(entries), tuple(word_devices), tuple(dword_devices))
 
 
+def _split_read_plan(plan: _ReadPlan, *, max_devices: int = 0xFF) -> tuple[_ReadPlanChunk, ...]:
+    """Split only at independent named-entry boundaries, preserving input order."""
+    chunks: list[_ReadPlanChunk] = []
+    entries: list[_ReadPlanEntry] = []
+    devices: list[DeviceRef] = []
+    seen: set[DeviceRef] = set()
+    kind: str | None = None
+
+    def flush() -> None:
+        nonlocal entries, devices, seen, kind
+        if not entries or kind is None:
+            return
+        chunks.append(
+            _ReadPlanChunk(
+                entries=tuple(entries),
+                word_devices=tuple(devices) if kind == "WORD" else (),
+                dword_devices=tuple(devices) if kind == "DWORD" else (),
+            )
+        )
+        entries = []
+        devices = []
+        seen = set()
+        kind = None
+
+    for entry in plan.entries:
+        assert entry.batch_kind in {"WORD", "DWORD"}
+        adds_wire_device = entry.device not in seen
+        if kind is not None and (entry.batch_kind != kind or (adds_wire_device and len(devices) == max_devices)):
+            flush()
+            adds_wire_device = True
+        if kind is None:
+            kind = entry.batch_kind
+        entries.append(entry)
+        if adds_wire_device:
+            devices.append(entry.device)
+            seen.add(entry.device)
+    flush()
+    return tuple(chunks)
+
+
 def _decode_word_value(value: int, dtype: str) -> int:
     if dtype == "S":
         return cast(int, struct.unpack("<h", struct.pack("<H", value & 0xFFFF))[0])
@@ -987,9 +1066,50 @@ def _encode_dword_words(value: int | float, dtype: str) -> list[int]:
     return list(struct.unpack("<HH", raw))
 
 
-def _update_bit_in_word_value(current: int, bit_index: int, value: bool) -> int:
-    if not 0 <= bit_index <= 15:
+def _prepare_bit_in_word_rmw(
+    client: object,
+    device: str | DeviceRef,
+    bit_index: int,
+    value: bool,
+) -> tuple[DeviceRef, int, bool]:
+    if type(bit_index) is not int or not 0 <= bit_index <= 15:
         raise ValueError(f"bit_index must be 0-15, got {bit_index}")
+    normalized_value = _require_typed_bool(value)
+    ref = _parse_device_for_client(client, device)
+    device_info = DEVICE_CODES.get(ref.code)
+    if device_info is None or device_info.unit is not DeviceUnit.WORD:
+        raise ValueError("write_bit_in_word is only valid for word devices; use write_typed for bit devices")
+
+    from .async_client import AsyncSlmpClient
+    from .client import SlmpClient
+
+    if isinstance(client, (SlmpClient, AsyncSlmpClient)):
+        client._ensure_profile_feature_allowed("direct")  # noqa: SLF001 - same-package aggregate preflight
+        _check_direct_device_points(
+            1,
+            bit_unit=False,
+            name="write_bit_in_word read",
+            plc_profile=client.plc_profile,
+        )
+        _check_direct_device_points(
+            1,
+            bit_unit=False,
+            name="write_bit_in_word write",
+            write=True,
+            plc_profile=client.plc_profile,
+        )
+        _validate_direct_read_device(ref, points=1, bit_unit=False)
+        _validate_direct_write_device(ref, bit_unit=False, plc_profile=client.plc_profile)
+        _check_temporarily_unsupported_device(ref)
+        encode_device_spec(ref, series=client.plc_series)
+        resolve_device_subcommand(bit_unit=False, series=client.plc_series, extension=False)
+    return ref, bit_index, normalized_value
+
+
+def _update_bit_in_word_value(current: int, bit_index: int, value: bool) -> int:
+    if type(bit_index) is not int or not 0 <= bit_index <= 15:
+        raise ValueError(f"bit_index must be 0-15, got {bit_index}")
+    value = _require_typed_bool(value)
     if value:
         current |= 1 << bit_index
     else:
@@ -1034,87 +1154,67 @@ def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> in
     return max_dwords_per_request
 
 
-async def _read_random_maps(
-    client: AsyncSlmpClient,
+def _prepare_read_plan(
+    client: AsyncSlmpClient | SlmpClient,
     plan: _ReadPlan,
-) -> tuple[dict[str, int], dict[str, int]]:
-    word_values: dict[str, int] = {}
-    dword_values: dict[str, int] = {}
-    word_devices = list(plan.word_devices)
-    dword_devices = list(plan.dword_devices)
-    if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-        raise ValueError("read_named supports at most 255 word devices and 255 dword devices in one request")
-    if word_devices or dword_devices:
-        result = await client.read_random(word_devices=word_devices, dword_devices=dword_devices)
-        word_values.update(result.word)
-        dword_values.update(result.dword)
+) -> tuple[tuple[_ReadPlanChunk, _operations.RandomReadOperation], ...]:
+    """Validate and encode every chunk before any transport send occurs."""
+    client._ensure_profile_feature_allowed("random")
+    _, default_series, _, _, _ = _resolve_connection_profile(
+        plc_profile=client.plc_profile,
+        plc_series=None,
+        frame_type=None,
+        address_profile=None,
+    )
+    prepared: list[tuple[_ReadPlanChunk, _operations.RandomReadOperation]] = []
+    limit_info = profile_limit(client.plc_profile, "random_read_word")
+    fallback_limit = 96 if default_series == PLCSeries.IQR else 192
+    max_devices = min(0xFF, limit_info.max if limit_info is not None else fallback_limit)
+    for chunk in _split_read_plan(plan, max_devices=max_devices):
+        operation = _operations.build_read_random_request(
+            word_devices=chunk.word_devices,
+            dword_devices=chunk.dword_devices,
+            series=None,
+            default_series=default_series,
+            address_profile=client.plc_profile,
+        )
+        prepared.append((chunk, operation))
+    return tuple(prepared)
 
-    return word_values, dword_values
 
-
-def _read_random_maps_sync(
-    client: SlmpClient,
-    plan: _ReadPlan,
-) -> tuple[dict[str, int], dict[str, int]]:
-    word_values: dict[str, int] = {}
-    dword_values: dict[str, int] = {}
-    word_devices = list(plan.word_devices)
-    dword_devices = list(plan.dword_devices)
-    if len(word_devices) > 0xFF or len(dword_devices) > 0xFF:
-        raise ValueError("read_named supports at most 255 word devices and 255 dword devices in one request")
-    if word_devices or dword_devices:
-        result = client.read_random(word_devices=word_devices, dword_devices=dword_devices)
-        word_values.update(result.word)
-        dword_values.update(result.dword)
-
-    return word_values, dword_values
+def _decode_read_chunk(
+    output: dict[str, int | float | bool],
+    chunk: _ReadPlanChunk,
+    random_result: Any,
+) -> None:
+    for entry in chunk.entries:
+        if entry.batch_kind == "WORD":
+            word = random_result.word[str(entry.device)]
+            if entry.dtype == "BIT_IN_WORD":
+                bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
+                output[entry.address] = bool((word >> bit_index) & 1)
+            else:
+                output[entry.address] = _decode_word_value(word, entry.dtype)
+        else:
+            output[entry.address] = _decode_dword_value(random_result.dword[str(entry.device)], entry.dtype)
 
 
 async def _read_named_with_plan(
     client: AsyncSlmpClient,
     plan: _ReadPlan,
 ) -> dict[str, int | float | bool]:
+    prepared = _prepare_read_plan(client, plan)
     result: dict[str, int | float | bool] = {}
-    word_values, dword_values = await _read_random_maps(client, plan)
-    long_timer_cache: dict[tuple[str, int], Any] = {}
+    from .async_client import AsyncSlmpClient
 
-    for entry in plan.entries:
-        if entry.batch_kind == "LONG_TIMER":
-            assert entry.long_timer_read is not None
-            if entry.device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
-                values = await client.read_devices(entry.device, 1, bit_unit=True)
-                result[entry.address] = bool(values[0])
-                continue
-            prefix, role = entry.long_timer_read
-            cache_key = (prefix, entry.device.number)
-            if cache_key not in long_timer_cache:
-                long_timer_cache[cache_key] = await _read_long_family_point(client, prefix, entry.device.number)
-            current_value, contact, coil = long_timer_cache[cache_key]
-            if role == "current":
-                result[entry.address] = _coerce_long_current_value(current_value, entry.dtype)
-            elif role == "contact":
-                result[entry.address] = bool(contact)
-            else:
-                result[entry.address] = bool(coil)
-            continue
-        if entry.batch_kind == "WORD":
-            word = word_values[str(entry.device)]
-            if entry.dtype == "BIT_IN_WORD":
-                bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
-                result[entry.address] = bool((word >> bit_index) & 1)
-            else:
-                result[entry.address] = _decode_word_value(word, entry.dtype)
-            continue
-        if entry.batch_kind == "DWORD":
-            result[entry.address] = _decode_dword_value(dword_values[str(entry.device)], entry.dtype)
-            continue
-        if entry.dtype == "BIT_IN_WORD":
-            words = await client.read_devices(entry.device, 1, bit_unit=False)
-            bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
-            result[entry.address] = bool((words[0] >> bit_index) & 1)
-        else:
-            result[entry.address] = await read_typed(client, entry.device, entry.dtype)
-
+    turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
+    async with turn:
+        for chunk, _ in prepared:
+            random_result = await client.read_random(
+                word_devices=list(chunk.word_devices),
+                dword_devices=list(chunk.dword_devices),
+            )
+            _decode_read_chunk(result, chunk, random_result)
     return result
 
 
@@ -1122,48 +1222,24 @@ def _read_named_with_plan_sync(
     client: SlmpClient,
     plan: _ReadPlan,
 ) -> dict[str, int | float | bool]:
+    prepared = _prepare_read_plan(client, plan)
     result: dict[str, int | float | bool] = {}
-    word_values, dword_values = _read_random_maps_sync(client, plan)
-    long_timer_cache: dict[tuple[str, int], Any] = {}
+    from .client import SlmpClient
 
-    for entry in plan.entries:
-        if entry.batch_kind == "LONG_TIMER":
-            assert entry.long_timer_read is not None
-            if entry.device.code in _LONG_COUNTER_STATE_DEVICE_CODES:
-                values = client.read_devices(entry.device, 1, bit_unit=True)
-                result[entry.address] = bool(values[0])
-                continue
-            prefix, role = entry.long_timer_read
-            cache_key = (prefix, entry.device.number)
-            if cache_key not in long_timer_cache:
-                long_timer_cache[cache_key] = _read_long_family_point_sync(client, prefix, entry.device.number)
-            current_value, contact, coil = long_timer_cache[cache_key]
-            if role == "current":
-                result[entry.address] = _coerce_long_current_value(current_value, entry.dtype)
-            elif role == "contact":
-                result[entry.address] = bool(contact)
-            else:
-                result[entry.address] = bool(coil)
-            continue
-        if entry.batch_kind == "WORD":
-            word = word_values[str(entry.device)]
-            if entry.dtype == "BIT_IN_WORD":
-                bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
-                result[entry.address] = bool((word >> bit_index) & 1)
-            else:
-                result[entry.address] = _decode_word_value(word, entry.dtype)
-            continue
-        if entry.batch_kind == "DWORD":
-            result[entry.address] = _decode_dword_value(dword_values[str(entry.device)], entry.dtype)
-            continue
-        if entry.dtype == "BIT_IN_WORD":
-            words = client.read_devices(entry.device, 1, bit_unit=False)
-            bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
-            result[entry.address] = bool((words[0] >> bit_index) & 1)
-        else:
-            result[entry.address] = read_typed_sync(client, entry.device, entry.dtype)
-
+    turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
+    with turn:
+        for chunk, _ in prepared:
+            random_result = client.read_random(
+                word_devices=list(chunk.word_devices),
+                dword_devices=list(chunk.dword_devices),
+            )
+            _decode_read_chunk(result, chunk, random_result)
     return result
+
+
+@asynccontextmanager
+async def _noop_async_context() -> AsyncIterator[None]:
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -1176,7 +1252,7 @@ async def poll(
     addresses: list[str],
     interval: float,
 ) -> AsyncIterator[dict[str, int | float | bool]]:
-    """Continuously yield mixed snapshots at a fixed interval.
+    """Continuously yield mixed read results at a fixed interval.
 
     The address list is compiled once and reused for every cycle.
     """
@@ -1191,7 +1267,7 @@ def poll_sync(
     addresses: list[str],
     interval: float,
 ) -> Iterator[dict[str, int | float | bool]]:
-    """Synchronously yield mixed snapshots at a fixed interval."""
+    """Synchronously yield mixed read results at a fixed interval."""
     plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
     while True:
         yield _read_named_with_plan_sync(client, plan)
@@ -1364,8 +1440,8 @@ def read_dwords_sync(
 
 async def open_and_connect(
     options: SlmpConnectionOptions,
-) -> QueuedAsyncSlmpClient:
-    """Create, connect, and wrap one queued async SLMP client.
+) -> AsyncSlmpClient:
+    """Create and connect one async SLMP client.
 
     This is the recommended async entry point for applications that share one
     connection across polling, named reads, and writes.
@@ -1374,7 +1450,8 @@ async def open_and_connect(
         options: Stable connection settings for the session.
 
     Returns:
-        A connected :class:`QueuedAsyncSlmpClient`.
+        A connected :class:`AsyncSlmpClient`. The ordinary client owns the
+        FIFO operation queue; no wrapper is required.
     """
 
     from .async_client import AsyncSlmpClient
@@ -1390,7 +1467,7 @@ async def open_and_connect(
         raise_on_error=options.raise_on_error,
     )
     await inner.connect()
-    return QueuedAsyncSlmpClient(inner)
+    return inner
 
 
 def open_and_connect_sync(
@@ -1419,44 +1496,3 @@ def open_and_connect_sync(
     )
     client.connect()
     return client
-
-
-# ---------------------------------------------------------------------------
-# Queued client
-# ---------------------------------------------------------------------------
-
-
-class QueuedAsyncSlmpClient:
-    """Serialize all async calls on one shared SLMP connection.
-
-    The wrapper exposes the same methods as :class:`AsyncSlmpClient`, but every
-    coroutine call is executed under one lock. Use it when one connection is
-    shared by polling, snapshot, and write tasks.
-
-    The wrapper does not change protocol semantics. It only prevents multiple
-    helper-layer coroutines from interleaving frames on the same socket.
-    """
-
-    def __init__(self, inner: AsyncSlmpClient) -> None:
-        self._inner = inner
-        self._lock = asyncio.Lock()
-
-    def __getattr__(self, name: str) -> Any:
-        attr = getattr(self._inner, name)
-        if asyncio.iscoroutinefunction(attr):
-
-            async def _locked(*args: Any, **kwargs: Any) -> Any:
-                async with self._lock:
-                    return await attr(*args, **kwargs)
-
-            return _locked
-        return attr
-
-    async def __aenter__(self) -> QueuedAsyncSlmpClient:
-        async with self._lock:
-            await self._inner.connect()
-        return self
-
-    async def __aexit__(self, *_: object) -> None:
-        async with self._lock:
-            await self._inner.close()

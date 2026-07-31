@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import sys
 
 import pytest
@@ -60,3 +61,12 @@ def test_standalone_sample_profile_choices_follow_public_descriptors(
     args = sample.parse_args()  # type: ignore[attr-defined]
 
     assert args.plc_profile == MXR_RJ71EN71
+
+
+def test_async_sample_describes_the_ordinary_client_fifo() -> None:
+    source = inspect.getsource(high_level_async)
+
+    assert "QueuedAsyncSlmpClient" not in source
+    assert "demo_queued_client" not in source
+    assert hasattr(high_level_async, "demo_shared_fifo_client")
+    assert "ordinary client owns a FIFO operation queue" in source
