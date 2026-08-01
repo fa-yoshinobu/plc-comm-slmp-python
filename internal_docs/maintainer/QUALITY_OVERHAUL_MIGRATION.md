@@ -710,17 +710,20 @@ Machine-verifiable acceptance criteria:
 - [x] Implementation completed in this repository.
 - [x] Existing deterministic tests explicitly selected for every acceptance criterion.
 - [x] The exact seven-test representative selector passed locally on Windows with Python 3.14.3.
-- [ ] The new Windows CI job passed on GitHub for the final source state.
+- [x] The new Windows CI job passed on GitHub for the final source state.
 - [x] Codex self-review completed after the local representative and complete verification runs.
 - [x] Live PLC checks are not required; all selected behavior uses fake state or localhost loopback.
 - [x] Maintainer CI documentation agrees with the workflow; no user migration note or changelog entry is required.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete.
 
-Verification disposition: the exact selector passed on the local Windows host,
+Verification evidence: the exact selector passed on the local Windows host,
 and the complete local static, unit, documentation, package, and current-worktree
-source gates passed on the same source state. The workflow specifies Python 3.13,
-which is not installed locally; no GitHub-hosted Windows pass is claimed until
-that job runs.
+source gates passed on the same source state. The GitHub-hosted Windows Python
+3.13 representative job passed for reviewed functional source commit
+`a36f238292805451c63b6d9322dfbbed49e0f3cf` in
+[PR #57](https://github.com/fa-yoshinobu/plc-comm-slmp-python/pull/57), with
+the Ubuntu matrix and sample checks also green. The follow-up change records
+that external evidence only and does not change runtime or workflow behavior.
 
 Self-review disposition:
 
