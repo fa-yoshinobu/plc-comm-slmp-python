@@ -95,6 +95,107 @@ def test_public_transport_error_types_are_pairwise_distinct() -> None:
     assert len(types) == 5
 
 
+def _sync_raw_client_with_receive_timeout() -> tuple[SlmpClient, MagicMock]:
+    client = SlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    sock = MagicMock()
+    sock.recv_into.side_effect = TimeoutError("deadline")
+    client._sock = sock
+    return client, sock
+
+
+def test_sync_unknown_raw_command_defaults_to_state_changing_after_send() -> None:
+    client, sock = _sync_raw_client_with_receive_timeout()
+
+    with pytest.raises(SlmpOutcomeUnknownError) as raised:
+        client.raw_command(0x1829, subcommand=0, payload=b"")
+
+    assert raised.value.reason is SlmpOutcomeUnknownReason.TIMEOUT
+    sock.sendall.assert_called_once()
+
+
+def test_sync_unknown_raw_command_can_be_explicitly_declared_read_only() -> None:
+    client, sock = _sync_raw_client_with_receive_timeout()
+
+    with pytest.raises(SlmpTimeoutError):
+        client.raw_command(0x1829, subcommand=0, payload=b"", state_changing=False)
+
+    sock.sendall.assert_called_once()
+
+
+@pytest.mark.parametrize("value", (0, 1, "false", []))
+def test_sync_raw_command_rejects_non_boolean_state_classification_before_transport(value: object) -> None:
+    client, sock = _sync_raw_client_with_receive_timeout()
+
+    with pytest.raises(ValueError, match="state_changing must be a boolean or None"):
+        client.raw_command(0x1829, subcommand=0, payload=b"", state_changing=value)  # type: ignore[arg-type]
+
+    sock.sendall.assert_not_called()
+
+
+def test_sync_raw_command_cannot_downgrade_a_known_state_changing_command() -> None:
+    client, sock = _sync_raw_client_with_receive_timeout()
+
+    with pytest.raises(ValueError, match="cannot downgrade"):
+        client.raw_command(Command.CLEAR_ERROR, subcommand=0, payload=b"", state_changing=False)
+
+    sock.sendall.assert_not_called()
+
+
+def _async_raw_client_with_receive_timeout() -> tuple[AsyncSlmpClient, MagicMock]:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    reader = MagicMock()
+    reader.readexactly = AsyncMock(side_effect=TimeoutError("deadline"))
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    client._reader = reader
+    client._writer = writer
+    return client, writer
+
+
+@pytest.mark.asyncio
+async def test_async_unknown_raw_command_defaults_to_state_changing_after_send() -> None:
+    client, writer = _async_raw_client_with_receive_timeout()
+
+    with pytest.raises(SlmpOutcomeUnknownError) as raised:
+        await client.raw_command(0x1829, subcommand=0, payload=b"")
+
+    assert raised.value.reason is SlmpOutcomeUnknownReason.TIMEOUT
+    writer.write.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_unknown_raw_command_can_be_explicitly_declared_read_only() -> None:
+    client, writer = _async_raw_client_with_receive_timeout()
+
+    with pytest.raises(SlmpTimeoutError):
+        await client.raw_command(0x1829, subcommand=0, payload=b"", state_changing=False)
+
+    writer.write.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_raw_command_rejects_non_boolean_state_classification_before_transport() -> None:
+    client, writer = _async_raw_client_with_receive_timeout()
+
+    with pytest.raises(ValueError, match="state_changing must be a boolean or None"):
+        await client.raw_command(0x1829, subcommand=0, payload=b"", state_changing=1)  # type: ignore[arg-type]
+
+    writer.write.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_async_state_change_cancellation_after_send_is_outcome_unknown() -> None:
     client = AsyncSlmpClient(

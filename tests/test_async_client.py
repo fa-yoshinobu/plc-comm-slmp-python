@@ -44,7 +44,37 @@ from slmp.errors import (
     SlmpOutcomeUnknownReason,
     SlmpProfileFeatureError,
     SlmpTimeoutError,
+    SlmpTransportError,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("loss", ["socket_error", "connection_lost"])
+async def test_idle_async_udp_transport_loss_retires_only_its_generation(loss: str) -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="udp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    protocol = SLMPDatagramProtocol(
+        FrameType.FRAME_4E,
+        client._record_receive,
+        client._retire_lost_udp_generation,
+    )
+    transport = MagicMock()
+    client._udp_protocol = protocol
+    client._udp_transport = transport
+
+    if loss == "socket_error":
+        protocol.error_received(OSError("network down"))
+    else:
+        protocol.connection_lost(None)
+
+    assert client._udp_protocol is None
+    assert client._udp_transport is None
+    transport.close.assert_called_once_with()
 
 
 def _build_4e_response(serial: int, data: bytes, *, end_code: int = 0) -> bytes:
@@ -417,6 +447,30 @@ class SerialSkewSLMPServer(MockSLMPServer):
         return header + body
 
 
+class FirstConnectionSilentSLMPServer(MockSLMPServer):
+    """Retire one timed-out connection, then serve the same client's reconnect."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.connection_count = 0
+
+    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.connection_count += 1
+        if self.connection_count != 1:
+            await super().handle_client(reader, writer)
+            return
+        try:
+            head = await reader.readexactly(13)
+            data_len = int.from_bytes(head[11:13], "little")
+            await reader.readexactly(data_len)
+            await reader.read()
+        except asyncio.IncompleteReadError:
+            pass
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
 class FakeAsyncClient(AsyncSlmpClient):
     """Fake async client for testing."""
 
@@ -780,6 +834,34 @@ async def test_async_read_and_close_share_one_connection_ownership_order() -> No
 
 
 @pytest.mark.asyncio
+async def test_async_timeout_retires_transport_then_same_client_reconnects_and_exchanges() -> None:
+    mock = FirstConnectionSilentSLMPServer()
+    await mock.start()
+    cli = AsyncSlmpClient(
+        mock.host,
+        mock.port,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+        timeout=0.05,
+    )
+    try:
+        await cli.connect()
+        with pytest.raises(SlmpTimeoutError, match="SLMP communication timeout"):
+            await cli.read_devices("D0", 1, bit_unit=False)
+        assert cli._writer is None
+        assert cli._reader is None
+
+        cli.timeout = 0.5
+        await cli.connect()
+        assert await cli.read_devices("D0", 1, bit_unit=False) == [1]
+        assert mock.connection_count == 2
+    finally:
+        await cli.close()
+        await mock.stop()
+
+
+@pytest.mark.asyncio
 async def test_async_udp_read_and_close_share_one_connection_ownership_order() -> None:
     protocol = SLMPDatagramProtocol(frame_type=FrameType.FRAME_4E)
 
@@ -789,7 +871,7 @@ async def test_async_udp_read_and_close_share_one_connection_ownership_order() -
 
         def sendto(self, frame: bytes) -> None:
             serial = int.from_bytes(frame[2:4], "little")
-            protocol.queue.put_nowait(_build_4e_response(serial, b"\x01\x00"))
+            protocol.datagram_received(_build_4e_response(serial, b"\x01\x00"), ("127.0.0.1", 1025))
 
         def close(self) -> None:
             self.closed = True
@@ -870,17 +952,21 @@ async def test_async_send_only_and_close_share_one_connection_ownership_order() 
 @pytest.mark.asyncio
 async def test_async_timeout() -> None:
     """Test timeout behavior."""
-    # Specify a port that is not listening
     cli = AsyncSlmpClient(
         "127.0.0.1",
-        1,
+        1025,
         transport="tcp",
         default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
         plc_profile="melsec:iq-r",
         timeout=0.1,
     )
-    with pytest.raises(ConnectionError):
-        await cli.connect()
+
+    async def blocked_connect(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        await asyncio.Future()
+
+    with patch("slmp.async_client.asyncio.open_connection", side_effect=blocked_connect):
+        with pytest.raises(SlmpTimeoutError, match="SLMP connection timeout"):
+            await cli.connect()
 
 
 @pytest.mark.asyncio
@@ -897,7 +983,7 @@ async def test_async_udp_read() -> None:
         timeout=0.1,
     )
     await cli.connect()
-    with pytest.raises(SlmpTimeoutError, match="SLMP communication timeout"):
+    with pytest.raises((SlmpTimeoutError, SlmpTransportError)):
         await cli.read_devices("D100", 1, bit_unit=False)
     assert cli._udp_transport is None
     assert cli._udp_protocol is None

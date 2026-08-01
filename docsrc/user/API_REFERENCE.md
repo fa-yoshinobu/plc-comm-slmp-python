@@ -126,11 +126,12 @@ result cannot be known after possible send raises
 `SlmpOutcomeUnknownReason`, and automatic retry is not performed.
 
 FIFO queue wait is outside the request deadline. After activation, one absolute
-deadline covers first send, complete transmit, receive, route/4E-serial
-correlation, and response decode; foreign responses do not restart it. Timeout
-retires the current transport generation, so another operation must establish a
-new generation and cannot consume a late response from the timed-out exchange.
-Connection establishment has its own timeout.
+deadline covers IPv4 resolution, connection and socket configuration, first
+send, complete transmit, receive, route/4E-serial correlation, and response
+decode; no phase or foreign response restarts it. Timeout retires the current
+transport generation, so another operation must establish a new generation and
+cannot consume a late connection or response result. An explicit `connect()`
+uses the same one-deadline rule from resolution through client adoption.
 
 Device-range catalog reads use the canonical profile rules and the profile's
 documented SD-register block only. They do not probe candidate device addresses

@@ -56,7 +56,7 @@ Replace direct `request()` calls and command-specific raw wrappers with one of t
 - the semantic public method for the operation; or
 - `raw_command(command, subcommand=..., payload=...)` for maintainer investigation.
 
-All three raw command fields are required. The client owns 4E serial allocation and response correlation.
+All three raw command fields are required. The client owns 4E serial allocation and response correlation. `state_changing=None` applies the shared conservative policy: known read-only commands remain read-only and every unknown command is state changing. `True` is an explicit conservative assertion. `False` is allowed only when the maintainer accepts responsibility for known or vendor-specific read-only semantics; it cannot downgrade a known state-changing command. Only native `bool` or `None` is accepted, and the classification is fixed before FIFO admission.
 
 ## Required operation choices
 
@@ -276,6 +276,134 @@ Self-review disposition:
 - Accepted: aggregate growth must be bounded while appending chunks, not only after `b"".join`, to
   avoid constructing an oversized complete payload. All four label builders use the bounded helper.
 - No rejected, duplicate, or deferred finding changes this contract.
+
+## PY-RAW-003 — Conservative unknown Raw command classification
+
+Scope: synchronous and asynchronous `raw_command()`, shared command policy,
+post-send failure classification, maintainer documentation, and changelog.
+
+Target contract: `state_changing=None` uses one shared policy in both clients.
+Known read-only commands remain read-only; known state-changing and unknown
+numeric commands are state changing. Native `True` may classify any command
+conservatively. Native `False` may identify a known or vendor-specific read-only
+command but cannot downgrade a known state-changing command. Classification is
+complete before FIFO admission. After possible send, an unconfirmed
+state-changing result is outcome-unknown and is never retried or read back.
+
+Compatibility impact: the keyword-only argument is additive and the
+maintainer-only default becomes safer for unknown numeric commands. Existing
+call shapes remain valid. A caller that knows an unknown command is read-only
+may pass `state_changing=False` explicitly.
+
+Acceptance criteria:
+
+1. Sync and async accept only native `bool` or `None`, before admission or transport.
+2. One shared policy classifies known reads, known writes, and unknown commands identically.
+3. Known writes cannot be downgraded; unknown known-read responsibility may be explicit.
+4. Post-send failure preserves the approved timeout/cancel/close/transport/protocol reason and cause.
+5. Pre-send failure is never outcome-unknown, and no path retries or reads back.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static, unit, integration, package, and source checks passed.
+- [x] Codex self-review completed against the final diff and cross-language contract.
+- [x] Live PLC checks are not required for deterministic classification and injected-failure behavior.
+- [x] Maintainer documentation, migration text, changelog, and generated API material agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-UDP-RX-003 — One active asynchronous UDP response waiter
+
+Scope: `SLMPDatagramProtocol`, async UDP correlation, transport retirement,
+traffic accounting, tests, maintainer documentation, and changelog.
+
+Target contract: retain no application-level datagram queue. The exact active
+UDP transport generation owns at most one pending response future. Datagrams
+without an active waiter, foreign routes, wrong 4E serials, duplicates, and
+post-completion arrivals are counted then discarded without retention. The one
+matching response completes the waiter once. Malformed active input and
+transport loss fail that waiter; every terminal path forgets it.
+
+Compatibility impact: private queue internals are removed. Public request and
+correlation behavior is unchanged except that unsolicited traffic cannot grow
+retained memory or leak into a later request.
+
+Acceptance criteria:
+
+1. Source contains no async UDP datagram collection or queue-size compatibility option.
+2. No-waiter and duplicate floods retain zero datagrams and cannot affect a later request.
+3. 3E route and 4E route/serial correlation complete exactly one active waiter.
+4. Timeout, cancellation, close, socket error, and malformed active input wake and retire the exact generation.
+5. Receive accounting stays consistent and no discarded datagram becomes a successful result.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static, unit, integration, package, and source checks passed.
+- [x] Codex self-review completed against the final waiter/generation diff.
+- [x] Live PLC checks are not required for deterministic fake-datagram behavior.
+- [x] Maintainer documentation and changelog agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-CONNECT-003 — One complete connection and lazy-request deadline
+
+Scope: sync/async, explicit/lazy, TCP/UDP IPv4 connection paths, partial and
+late-result cleanup, stable errors, tests, maintainer documentation, and
+changelog.
+
+Target contract: after FIFO admission, one monotonic absolute deadline begins
+before IPv4 resolution. It covers resolution, first-IPv4 selection, socket or
+endpoint creation, connect, required TCP configuration, cancellation/generation
+checks, client adoption, and—on lazy paths—the remaining send/response/decode
+work. No phase restarts the timeout. A timed-out or closed synchronous resolver
+worker never retains the client, and every late socket/result is closed rather
+than adopted. IPv4-only policy and first-IPv4 selection remain unchanged.
+
+Compatibility impact: no signature or address-family change. Calls that formerly
+received a fresh timeout for each connection phase now return stable timeout at
+the one configured operation bound.
+
+Acceptance criteria:
+
+1. Explicit and lazy sync/async TCP/UDP paths create one deadline before resolution.
+2. Every connection and lazy exchange phase consumes only the same remaining duration.
+3. Deadline/close before adoption yields no connected state, no send, and no outcome-unknown result.
+4. Late resolver or socket completion cannot mutate client state and closes partial resources.
+5. Configuration failure remains a transport/connection failure unless the deadline actually expires.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static, unit, integration, package, and source checks passed.
+- [x] Codex self-review completed against the final deadline/adoption diff.
+- [x] Live PLC checks are not required for deterministic resolver/socket behavior.
+- [x] Maintainer documentation, changelog, and generated API material agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+Verification evidence for `PY-RAW-003`, `PY-UDP-RX-003`, and
+`PY-CONNECT-003` on the final local source state:
+
+- `run_ci.bat` passed Ruff lint/format, Mypy over the 16 library source files,
+  public API documentation coverage for 207 definitions and 132 methods, and
+  all 465 tests on Windows/Python 3.14.3.
+- The stricter CI Mypy scope over `slmp` and `scripts` passed for 33 source
+  files. Wheel/sdist build, isolated installed-wheel consumer, package-content
+  inspection, and the complete current-worktree source-archive gate passed.
+- Canonical profile drift and no-auto-publish checks passed. The seven-test
+  Windows representative selector passed locally; no PLC communication was
+  performed.
+- Accepted and corrected during final self-review: a lazy connection deadline
+  correctly raised `SlmpTimeoutError("SLMP connection timeout")`, but the
+  exchange classifier replaced that pre-send result with the generic
+  communication-timeout message. Existing `SlmpTimeoutError` instances are now
+  preserved, while raw asyncio timeouts are still normalized.
+- Accepted and corrected during final gate execution: the new IPv4 contract
+  test import block was not Ruff-sorted. The import-only correction was applied
+  before the full gate was rerun.
+- Accepted and corrected by GitHub-hosted Python 3.10 Mypy: on Python 3.10,
+  `asyncio.TimeoutError` is typed separately from the built-in `TimeoutError`.
+  The private connection-failure classifier now accepts the precise union; its
+  runtime classification and public API are unchanged. Python 3.10 Mypy over
+  all 33 source files and the 14 IPv4 connection regressions passed afterward.
+- The GitHub-hosted Ubuntu Python 3.10/3.11/3.12/3.13/3.14 matrix was not run
+  locally and remains CI evidence rather than a claimed local pass.
 
 ## PY-PACKAGE-001 — Consumer-real package and worktree source gates
 
@@ -539,3 +667,62 @@ Self-review disposition:
 - Accepted: the full format gate exposed pre-existing Markdown code-fence drift;
   Ruff formatting corrected it without changing the documented contracts.
 - No rejected, duplicate, or deferred finding changes this contract.
+
+## GOAL-CROSS-OS-CI-001 — Required Windows representative contract smoke
+
+Implementation scope: the repository CI workflow and existing deterministic
+fake/loopback lifecycle tests. Runtime code, public API, packaging, release
+workflows, and the Ubuntu Python-version matrix are unchanged.
+
+Target contract: the primary Ubuntu full gate remains authoritative. One
+additional non-optional Windows job on Python 3.13 runs only representative
+contracts for absolute connect timeout with late-socket rejection, close
+retirement of active/queued work, one TCP header/body deadline under fragmented
+receive, async post-send cancellation retirement, and pre-adoption TCP socket-
+option failure cleanup. The selected UDP correlation case also proves that only
+the active matching response is retained. A real IPv4 loopback case times out,
+retires the first TCP connection, explicitly reconnects the same client, and
+completes a request on the second connection. The job has a ten-minute bound
+and performs no package build or hardware communication.
+
+Compatibility impact: none; this adds CI evidence only.
+
+Machine-verifiable acceptance criteria:
+
+1. `.github/workflows/ci.yml` contains exactly one `windows-latest` contract-
+   smoke job in addition to the unchanged Ubuntu full matrix.
+2. The Windows job is required by workflow semantics: it has no conditional,
+   failure suppression, or `continue-on-error` path.
+3. The selected tests cover late connect completion, bounded fragmented
+   receive, active/queued close retirement, cancellation, active UDP response
+   association, and rejection of work from a retired transport generation.
+4. The Windows job installs only pytest and pytest-asyncio, runs the explicit
+   bounded test list, and does not build, package, publish, or contact a PLC.
+
+- [x] Implementation completed in this repository.
+- [x] Existing deterministic tests explicitly selected for every acceptance criterion.
+- [x] The exact seven-test representative selector passed locally on Windows with Python 3.14.3.
+- [ ] The new Windows CI job passed on GitHub for the final source state.
+- [x] Codex self-review completed after the local representative and complete verification runs.
+- [x] Live PLC checks are not required; all selected behavior uses fake state or localhost loopback.
+- [x] Maintainer CI documentation agrees with the workflow; no user migration note or changelog entry is required.
+- [ ] Final acceptance criteria verified and the item marked complete.
+
+Verification disposition: the exact selector passed on the local Windows host,
+and the complete local static, unit, documentation, package, and current-worktree
+source gates passed on the same source state. The workflow specifies Python 3.13,
+which is not installed locally; no GitHub-hosted Windows pass is claimed until
+that job runs.
+
+Self-review disposition:
+
+- Accepted and corrected: the initially selected sync queue test was named for
+  active and queued retirement but directly asserted only active-generation
+  invalidation. It was replaced by the existing async UDP ownership test that
+  actually queues an operation behind close and proves zero send.
+- Accepted and corrected: explicit non-timeout connect failure was absent from
+  the first subset. Required keepalive setup failure and candidate cleanup are
+  now selected.
+- Rejected: copying these tests into a Windows-only file would duplicate their
+  contract. Exact existing node IDs remain authoritative.
+- Duplicate findings: none. Deferred findings: none.

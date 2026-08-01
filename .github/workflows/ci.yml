@@ -50,3 +50,29 @@ jobs:
         if: matrix.python-version == '3.14'
         shell: pwsh
         run: ./scripts/check_source_archive.ps1 -IncludeWorktree
+
+  windows-contract-smoke:
+    name: Windows representative contract smoke
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install smoke-test dependencies
+        run: python -m pip install pytest pytest-asyncio
+
+      - name: Run representative Windows transport lifecycle contracts
+        run: >-
+          python -m pytest -q
+          tests/test_ipv4_contract.py::test_sync_connect_deadline_covers_resolution_and_discards_late_socket
+          tests/test_async_client.py::test_async_udp_read_and_close_share_one_connection_ownership_order
+          tests/test_async_client.py::test_async_timeout_retires_transport_then_same_client_reconnects_and_exchanges
+          tests/test_response_correlation.py::test_async_udp_protocol_retains_only_the_active_matching_response
+          tests/test_response_correlation.py::test_sync_tcp_header_and_body_share_one_absolute_deadline
+          tests/test_response_correlation.py::test_async_cancellation_after_send_invalidates_transport_generation
+          tests/test_socket_options.py::test_tcp_connect_closes_socket_when_required_keepalive_setup_fails

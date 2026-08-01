@@ -247,12 +247,12 @@ Read `end_code` for the PLC response code and `error_info` when the PLC returned
 Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` and
 `TimeoutError` subclass, in both clients. The configured
 `timeout` begins only after the request's FIFO turn becomes active. One absolute
-deadline covers first send, complete transmit, receive, route/4E-serial
-correlation, and response decode; discarding a valid response for another route
-or serial does not restart it. Timeout retires the current transport generation,
-so a later operation must establish a new generation and cannot consume a late
-response from the timed-out exchange. Connection establishment is a separate
-operation with its own timeout.
+deadline covers IPv4 resolution, connection and socket configuration, first
+send, complete transmit, receive, route/4E-serial correlation, and response
+decode; no phase or discarded response restarts it. Timeout retires the current
+transport generation, so a later operation must establish a new generation and
+cannot consume a late connection or response result. An explicit `connect()`
+uses the same one-deadline rule from resolution through client adoption.
 
 `SlmpClosedError`, `SlmpNotConnectedError`, and `SlmpTransportError` distinguish
 local close, missing transport state, and other I/O failure. If a write, remote
