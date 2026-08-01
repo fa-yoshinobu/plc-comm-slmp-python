@@ -1070,3 +1070,17 @@ verified a 102-file self-contained source archive. This repository has no
 independent MkDocs project; maintained user Markdown and generated API source
 are covered by the repository gates. No live PLC communication, registry
 publication, commit, or push was performed.
+
+## 2026-08-02 response-identity, 4E, and ACK migration
+
+- PLC error information, when present, is now correlated with the active route,
+  command, and subcommand. Applications that previously treated a mismatched
+  block as a definitive PLC rejection must instead handle a protocol failure or
+  `SlmpOutcomeUnknownError(PROTOCOL)` and reconnect.
+- Non-zero 4E reserved bytes are no longer accepted or cleared. They invalidate
+  the current transport generation.
+- Standard semantic ACK-only APIs now require empty success data. Applications
+  using a vendor command with a data-bearing success response must use
+  `raw_command()` and explicitly classify whether the command changes state.
+- These are deterministic frame-contract changes. No live PLC communication is
+  required to verify them.

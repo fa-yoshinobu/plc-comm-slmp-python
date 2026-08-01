@@ -972,6 +972,9 @@ def decode_4e_response(frame: bytes) -> SlmpResponse:
     if frame[:2] != FRAME_4E_RESPONSE_SUBHEADER:
         got = frame[:2].hex(" ").upper()
         raise SlmpError(f"unexpected 4E response subheader: {got}")
+    if frame[4:6] != b"\x00\x00":
+        got = frame[4:6].hex(" ").upper()
+        raise SlmpError(f"unexpected 4E response reserved field: {got}")
 
     serial = int.from_bytes(frame[2:4], "little")
     target = SlmpTarget(

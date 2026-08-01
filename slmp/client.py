@@ -299,6 +299,7 @@ class SlmpClient:
         if raise_on_error is not None and type(raise_on_error) is not bool:
             raise ValueError("raise_on_error must be a boolean when provided")
         effective_state_changing = classify_command_state(int(command), state_changing)
+        require_empty_success_data = state_changing is None and effective_state_changing
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
         with self._operation_queue.turn():
@@ -312,6 +313,7 @@ class SlmpClient:
                 raise_on_error=effective_raise_on_error,
                 state_changing=effective_state_changing,
                 response_is_final=True,
+                require_empty_success_data=require_empty_success_data,
             )
 
     def _request_decoded(
@@ -363,6 +365,7 @@ class SlmpClient:
         raise_on_error: bool | None = None,
         state_changing: bool | None = None,
         response_is_final: bool = True,
+        require_empty_success_data: bool = False,
     ) -> SlmpResponse:
         """Send an internal SLMP request and return the response.
 
@@ -399,8 +402,9 @@ class SlmpClient:
             subcommand=subcommand,
             data=data,
         )
+        effective_state_changing = classify_command_state(cmd, state_changing)
         previous_state_changing = self._active_state_changing
-        self._active_state_changing = classify_command_state(cmd, state_changing)
+        self._active_state_changing = effective_state_changing
         try:
             raw = self._send_and_receive(frame)
         finally:
@@ -429,6 +433,19 @@ class SlmpClient:
                     error_info=resp.error_info,
                 )
             return resp
+        if require_empty_success_data and resp.data:
+            error = SlmpError(
+                "successful SLMP acknowledgement contains unexpected payload data",
+                data=resp.data,
+            )
+            self._close_transport()
+            if effective_state_changing:
+                raise SlmpOutcomeUnknownError(
+                    "SLMP state-changing command outcome is unknown because its acknowledgement was malformed",
+                    reason=SlmpOutcomeUnknownReason.PROTOCOL,
+                    cause=error,
+                ) from error
+            raise error
         if not response_is_final:
             self._operation_queue.ensure_current()
         return resp
@@ -1748,11 +1765,13 @@ def _response_matches_request(
     raw: bytes,
     *,
     frame_type: FrameType,
-    expected_identity: tuple[int | None, SlmpTarget],
+    expected_identity: tuple[int | None, SlmpTarget] | tuple[int | None, SlmpTarget, int, int],
 ) -> bool:
     """Validate one complete response and match its request identity."""
     response = decode_response(raw, frame_type=frame_type)
-    expected_serial, expected_target = expected_identity
+    expected_serial, expected_target = expected_identity[:2]
+    expected_command = expected_identity[2] if len(expected_identity) == 4 else None
+    expected_subcommand = expected_identity[3] if len(expected_identity) == 4 else None
     if (
         response.target.network != expected_target.network
         or response.target.station != expected_target.station
@@ -1760,26 +1779,54 @@ def _response_matches_request(
         or response.target.multidrop != expected_target.multidrop
     ):
         return False
-    return expected_serial is None or response.serial == expected_serial
+    if expected_serial is not None and response.serial != expected_serial:
+        return False
+    error_info = response.error_info
+    if (
+        error_info is not None
+        and expected_command is not None
+        and (
+            error_info.network != expected_target.network
+            or error_info.station != expected_target.station
+            or error_info.module_io != expected_target.module_io
+            or error_info.multidrop != expected_target.multidrop
+            or error_info.command != expected_command
+            or error_info.subcommand != expected_subcommand
+        )
+    ):
+        raise SlmpError("SLMP error information does not match the active request")
+    return True
 
 
-def _request_identity(frame: bytes, *, frame_type: FrameType) -> tuple[int | None, SlmpTarget]:
+def _request_identity(
+    frame: bytes, *, frame_type: FrameType
+) -> tuple[int | None, SlmpTarget] | tuple[int | None, SlmpTarget, int, int]:
     """Extract the required response identity from one encoded request frame."""
     if frame_type == FrameType.FRAME_4E:
         if len(frame) < 11 or frame[:2] != b"\x54\x00":
             raise SlmpError("invalid 4E request frame")
         serial: int | None = int.from_bytes(frame[2:4], "little")
         offset = 6
+        command_offset = 15
     else:
         if len(frame) < 7 or frame[:2] != b"\x50\x00":
             raise SlmpError("invalid 3E request frame")
         serial = None
         offset = 2
-    return serial, SlmpTarget(
+        command_offset = 11
+    target = SlmpTarget(
         network=frame[offset],
         station=frame[offset + 1],
         module_io=int.from_bytes(frame[offset + 2 : offset + 4], "little"),
         multidrop=frame[offset + 4],
+    )
+    if len(frame) < command_offset + 4:
+        return serial, target
+    return (
+        serial,
+        target,
+        int.from_bytes(frame[command_offset : command_offset + 2], "little"),
+        int.from_bytes(frame[command_offset + 2 : command_offset + 4], "little"),
     )
 
 

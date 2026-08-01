@@ -150,6 +150,14 @@ result cannot be known after possible send raises
 `SlmpOutcomeUnknownError(reason=..., cause=...)`; reasons are defined by
 `SlmpOutcomeUnknownReason`, and automatic retry is not performed.
 
+Response validation requires a zero 4E reserved field. When a PLC error includes
+the structured error-information prefix, its route, command, and subcommand must
+match the active request; trailing PLC error detail is preserved. Standard
+semantic ACK-only APIs accept only empty success data. Any mismatch or non-empty
+ACK retires the transport and is `SlmpError` for a read-only operation or
+`SlmpOutcomeUnknownError` with reason `PROTOCOL` for a possibly applied state
+change. `raw_command()` intentionally retains arbitrary success response data.
+
 After complete response correlation and command-specific decoding, the result
 is definitive: a later concurrent `close()` does not replace a decoded value,
 acknowledged write, or framed PLC end-code. A read interrupted before that point

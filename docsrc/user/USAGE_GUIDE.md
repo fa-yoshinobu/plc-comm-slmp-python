@@ -247,6 +247,16 @@ Extended Device entries use the 32-bit layout.
 
 When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
 Read `end_code` for the PLC response code and `error_info` when the PLC returned the structured error-information block.
+When that block is present, its route, command, and subcommand must identify the
+active request. A mismatch is malformed and retires the transport rather than
+being published as a definitive PLC error; any bytes after the fixed prefix are
+retained as additional PLC error data. Every 4E response also requires a zero
+reserved field.
+
+Successful responses from standard ACK-only APIs must contain no response data.
+Unexpected data makes a possibly applied state change outcome-unknown with
+reason `PROTOCOL` and retires the transport. `raw_command()` is the explicit
+maintainer escape hatch and continues to return arbitrary success data.
 Request-exchange deadline expiry raises `SlmpTimeoutError`, a `SlmpError` and
 `TimeoutError` subclass, in both clients. The configured
 `timeout` begins only after the request's FIFO turn becomes active. One absolute
