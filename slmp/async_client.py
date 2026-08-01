@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import math
 import socket
 from collections.abc import Callable, Mapping, Sequence
@@ -546,7 +547,7 @@ class AsyncSlmpClient:
             self._active_state_changing = previous_state_changing
         resp = decode_response(raw, frame_type=self.frame_type)
 
-        if self._trace_hook:
+        if self._trace_hook is not None:
             await self._emit_trace(
                 _SlmpTraceFrame(
                     serial=serial_no,
@@ -1528,12 +1529,11 @@ class AsyncSlmpClient:
 
     async def _emit_trace(self, trace: _SlmpTraceFrame) -> None:
         """Emit a trace event if a trace hook is registered."""
-        if self._trace_hook:
+        if self._trace_hook is not None:
             try:
-                if asyncio.iscoroutinefunction(self._trace_hook):
-                    await self._trace_hook(trace)
-                else:
-                    self._trace_hook(trace)
+                result = self._trace_hook(trace)
+                if inspect.isawaitable(result):
+                    await result
             except Exception:
                 pass
 

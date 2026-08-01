@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
 
-from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, PLCSeries
+from .constants import DIRECT_MEMORY_LINK_DIRECT, Command, DeviceUnit, PLCSeries
 from .core import (
     BlockReadResult,
     DeviceBlockResult,
@@ -33,6 +33,7 @@ from .core import (
     _check_temporarily_unsupported_devices,
     _check_u16,
     _check_u32,
+    _device_unit,
     _encode_label_name,
     _encode_remote_password_payload,
     _encode_resolved_extended_device_spec,
@@ -40,6 +41,7 @@ from .core import (
     _label_array_data_bytes,
     _label_array_wire_data_bytes,
     _normalize_items,
+    _random_device_span_points,
     _require_explicit_plc_profile_for_xy,
     _require_write_bit,
     _require_write_u16,
@@ -48,6 +50,7 @@ from .core import (
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_block_write_ranges,
+    _validate_device_span,
     _validate_direct_dword_read_device,
     _validate_direct_read_device,
     _validate_direct_write_device,
@@ -114,6 +117,31 @@ def _extended_subcommand_series(
             f"{operation} cannot mix J link-direct Q/L entries with 13-byte iQ-R extended entries in one request"
         )
     return PLCSeries.QL if has_link_direct else effective_series
+
+
+def _extended_wire_series(effective_series: PLCSeries, extension: _ExtensionSpec) -> PLCSeries:
+    """Return the device-number width used by one Extended Device entry."""
+    if extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
+        return PLCSeries.QL
+    return effective_series
+
+
+def _word_unit_device_span_points(
+    ref: DeviceRef,
+    word_points: int,
+    *,
+    long_current_block: bool = False,
+) -> int:
+    """Convert transferred word points to addresses consumed by the device family."""
+    if long_current_block and ref.code in {"LTN", "LSTN"}:
+        return (word_points + 3) // 4
+    if _device_unit(ref) == DeviceUnit.BIT:
+        return word_points * 16
+    return word_points
+
+
+def _direct_device_span_points(ref: DeviceRef, points: int, *, bit_unit: bool) -> int:
+    return points if bit_unit else _word_unit_device_span_points(ref, points, long_current_block=True)
 
 
 def _validate_random_result_keys(word_keys: Sequence[str], dword_keys: Sequence[str]) -> None:
@@ -184,6 +212,12 @@ def build_read_devices_request(
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
+    _validate_device_span(
+        ref,
+        points=_direct_device_span_points(ref, points, bit_unit=bit_unit),
+        series=effective_series,
+        operation="read_devices",
+    )
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
     _warn_boundary_behavior(
@@ -246,6 +280,12 @@ def build_write_devices_request(
     effective_series = _effective_series(series, default_series)
     ref = _parse_device_for_address_profile(device, address_profile)
     _validate_direct_write_device(ref, bit_unit=bit_unit, plc_profile=address_profile)
+    _validate_device_span(
+        ref,
+        points=_direct_device_span_points(ref, len(values), bit_unit=bit_unit),
+        series=effective_series,
+        operation="write_devices",
+    )
     _check_temporarily_unsupported_device(ref)
     _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
     _warn_boundary_behavior(
@@ -397,9 +437,15 @@ def build_read_devices_ext_request(
         enforce_semantic_unit=enforce_semantic_unit,
     )
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-    _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
         effective_series = PLCSeries.QL
+    _validate_device_span(
+        ref,
+        points=_direct_device_span_points(ref, points, bit_unit=bit_unit),
+        series=effective_series,
+        operation="read_devices_ext",
+    )
+    _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
     payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
@@ -439,9 +485,15 @@ def build_write_devices_ext_request(
         enforce_semantic_unit=enforce_semantic_unit,
     )
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
-    _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
         effective_series = PLCSeries.QL
+    _validate_device_span(
+        ref,
+        points=_direct_device_span_points(ref, len(values), bit_unit=bit_unit),
+        series=effective_series,
+        operation="write_devices_ext",
+    )
+    _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     subcommand = resolve_device_subcommand(bit_unit=bit_unit, series=effective_series, extension=True)
     payload = bytearray()
     payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
@@ -485,11 +537,25 @@ def build_register_monitor_devices_request(
     for dev in word_devices:
         ref = _parse_device_for_address_profile(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
+        _validate_monitor_register_devices([ref], [])
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=False),
+            series=effective_series,
+            operation="register_monitor_devices",
+        )
         payload += encode_device_spec(ref, series=effective_series)
         word_refs.append(ref)
     for dev in dword_devices:
         ref = _parse_device_for_address_profile(dev, address_profile)
         _check_temporarily_unsupported_device(ref)
+        _validate_monitor_register_devices([], [ref])
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=True),
+            series=effective_series,
+            operation="register_monitor_devices",
+        )
         payload += encode_device_spec(ref, series=effective_series)
         dword_refs.append(ref)
     _validate_monitor_register_devices(word_refs, dword_refs)
@@ -528,18 +594,32 @@ def build_register_monitor_devices_ext_request(
     for dev, ext in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_monitor_register_devices([ref], [])
         word_refs.append(ref)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=False),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="register_monitor_devices_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for dev, ext in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_monitor_register_devices([], [ref])
         dword_refs.append(ref)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=True),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="register_monitor_devices_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_monitor_register_devices(word_refs, dword_refs)
     subcommand = resolve_device_subcommand(
@@ -715,6 +795,20 @@ def build_read_random_request(
     _validate_random_result_keys(word_keys, dword_keys)
     _check_temporarily_unsupported_devices(words)
     _check_temporarily_unsupported_devices(dwords)
+    for device in words:
+        _validate_device_span(
+            device,
+            points=_random_device_span_points(device, dword=False),
+            series=effective_series,
+            operation="read_random",
+        )
+    for device in dwords:
+        _validate_device_span(
+            device,
+            points=_random_device_span_points(device, dword=True),
+            series=effective_series,
+            operation="read_random",
+        )
 
     payload = bytearray([len(words), len(dwords)])
     for device in words:
@@ -763,20 +857,34 @@ def build_read_random_ext_request(
     for device, extension, result_key in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_random_read_devices([ref], [])
         words.append(ref)
         word_keys.append(result_key)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=False),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="read_random_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     for device, extension, result_key in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_random_read_devices([], [ref])
         dwords.append(ref)
         dword_keys.append(result_key)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=True),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="read_random_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
     _validate_random_read_devices(words, dwords)
     _validate_random_result_keys(word_keys, dword_keys)
@@ -846,6 +954,20 @@ def build_write_random_words_request(
         [device for device, _ in dword_items],
         plc_profile=address_profile,
     )
+    for device, _ in word_items:
+        _validate_device_span(
+            device,
+            points=_random_device_span_points(device, dword=False),
+            series=effective_series,
+            operation="write_random_words",
+        )
+    for device, _ in dword_items:
+        _validate_device_span(
+            device,
+            points=_random_device_span_points(device, dword=True),
+            series=effective_series,
+            operation="write_random_words",
+        )
     subcommand = resolve_device_subcommand(bit_unit=False, series=effective_series, extension=False)
     payload = bytearray([len(word_items), len(dword_items)])
     for index, (device, value) in enumerate(word_items):
@@ -892,21 +1014,45 @@ def build_write_random_words_ext_request(
     for index, (device, value, extension) in enumerate(word_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_random_write_word_devices(
+            [ref],
+            [],
+            plc_profile=address_profile,
+            word_namespaces=[effective_extension],
+        )
         word_refs.append(ref)
         word_extensions.append(effective_extension)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=False),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="write_random_words_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += _require_write_u16(value, f"word_values[{index}]").to_bytes(2, "little", signed=False)
     for index, (device, value, extension) in enumerate(dword_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
+        _validate_random_write_word_devices(
+            [],
+            [ref],
+            plc_profile=address_profile,
+            dword_namespaces=[effective_extension],
+        )
         dword_refs.append(ref)
         dword_extensions.append(effective_extension)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
+        _validate_device_span(
+            ref,
+            points=_random_device_span_points(ref, dword=True),
+            series=_extended_wire_series(effective_series, effective_extension),
+            operation="write_random_words_ext",
+        )
         payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         payload += _require_write_u32(value, f"dword_values[{index}]").to_bytes(4, "little", signed=False)
     _validate_random_write_word_devices(
@@ -1050,6 +1196,13 @@ def build_read_block_request(
         ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
+        _validate_block_read_devices([(ref, points)], [])
+        _validate_device_span(
+            ref,
+            points=_word_unit_device_span_points(ref, points, long_current_block=True),
+            series=effective_series,
+            operation="read_block",
+        )
         normalized_word.append((ref, points))
         payload += encode_device_spec(ref, series=effective_series)
         payload += points.to_bytes(2, "little")
@@ -1058,6 +1211,8 @@ def build_read_block_request(
         ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
+        _validate_block_read_devices([], [(ref, points)])
+        _validate_device_span(ref, points=points * 16, series=effective_series, operation="read_block")
         normalized_bit.append((ref, points))
         payload += encode_device_spec(ref, series=effective_series)
         payload += points.to_bytes(2, "little")
@@ -1128,12 +1283,21 @@ def build_write_block_request(
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "word block size")
+        _validate_block_write_devices([ref], [], plc_profile=address_profile)
+        _validate_device_span(
+            ref,
+            points=_word_unit_device_span_points(ref, len(values)),
+            series=effective_series,
+            operation="write_block",
+        )
         word_refs.append(ref)
     for device, values in bit_blocks:
         ref = _parse_device_for_address_profile(device, address_profile)
         _check_temporarily_unsupported_device(ref)
         _warn_practical_device_path(ref, series=effective_series, access_kind="direct")
         _check_points_u16(len(values), "bit block size")
+        _validate_block_write_devices([], [ref], plc_profile=address_profile)
+        _validate_device_span(ref, points=len(values) * 16, series=effective_series, operation="write_block")
         bit_refs.append(ref)
     _validate_block_write_devices(word_refs, bit_refs, plc_profile=address_profile)
     _validate_block_write_ranges(

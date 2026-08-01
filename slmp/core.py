@@ -725,7 +725,7 @@ def _parse_extended_device(
     text = value.strip().upper()
 
     # J-format: link direct device (e.g. 'J2\SW10')
-    j_qualified = re.fullmatch(r"J(\d+)[\\/](.+)", text)
+    j_qualified = re.fullmatch(r"J([0-9]+)[\\/](.+)", text)
     if j_qualified:
         j_net_txt, device_txt = j_qualified.groups()
         j_network = int(j_net_txt)
@@ -1036,6 +1036,23 @@ def encode_device_spec(
 
     _check_u32(ref.number, "device.number")
     return ref.number.to_bytes(4, "little") + dev.code.to_bytes(2, "little")
+
+
+def _validate_device_span(
+    ref: DeviceRef,
+    *,
+    points: int,
+    series: PLCSeries,
+    operation: str,
+) -> None:
+    """Validate a contiguous request against the selected wire address width."""
+    maximum = 0xFFFFFF if series == PLCSeries.QL else 0xFFFFFFFF
+    end = ref.number + points - 1
+    if ref.number < 0 or end > maximum:
+        raise ValueError(
+            f"{operation} device span out of range for {series.value} format: "
+            f"start={ref.number}, points={points}, end={end}, maximum={maximum}"
+        )
 
 
 def _encode_extension_spec(spec: _ExtensionSpec) -> bytes:
@@ -1624,6 +1641,14 @@ def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Se
         )
 
 
+def _random_device_span_points(ref: DeviceRef, *, dword: bool) -> int:
+    """Return logical device numbers consumed by one Random/Monitor entry."""
+    if dword and (ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES):
+        return 1
+    word_points = 2 if dword else 1
+    return word_points * 16 if _device_unit(ref) == DeviceUnit.BIT else word_points
+
+
 def _validate_random_write_word_devices(
     word_refs: Sequence[DeviceRef],
     dword_refs: Sequence[DeviceRef] = (),
@@ -1647,16 +1672,29 @@ def _validate_random_write_word_devices(
     if len(word_scopes) != len(word_refs) or len(dword_scopes) != len(dword_refs):
         raise ValueError("random write destination namespace count mismatch")
     occupied: set[tuple[object, str, int]] = set()
+    starts: set[tuple[object, str, int]] = set()
     for ref, scope in zip(word_refs, word_scopes, strict=True):
-        slot = (scope, ref.code, ref.number)
-        if slot in occupied:
+        start = (scope, ref.code, ref.number)
+        if start in starts:
             raise ValueError(f"Write Random (0x1402) has a duplicate destination: {ref}")
-        occupied.add(slot)
+        slots = {
+            (scope, ref.code, ref.number + offset) for offset in range(_random_device_span_points(ref, dword=False))
+        }
+        if occupied.intersection(slots):
+            raise ValueError(f"Write Random (0x1402) has overlapping word destinations: {ref}")
+        occupied.update(slots)
+        starts.add(start)
     for ref, scope in zip(dword_refs, dword_scopes, strict=True):
-        slots = ((scope, ref.code, ref.number), (scope, ref.code, ref.number + 1))
-        if any(slot in occupied for slot in slots):
+        start = (scope, ref.code, ref.number)
+        if start in starts:
+            raise ValueError(f"Write Random (0x1402) has a duplicate destination: {ref}")
+        slots = {
+            (scope, ref.code, ref.number + offset) for offset in range(_random_device_span_points(ref, dword=True))
+        }
+        if occupied.intersection(slots):
             raise ValueError(f"Write Random (0x1402) has overlapping word/dword destinations: {ref}")
         occupied.update(slots)
+        starts.add(start)
 
 
 def _validate_random_write_bit_devices(

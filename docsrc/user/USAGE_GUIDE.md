@@ -237,6 +237,12 @@ with SlmpClient(
 The available link direct device families depend on the PLC route and link
 module configuration.
 
+Write the `J` network number with ASCII decimal digits (`0` through `9`). For
+example, `J2\SW10` is valid; visually similar Unicode digits are rejected
+before request construction. A `J`-qualified link-direct device always uses
+the 24-bit Q/L device specification, including on an iQ-R client; other iQ-R
+Extended Device entries use the 32-bit layout.
+
 ## SLMP response end codes
 
 When the PLC returns a non-zero SLMP end code, the high-level APIs raise `SlmpError`.
