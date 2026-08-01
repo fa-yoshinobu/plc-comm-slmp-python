@@ -397,6 +397,11 @@ Verification evidence for `PY-RAW-003`, `PY-UDP-RX-003`, and
 - Accepted and corrected during final gate execution: the new IPv4 contract
   test import block was not Ruff-sorted. The import-only correction was applied
   before the full gate was rerun.
+- Accepted and corrected by GitHub-hosted Python 3.10 Mypy: on Python 3.10,
+  `asyncio.TimeoutError` is typed separately from the built-in `TimeoutError`.
+  The private connection-failure classifier now accepts the precise union; its
+  runtime classification and public API are unchanged. Python 3.10 Mypy over
+  all 33 source files and the 14 IPv4 connection regressions passed afterward.
 - The GitHub-hosted Ubuntu Python 3.10/3.11/3.12/3.13/3.14 matrix was not run
   locally and remains CI evidence rather than a claimed local pass.
 

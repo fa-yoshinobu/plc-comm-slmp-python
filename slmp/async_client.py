@@ -1463,7 +1463,7 @@ def _connection_remaining_timeout(deadline: float, *, loop: asyncio.AbstractEven
 
 
 def _raise_connection_timeout_or_transport(
-    error: TimeoutError,
+    error: asyncio.TimeoutError | TimeoutError,
     *,
     deadline: float,
     loop: asyncio.AbstractEventLoop,
