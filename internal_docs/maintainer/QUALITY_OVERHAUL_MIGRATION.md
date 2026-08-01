@@ -66,11 +66,11 @@ Specify choices that change the command meaning or destination: `bit_unit`, remo
 
 Replace chunked helpers and automatic mixed-block splitting with explicit application-controlled requests. If a logical read spans requests, the application must define snapshot/version checks. If a logical write spans requests, it must define partial-success and retry handling.
 
-Named reads and polling cycles may split only at independent entry boundaries
-under `PY-AGGREGATE-002`; they preserve declared order and execute under one
-exclusive ordinary-client turn. Named writes remain single-request-or-reject:
-one word/DWord random family or one random-bit family. Other routes must be
-called explicitly by the application.
+Named reads and polling cycles are single-request-or-reject under
+`PY-R1-20260801`. The earlier `PY-AGGREGATE-002` automatic-split target is
+superseded. Named writes remain single-request-or-reject: one word/DWord random
+family or one random-bit family. Other routes must be called explicitly by the
+application.
 
 Random read may omit either the word or DWord device collection. At least one valid device is required across both categories; all-empty and invalid supplied collections fail before transport. The result always contains both mappings, with the unused category represented by an empty mapping. The same rule applies to semantic Extended Device random reads.
 
@@ -536,6 +536,9 @@ Acceptance criteria:
 
 ## PY-AGGREGATE-002 — Read-only entry-boundary aggregation
 
+Status: superseded on 2026-08-01 by `PY-R1-20260801`. The checked evidence
+below records the historical implementation and is not the current contract.
+
 Scope: `read_named`, `read_named_sync`, and `poll`.
 
 Target contract: snapshot and preflight the full plan before send. An oversized
@@ -726,3 +729,188 @@ Self-review disposition:
 - Rejected: copying these tests into a Windows-only file would duplicate their
   contract. Exact existing node IDs remain authoritative.
 - Duplicate findings: none. Deferred findings: none.
+
+## PY-R1-20260801 — One-request named reads
+
+Implementation scope: sync/async named reads, polling, plan compilation,
+long-timer routing, tests, user documentation, migration notes, and changelog.
+
+Target contract: one ordinary named read or polling cycle emits exactly one
+canonical Random Read or rejects its complete plan before transport. Long-timer
+Direct Read families remain available only through typed or explicit helpers.
+`PY-AGGREGATE-002` is superseded; no compatibility split remains callable.
+
+Compatibility impact: oversized named collections and callers relying on
+automatic word/DWord category splitting must issue explicit application calls.
+
+Acceptance criteria:
+
+1. Mixed word/DWord named input emits one Random Read and preserves result keys.
+2. Profile-limit overflow, unsupported families, and representative
+   `LTN10:D`, `LSTN10:L`, `LTS10:BIT`, `LTC10:BIT`, `LSTS10:BIT`, and
+   `LSTC10:BIT` fail before any client request.
+3. No plan contains a long-timer execution kind or exposes a partial result.
+4. Typed and explicit long-timer helpers retain their documented routes.
+5. User and generated documentation contain no automatic-split claim.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the actual diff, API, validation order, tests, documentation, and cross-language contract.
+- [x] Live PLC checks are not required; planning, request count, and route admission are deterministic local properties.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-D1-20260801 — Definitive result precedence across close
+
+Implementation scope: sync/async request execution, TCP/UDP lifecycle
+generation checks, command-specific decoders, PLC end-code construction,
+acknowledged writes, tests, and public error documentation.
+
+Target contract: a result becomes definitive after complete correlation,
+protocol validation, and command-specific decoding; a framed PLC end-code and
+an acknowledged write are also definitive. A later close cannot replace them.
+Close before read completion remains `SlmpClosedError`, and a possibly-sent
+state change without a definitive result remains outcome-unknown/closed.
+
+Compatibility impact: a narrow close race now returns an already-established
+result or PLC error instead of closed/outcome-unknown. Incomplete operations do
+not change classification and no retry is added.
+
+Acceptance criteria:
+
+1. Deterministic sync/async TCP/UDP barriers preserve decoded word reads after
+   lifecycle publication.
+2. Close before command decoding, including a decoder-rejected malformed
+   payload, still rejects the read as closed.
+3. Framed `0xC051` remains a structured PLC error across concurrent close.
+4. Acknowledged writes remain successful across concurrent close.
+5. Possibly-sent unacknowledged writes remain outcome-unknown with reason and
+   cause `CLOSED`; queued retired work sends nothing.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the actual diff, result publication point, lifecycle transitions, errors, tests, and cross-language contract.
+- [x] Live PLC checks are not required; lifecycle ordering is deterministic local behavior.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-P1-20260801 — Typed local-close exception identity
+
+Implementation scope: all three sync and all three async exchange cleanup
+handlers, TCP/UDP close races, state-changing classification, tests, and docs.
+
+Target contract: a bare re-raise is used only when the final classified object
+is the originally caught exception. Replacing it with `SlmpClosedError` raises
+that replacement, or wraps it in `SlmpOutcomeUnknownError(CLOSED)` after a
+possibly-sent state change.
+
+Compatibility impact: local close no longer leaks raw `OSError`,
+`ConnectionError`, `asyncio.IncompleteReadError`, or replacement transport
+errors from the interrupted operation.
+
+Acceptance criteria:
+
+1. Sync and async TCP/UDP reads interrupted by local close raise
+   `SlmpClosedError`.
+2. The six handler copies compare the classified result with the originally
+   caught exception, not a replacement `failure` variable.
+3. Sync and async possibly-sent writes retain outcome-unknown reason `CLOSED`
+   and a typed closed cause.
+4. Ordinary transport loss without lifecycle invalidation remains transport
+   failure and no retry is introduced.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against all handler copies, exception identity, chaining, tests, and cross-language contract.
+- [x] Live PLC checks are not required; exception identity and close races are deterministic local properties.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## PY-N1-20260801 — Canonical semantic device units
+
+Implementation scope: canonical device metadata, Direct and Extended Device
+bit operations, Random bit writes, Block entries, typed/named helpers,
+convenience wrappers, raw evidence path, tests, docs, and changelog.
+
+Target contract: every semantic bit-unit/bit-entry surface requires a bit
+device; Block word entries and typed/named numeric values require a word device.
+Typed/named `BIT` requires a bit device. Explicit low-level word-unit Direct
+access retains packed access to bit devices. One word-device bit uses `.n` or
+the explicit non-atomic bit-in-word helper. `G` and `HG` are word-only.
+
+Compatibility impact: calls such as `D0 + bit_unit=True`, `D0:BIT`, `M0:U`,
+word devices in bit Block lists, and bit devices in word Block lists now fail
+before request construction. Packed bit-device word access migrates from typed
+numeric helpers to explicit `read_devices`/`write_devices` word-unit calls.
+
+Acceptance criteria:
+
+1. One canonical metadata lookup classifies every public device code and both
+   unit sets are exhaustively tested.
+2. Sync/async Direct, Extended/link, Random bit, Block, typed, named, and
+   convenience surfaces reject mismatched units before request activity.
+3. Both Block mismatch directions are rejected.
+4. Explicit low-level word-unit access to `M` remains accepted and emits the
+   word subcommand.
+5. Private raw Extended Device evidence calls can explicitly bypass only the
+   semantic unit guard while retaining all other route validation.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the classifier, every semantic surface, raw evidence boundary, tests, docs, and cross-language contract.
+- [x] Live PLC checks are not required; unit classification and zero-send validation are deterministic local properties.
+- [x] Documentation, migration notes, changelog, and generated API reference agree.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+Self-review disposition for the 2026-08-01 items:
+
+- Accepted and corrected: typed sync/async helpers initially delegated unit
+  validation to a client call, allowing test doubles to bypass the exact
+  typed/named contract. All four helpers now validate canonical dtype/unit
+  compatibility before routing.
+- Accepted and corrected: user and maintainer docs retained the superseded
+  named-read automatic-split contract. They now state one request or rejection.
+- Accepted and corrected: packed bit-device word examples used typed numeric
+  APIs, which now intentionally reject bit devices. Examples use explicit
+  word-unit Direct APIs.
+- Accepted and corrected: the first lifecycle implementation allowed
+  `raise_on_error=False` to reclassify an already-framed PLC end-code as a
+  concurrent close. The framed error now reaches the command decoder before
+  lifecycle reclassification for both settings.
+- Accepted and corrected: a command decoder that rejected a malformed payload
+  initially bypassed the final generation publication check. Decoder failures
+  now use the same publication boundary as decoded values, while a framed PLC
+  end-code remains definitive. Deterministic sync/async TCP/UDP tests cover the
+  race.
+- Accepted and corrected: the first R1 test set did not prove every listed
+  long-timer Direct family independently. Sync and async zero-request vectors
+  now cover `LTN`, `LSTN`, `LTS`, `LTC`, `LSTS`, and `LSTC`.
+- Accepted and corrected: the existing async complete-connection deadline test
+  exposed Windows event-loop clock quantization. A timeout injected by
+  `asyncio.wait_for` is identified from its cancellation cause, while an
+  earlier socket `TimeoutError` remains a transport error; both paths have
+  deterministic tests.
+- Rejected: applying the semantic unit guard to private raw Extended Device
+  evidence probes would prevent controlled protocol investigation and conflicts
+  with the approved raw-evidence boundary. Those calls explicitly bypass only
+  this guard.
+- Rejected: requiring word-device metadata in `read_words_single_request`,
+  `write_words_single_request`, or their sync/DWord wrappers would remove the
+  explicitly word-oriented low-level packed access that the approved N1
+  contract preserves. Only semantic typed/named numeric helpers reject bit
+  devices; explicit word-unit APIs remain intentionally asymmetric.
+- Duplicate findings: none. Deferred findings: none.
+
+Verification evidence (2026-08-01): Ruff lint and format, mypy, public API
+docstring coverage (207 definitions and 132 methods), canonical profile drift,
+automatic-publication guard, and version synchronization passed. The full
+suite passed with 504 tests and 317 subtests. The current-worktree source
+archive gate passed, including isolated archive CI, wheel/sdist construction,
+installed-wheel smoke tests, package-content checks, and 23 wheel / 29 sdist
+consumer assertions. This repository does not contain an independent MkDocs
+project; the maintained user Markdown and generated API source were checked by
+the repository gates.

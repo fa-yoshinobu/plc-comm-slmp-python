@@ -12,13 +12,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
 from . import _operations
-from .capability_profiles import profile_limit
-from .constants import DEVICE_CODES, DeviceUnit, FrameType, PLCSeries
+from .constants import DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
     SlmpTarget,
     _check_direct_device_points,
     _check_temporarily_unsupported_device,
+    _device_unit,
     _normalize_plc_profile_hint,
     _require_explicit_plc_profile_for_xy,
     _require_write_u16,
@@ -64,18 +64,10 @@ class _ReadPlanEntry:
     dtype: str
     bit_index: int | None
     batch_kind: str | None
-    long_timer_read: tuple[str, str] | None
 
 
 @dataclass(frozen=True)
 class _ReadPlan:
-    entries: tuple[_ReadPlanEntry, ...]
-    word_devices: tuple[DeviceRef, ...]
-    dword_devices: tuple[DeviceRef, ...]
-
-
-@dataclass(frozen=True)
-class _ReadPlanChunk:
     entries: tuple[_ReadPlanEntry, ...]
     word_devices: tuple[DeviceRef, ...]
     dword_devices: tuple[DeviceRef, ...]
@@ -235,6 +227,7 @@ async def read_typed(
     """
     ref = _parse_device_for_client(client, device)
     key = _require_dtype(dtype)
+    _validate_device_dtype(str(ref), ref, key)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -274,6 +267,7 @@ async def write_typed(
     """
     ref = _parse_device_for_client(client, device)
     key = _require_dtype(dtype)
+    _validate_device_dtype(str(ref), ref, key)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -306,6 +300,7 @@ def read_typed_sync(
     """Synchronously read one logical value as a Python scalar."""
     ref = _parse_device_for_client(client, device)
     key = _require_dtype(dtype)
+    _validate_device_dtype(str(ref), ref, key)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -338,6 +333,7 @@ def write_typed_sync(
     """Synchronously write one logical value using the requested type."""
     ref = _parse_device_for_client(client, device)
     key = _require_dtype(dtype)
+    _validate_device_dtype(str(ref), ref, key)
     long_read = _get_long_timer_read(ref)
     if long_read is not None:
         _validate_long_timer_entry(str(ref), ref, key)
@@ -712,8 +708,7 @@ def normalize_address(
 
 
 def _is_batchable_word_device(device: DeviceRef) -> bool:
-    code = DEVICE_CODES.get(device.code)
-    return code is not None and code.unit == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
+    return _device_unit(device) == DeviceUnit.WORD and device.code not in _UNBATCHED_DEVICE_CODES
 
 
 def _plain_bit_word_read(device: DeviceRef) -> tuple[DeviceRef, int] | None:
@@ -737,8 +732,7 @@ def _resolve_dtype_for_address(address: str, device: DeviceRef, dtype: str, bit_
 def _validate_device_dtype(address: str, device: DeviceRef, dtype: str) -> None:
     if dtype == "BIT_IN_WORD":
         return
-    code = DEVICE_CODES.get(device.code)
-    is_bit_device = code is not None and code.unit == DeviceUnit.BIT
+    is_bit_device = _device_unit(device) == DeviceUnit.BIT
     if is_bit_device and dtype != "BIT":
         raise ValueError(f"Address '{address}' is a bit device and requires ':BIT'.")
     if not is_bit_device and dtype == "BIT":
@@ -835,8 +829,7 @@ def _encode_typed_float32(value: object) -> int:
 
 
 def _validate_bit_in_word_target(address: str, device: DeviceRef) -> None:
-    code = DEVICE_CODES.get(device.code)
-    if code is None or code.unit != DeviceUnit.WORD:
+    if _device_unit(device) != DeviceUnit.WORD:
         raise ValueError(
             f"Address '{address}' uses '.bit' notation, which is only valid for word devices. "
             "Address bit devices directly, for example 'M1000' instead of 'M1000.0'."
@@ -955,8 +948,11 @@ def _compile_read_plan(
             _validate_long_timer_entry(address, device, dtype)
 
         if long_timer_read is not None and not (device.code == "LCN" and long_timer_read[1] == "current"):
-            batch_kind = "LONG_TIMER"
-        elif long_timer_read is not None:
+            raise ValueError(
+                f"read_named cannot route '{address}' through a hidden Direct long-timer read; "
+                "use read_typed or an explicit long-timer helper"
+            )
+        if long_timer_read is not None:
             batch_kind = "DWORD"
             if device not in seen_dwords:
                 dword_devices.append(device)
@@ -983,7 +979,7 @@ def _compile_read_plan(
                     dword_devices.append(device)
                     seen_dwords.add(device)
 
-        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind, long_timer_read))
+        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind))
 
     unsupported = [entry.address for entry in entries if entry.batch_kind not in {"WORD", "DWORD"}]
     if unsupported:
@@ -993,46 +989,6 @@ def _compile_read_plan(
         )
 
     return _ReadPlan(tuple(entries), tuple(word_devices), tuple(dword_devices))
-
-
-def _split_read_plan(plan: _ReadPlan, *, max_devices: int = 0xFF) -> tuple[_ReadPlanChunk, ...]:
-    """Split only at independent named-entry boundaries, preserving input order."""
-    chunks: list[_ReadPlanChunk] = []
-    entries: list[_ReadPlanEntry] = []
-    devices: list[DeviceRef] = []
-    seen: set[DeviceRef] = set()
-    kind: str | None = None
-
-    def flush() -> None:
-        nonlocal entries, devices, seen, kind
-        if not entries or kind is None:
-            return
-        chunks.append(
-            _ReadPlanChunk(
-                entries=tuple(entries),
-                word_devices=tuple(devices) if kind == "WORD" else (),
-                dword_devices=tuple(devices) if kind == "DWORD" else (),
-            )
-        )
-        entries = []
-        devices = []
-        seen = set()
-        kind = None
-
-    for entry in plan.entries:
-        assert entry.batch_kind in {"WORD", "DWORD"}
-        adds_wire_device = entry.device not in seen
-        if kind is not None and (entry.batch_kind != kind or (adds_wire_device and len(devices) == max_devices)):
-            flush()
-            adds_wire_device = True
-        if kind is None:
-            kind = entry.batch_kind
-        entries.append(entry)
-        if adds_wire_device:
-            devices.append(entry.device)
-            seen.add(entry.device)
-    flush()
-    return tuple(chunks)
 
 
 def _decode_word_value(value: int, dtype: str) -> int:
@@ -1077,8 +1033,7 @@ def _prepare_bit_in_word_rmw(
         raise ValueError(f"bit_index must be 0-15, got {bit_index}")
     normalized_value = _require_typed_bool(value)
     ref = _parse_device_for_client(client, device)
-    device_info = DEVICE_CODES.get(ref.code)
-    if device_info is None or device_info.unit is not DeviceUnit.WORD:
+    if _device_unit(ref) is not DeviceUnit.WORD:
         raise ValueError("write_bit_in_word is only valid for word devices; use write_typed for bit devices")
 
     from .async_client import AsyncSlmpClient
@@ -1158,8 +1113,8 @@ def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> in
 def _prepare_read_plan(
     client: AsyncSlmpClient | SlmpClient,
     plan: _ReadPlan,
-) -> tuple[tuple[_ReadPlanChunk, _operations.RandomReadOperation], ...]:
-    """Validate and encode every chunk before any transport send occurs."""
+) -> _operations.RandomReadOperation:
+    """Validate and encode the one named-read request before transport."""
     client._ensure_profile_feature_allowed("random")
     _, default_series, _, _, _ = _resolve_connection_profile(
         plc_profile=client.plc_profile,
@@ -1167,28 +1122,21 @@ def _prepare_read_plan(
         frame_type=None,
         address_profile=None,
     )
-    prepared: list[tuple[_ReadPlanChunk, _operations.RandomReadOperation]] = []
-    limit_info = profile_limit(client.plc_profile, "random_read_word")
-    fallback_limit = 96 if default_series == PLCSeries.IQR else 192
-    max_devices = min(0xFF, limit_info.max if limit_info is not None else fallback_limit)
-    for chunk in _split_read_plan(plan, max_devices=max_devices):
-        operation = _operations.build_read_random_request(
-            word_devices=chunk.word_devices,
-            dword_devices=chunk.dword_devices,
-            series=None,
-            default_series=default_series,
-            address_profile=client.plc_profile,
-        )
-        prepared.append((chunk, operation))
-    return tuple(prepared)
+    return _operations.build_read_random_request(
+        word_devices=plan.word_devices,
+        dword_devices=plan.dword_devices,
+        series=None,
+        default_series=default_series,
+        address_profile=client.plc_profile,
+    )
 
 
-def _decode_read_chunk(
+def _decode_read_plan(
     output: dict[str, int | float | bool],
-    chunk: _ReadPlanChunk,
+    plan: _ReadPlan,
     random_result: Any,
 ) -> None:
-    for entry in chunk.entries:
+    for entry in plan.entries:
         if entry.batch_kind == "WORD":
             word = random_result.word[str(entry.device)]
             if entry.dtype == "BIT_IN_WORD":
@@ -1204,18 +1152,17 @@ async def _read_named_with_plan(
     client: AsyncSlmpClient,
     plan: _ReadPlan,
 ) -> dict[str, int | float | bool]:
-    prepared = _prepare_read_plan(client, plan)
+    operation = _prepare_read_plan(client, plan)
     result: dict[str, int | float | bool] = {}
     from .async_client import AsyncSlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
     async with turn:
-        for chunk, _ in prepared:
-            random_result = await client.read_random(
-                word_devices=list(chunk.word_devices),
-                dword_devices=list(chunk.dword_devices),
-            )
-            _decode_read_chunk(result, chunk, random_result)
+        random_result = await client.read_random(
+            word_devices=list(operation.word_refs),
+            dword_devices=list(operation.dword_refs),
+        )
+        _decode_read_plan(result, plan, random_result)
     return result
 
 
@@ -1223,18 +1170,17 @@ def _read_named_with_plan_sync(
     client: SlmpClient,
     plan: _ReadPlan,
 ) -> dict[str, int | float | bool]:
-    prepared = _prepare_read_plan(client, plan)
+    operation = _prepare_read_plan(client, plan)
     result: dict[str, int | float | bool] = {}
     from .client import SlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
     with turn:
-        for chunk, _ in prepared:
-            random_result = client.read_random(
-                word_devices=list(chunk.word_devices),
-                dword_devices=list(chunk.dword_devices),
-            )
-            _decode_read_chunk(result, chunk, random_result)
+        random_result = client.read_random(
+            word_devices=list(operation.word_refs),
+            dword_devices=list(operation.dword_refs),
+        )
+        _decode_read_plan(result, plan, random_result)
     return result
 
 

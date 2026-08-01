@@ -29,6 +29,7 @@ from .constants import (
     SUBCOMMAND_DEVICE_WORD_QL,
     SUBCOMMAND_DEVICE_WORD_QL_EXT,
     Command,
+    DeviceUnit,
     FrameType,
     ModuleIONo,
     PLCSeries,
@@ -1524,7 +1525,36 @@ def _check_temporarily_unsupported_devices(refs: Sequence[DeviceRef], *, access_
         _check_temporarily_unsupported_device(ref, access_kind=access_kind)
 
 
-def _validate_direct_read_device(ref: DeviceRef, *, points: int, bit_unit: bool) -> None:
+def _device_unit(ref: DeviceRef) -> DeviceUnit:
+    """Return the canonical semantic unit for a parsed device."""
+    return DEVICE_CODES[ref.code].unit
+
+
+def _require_bit_device(ref: DeviceRef, *, operation: str) -> None:
+    if _device_unit(ref) != DeviceUnit.BIT:
+        raise ValueError(
+            f"{operation} requires a bit device; {ref.code} is a word device. "
+            "Use an explicit word-unit API for packed access or '.bit' notation for one bit inside a word device."
+        )
+
+
+def _require_word_device(ref: DeviceRef, *, operation: str) -> None:
+    if _device_unit(ref) != DeviceUnit.WORD:
+        raise ValueError(
+            f"{operation} requires a word device; {ref.code} is a bit device. "
+            "Use an explicit word-unit direct API only when packed bit-device access is intended."
+        )
+
+
+def _validate_direct_read_device(
+    ref: DeviceRef,
+    *,
+    points: int,
+    bit_unit: bool,
+    enforce_semantic_unit: bool = True,
+) -> None:
+    if bit_unit and enforce_semantic_unit:
+        _require_bit_device(ref, operation="Direct bit read")
     if bit_unit and ref.code in _LT_LST_DIRECT_CODES:
         raise ValueError(
             f"Direct bit read is not supported for {ref.code}. "
@@ -1546,7 +1576,15 @@ def _is_read_only_device(ref: DeviceRef, plc_profile: object | None = None) -> b
     return is_profile_read_only_device(plc_profile, ref.code)
 
 
-def _validate_direct_write_device(ref: DeviceRef, *, bit_unit: bool, plc_profile: object | None = None) -> None:
+def _validate_direct_write_device(
+    ref: DeviceRef,
+    *,
+    bit_unit: bool,
+    plc_profile: object | None = None,
+    enforce_semantic_unit: bool = True,
+) -> None:
+    if bit_unit and enforce_semantic_unit:
+        _require_bit_device(ref, operation="Direct bit write")
     if _is_read_only_device(ref, plc_profile):
         raise ValueError(f"{ref.code} is read-only for the selected PLC profile and cannot be written.")
     if bit_unit and ref.code in _LONG_FAMILY_STATE_WRITE_DIRECT_CODES:
@@ -1564,7 +1602,8 @@ def _validate_direct_dword_read_device(ref: DeviceRef) -> None:
     if ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES:
         raise ValueError(
             f"Direct dword read is not supported for {ref.code}. "
-            "Use read_typed/read_named so the supported 32-bit route is selected."
+            "Use read_typed so the supported 32-bit route is selected; "
+            "read_named is available only for random-readable LCN/LZ entries."
         )
 
 
@@ -1572,16 +1611,16 @@ def _validate_random_read_devices(word_refs: Sequence[DeviceRef], dword_refs: Se
     if any(ref.code in _LT_LST_DIRECT_CODES for ref in (*word_refs, *dword_refs)):
         raise ValueError(
             "Read Random (0x0403) does not support LTS/LTC/LSTS/LSTC. "
-            "Use read_typed/read_named or the long timer status helpers instead."
+            "Use read_typed or the explicit long-timer status helpers instead."
         )
     if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
         raise ValueError(
-            "Read Random (0x0403) does not support LCS/LCC. Use read_typed/read_named so direct bit read is selected."
+            "Read Random (0x0403) does not support LCS/LCC. Use read_typed or the explicit long-counter state helpers."
         )
     if any(ref.code in _LT_LST_CURRENT_CODES or ref.code in _DWORD_ONLY_DIRECT_CODES for ref in word_refs):
         raise ValueError(
             "Read Random (0x0403) does not support LTN/LSTN/LCN/LZ as word entries. "
-            "Use dword entries or read_typed/read_named with ':D' or ':L' instead."
+            "Use explicit dword entries or read_typed; read_named ':D' or ':L' is available only for LCN/LZ."
         )
 
 
@@ -1626,6 +1665,8 @@ def _validate_random_write_bit_devices(
     plc_profile: object | None = None,
     namespaces: Sequence[object] | None = None,
 ) -> None:
+    for ref in bit_refs:
+        _require_bit_device(ref, operation="Random bit write")
     read_only = next((ref for ref in bit_refs if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
         raise ValueError(
@@ -1663,6 +1704,10 @@ def _validate_block_read_devices(
     word_blocks: Sequence[tuple[DeviceRef, int]],
     bit_blocks: Sequence[tuple[DeviceRef, int]],
 ) -> None:
+    for ref, _ in word_blocks:
+        _require_word_device(ref, operation="Read Block word entry")
+    for ref, _ in bit_blocks:
+        _require_bit_device(ref, operation="Read Block bit entry")
     all_refs = tuple(ref for ref, _ in (*word_blocks, *bit_blocks))
     invalid_long_block = next(
         ((ref, points) for ref, points in word_blocks if ref.code in _LT_LST_CURRENT_BLOCK_CODES and points % 4 != 0),
@@ -1672,7 +1717,7 @@ def _validate_block_read_devices(
         ref, points = invalid_long_block
         raise ValueError(
             f"Read Block (0x0406) direct read of {ref.code} requires 4-word blocks. "
-            f"Requested points={points}; use read_typed/read_named for 32-bit current values."
+            f"Requested points={points}; use read_typed or an explicit long-timer helper for current values."
         )
     if any(ref.code in _RANDOM_DWORD_ONLY_DIRECT_CODES for ref in all_refs):
         raise ValueError(
@@ -1681,7 +1726,7 @@ def _validate_block_read_devices(
         )
     if any(ref.code in _LC_CONTACT_CODES for ref in all_refs):
         raise ValueError(
-            "Read Block (0x0406) does not support LCS/LCC. Use read_typed/read_named so direct bit read is selected."
+            "Read Block (0x0406) does not support LCS/LCC. Use read_typed or the explicit long-counter state helpers."
         )
 
 
@@ -1691,6 +1736,10 @@ def _validate_block_write_devices(
     *,
     plc_profile: object | None = None,
 ) -> None:
+    for ref in word_refs:
+        _require_word_device(ref, operation="Write Block word entry")
+    for ref in bit_refs:
+        _require_bit_device(ref, operation="Write Block bit entry")
     read_only = next((ref for ref in (*word_refs, *bit_refs) if _is_read_only_device(ref, plc_profile)), None)
     if read_only is not None:
         raise ValueError(
@@ -1714,7 +1763,7 @@ def _validate_monitor_register_devices(word_refs: Sequence[DeviceRef], dword_ref
     if any(ref.code in _LC_CONTACT_CODES for ref in (*word_refs, *dword_refs)):
         raise ValueError(
             "Entry Monitor Device (0x0801) does not support LCS/LCC. "
-            "Use read_typed/read_named so direct bit read is selected."
+            "Use read_typed or the explicit long-counter state helpers."
         )
 
 

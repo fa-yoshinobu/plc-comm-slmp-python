@@ -6,7 +6,7 @@ import asyncio
 import math
 import socket
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, TypeVar, cast
 
 from . import _operations
 from ._command_policy import classify_command_state
@@ -60,6 +60,7 @@ from .errors import (
 )
 
 _COMMUNICATION_TIMEOUT_MESSAGE = "SLMP communication timeout"
+_DecodedT = TypeVar("_DecodedT")
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -468,7 +469,45 @@ class AsyncSlmpClient:
                 monitoring_timer=monitoring_timer,
                 raise_on_error=raise_on_error,
                 state_changing=effective_state_changing,
+                response_is_final=True,
             )
+
+    async def _request_decoded(
+        self,
+        command: int | Command,
+        subcommand: int,
+        data: bytes,
+        decoder: Callable[[SlmpResponse], _DecodedT],
+    ) -> _DecodedT:
+        """Execute a read and publish lifecycle completion after command decoding."""
+        if type(self)._request is not AsyncSlmpClient._request:
+            return decoder(await self._request(command, subcommand, data))
+        effective_state_changing = classify_command_state(int(command), False)
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
+        async with self._operation_queue.turn():
+            response = await self._request_unlocked(
+                command,
+                subcommand,
+                data,
+                raise_on_error=self.raise_on_error,
+                state_changing=effective_state_changing,
+                response_is_final=False,
+            )
+            if response.end_code != 0:
+                # A completely framed PLC end-code is definitive even when
+                # raise_on_error=False delegates structured error construction
+                # to the command decoder.
+                return decoder(response)
+            try:
+                result = decoder(response)
+            except BaseException:
+                # A command decoder failure is published at the same lifecycle
+                # boundary as a decoded value. If close linearized first, the
+                # read is still incomplete and the typed closed error wins.
+                self._operation_queue.ensure_current()
+                raise
+            self._operation_queue.ensure_current()
+            return result
 
     async def _request_unlocked(
         self,
@@ -481,6 +520,7 @@ class AsyncSlmpClient:
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
         state_changing: bool | None = None,
+        response_is_final: bool = True,
     ) -> SlmpResponse:
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
@@ -520,15 +560,17 @@ class AsyncSlmpClient:
                     monitoring_timer=monitor,
                 )
             )
-        self._operation_queue.ensure_current()
-
-        if do_raise and resp.end_code != 0:
-            raise SlmpError(
-                f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
-                end_code=resp.end_code,
-                data=resp.data,
-                error_info=resp.error_info,
-            )
+        if resp.end_code != 0:
+            if do_raise:
+                raise SlmpError(
+                    f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
+                    end_code=resp.end_code,
+                    data=resp.data,
+                    error_info=resp.error_info,
+                )
+            return resp
+        if not response_is_final:
+            self._operation_queue.ensure_current()
         return resp
 
     async def raw_command(
@@ -582,8 +624,16 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_devices_response(
+                response,
+                points=points,
+                bit_unit=bit_unit,
+            ),
+        )
 
     async def write_devices(
         self,
@@ -632,8 +682,12 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_dwords_response(resp, count=count)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_dwords_response(response, count=count),
+        )
 
     async def write_dwords(
         self,
@@ -678,8 +732,12 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_float32s_response(resp, count=count)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_float32s_response(response, count=count),
+        )
 
     async def write_float32s(
         self,
@@ -715,8 +773,16 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_devices_response(
+                response,
+                points=points,
+                bit_unit=bit_unit,
+            ),
+        )
 
     async def write_devices_ext(
         self,
@@ -755,8 +821,12 @@ class AsyncSlmpClient:
             address_profile=self.plc_profile,
         )
         request = operation.request
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_random_response(resp, operation)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_random_response(response, operation),
+        )
 
     async def read_random_ext(
         self,
@@ -784,8 +854,12 @@ class AsyncSlmpClient:
             address_profile=self.plc_profile,
         )
         request = operation.request
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_random_response(resp, operation)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_random_response(response, operation),
+        )
 
     async def write_random_words(
         self,
@@ -917,8 +991,16 @@ class AsyncSlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_run_monitor_cycle_response(
+                response,
+                word_points=word_points,
+                dword_points=dword_points,
+            ),
+        )
 
     async def read_block(
         self,
@@ -940,8 +1022,12 @@ class AsyncSlmpClient:
             address_profile=self.plc_profile,
         )
         request = operation.request
-        resp = await self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_block_response(resp, operation)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_block_response(response, operation),
+        )
 
     async def write_block(
         self,
@@ -982,8 +1068,12 @@ class AsyncSlmpClient:
         """Read the PLC type name and model code."""
         self._ensure_profile_feature_allowed("type_name")
         request = _operations.build_read_type_name_request()
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_read_type_name_response(resp)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            _operations.decode_read_type_name_response,
+        )
 
     async def read_device_range_catalog_for_plc_profile(
         self,
@@ -1061,8 +1151,15 @@ class AsyncSlmpClient:
     async def self_test_loopback(self, data: bytes | str) -> bytes:
         """Execute a self-test loopback."""
         request = _operations.build_self_test_loopback_request(data)
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_self_test_loopback_response(resp, expected=request.payload[2:])
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_self_test_loopback_response(
+                response,
+                expected=request.payload[2:],
+            ),
+        )
 
     # --------------------
     # Label commands
@@ -1074,8 +1171,15 @@ class AsyncSlmpClient:
         """Read array labels from the PLC."""
         requested_points = tuple(points)
         request = _operations.build_read_array_labels_request(requested_points, abbreviation_labels=abbreviation_labels)
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.parse_array_label_read_response(resp.data, requested_points=requested_points)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.parse_array_label_read_response(
+                response.data,
+                requested_points=requested_points,
+            ),
+        )
 
     async def write_array_labels(
         self, points: Sequence[LabelArrayWritePoint], *, abbreviation_labels: Sequence[str] = ()
@@ -1092,8 +1196,15 @@ class AsyncSlmpClient:
         request = _operations.build_read_random_labels_request(
             requested_labels, abbreviation_labels=abbreviation_labels
         )
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.parse_label_read_random_response(resp.data, expected_points=len(requested_labels))
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.parse_label_read_random_response(
+                response.data,
+                expected_points=len(requested_labels),
+            ),
+        )
 
     async def write_random_labels(
         self, points: Sequence[LabelRandomWritePoint], *, abbreviation_labels: Sequence[str] = ()
@@ -1109,8 +1220,12 @@ class AsyncSlmpClient:
     async def memory_read_words(self, head_address: int, word_length: int) -> list[int]:
         """Read memory words from the PLC."""
         request = _operations.build_memory_read_words_request(head_address, word_length)
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_memory_read_words_response(resp, word_length=word_length)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_memory_read_words_response(response, word_length=word_length),
+        )
 
     async def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
         """Write memory words to the PLC."""
@@ -1120,8 +1235,15 @@ class AsyncSlmpClient:
     async def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
         """Read words from an extend unit."""
         request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_extend_unit_read_words_response(resp, word_length=word_length)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_extend_unit_read_words_response(
+                response,
+                word_length=word_length,
+            ),
+        )
 
     async def extend_unit_write_words(self, head_address: int, module_no: int, values: Sequence[int]) -> None:
         """Write words to an extend unit."""
@@ -1191,8 +1313,15 @@ class AsyncSlmpClient:
     async def extend_unit_read_bytes(self, head_address: int, byte_length: int, module_no: int) -> bytes:
         """Read bytes from an extend unit."""
         request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
-        resp = await self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_extend_unit_read_bytes_response(resp, byte_length=byte_length)
+        return await self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_extend_unit_read_bytes_response(
+                response,
+                byte_length=byte_length,
+            ),
+        )
 
     async def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
         """Read a single word from an extend unit."""
@@ -1280,7 +1409,7 @@ class AsyncSlmpClient:
                 except SlmpClosedError as closed:
                     failure = closed
                 classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
-                if classified is failure:
+                if classified is err:
                     raise
                 raise classified from failure
             finally:
@@ -1310,7 +1439,7 @@ class AsyncSlmpClient:
                 except SlmpClosedError as closed:
                     failure = closed
                 classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
-                if classified is failure:
+                if classified is err:
                     raise
                 raise classified from failure
         # A send-only command can still produce an NG response. 3E has no
@@ -1373,7 +1502,7 @@ class AsyncSlmpClient:
                     state_changing=self._active_state_changing,
                     attempted_send=attempted_send,
                 )
-                if classified is failure:
+                if classified is err:
                     raise
                 raise classified from failure
 
@@ -1468,7 +1597,12 @@ def _raise_connection_timeout_or_transport(
     deadline: float,
     loop: asyncio.AbstractEventLoop,
 ) -> NoReturn:
-    if deadline - loop.time() <= 0:
+    # ``asyncio.wait_for`` reports its own deadline by chaining the
+    # TimeoutError from the cancellation it injected.  On Windows the event
+    # loop clock can still appear a few milliseconds before ``deadline`` at
+    # that point, so the clock comparison alone misclassifies a real timeout
+    # as a transport failure.
+    if isinstance(error.__cause__, asyncio.CancelledError) or deadline - loop.time() <= 0:
         raise SlmpTimeoutError("SLMP connection timeout") from error
     raise SlmpTransportError(f"SLMP connection failed before its deadline: {error}") from error
 

@@ -31,7 +31,7 @@ from slmp.client import (
     _recv_exact,
     _recv_tcp_frame,
 )
-from slmp.constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
+from slmp.constants import DEVICE_CODES, Command, DeviceUnit, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from slmp.core import (
     DeviceRef,
     SlmpBoundaryBehaviorWarning,
@@ -45,9 +45,12 @@ from slmp.core import (
     SlmpTarget,
     SlmpUnsupportedDeviceError,
     _build_device_modification_flags,
+    _device_unit,
     _encode_extended_device_spec,
     _ExtensionSpec,
     _parse_extended_device,
+    _require_bit_device,
+    _require_word_device,
     decode_4e_response,
     encode_4e_request,
     encode_device_spec,
@@ -73,6 +76,76 @@ print(f"DEBUG: core file = {slmp.core.__file__}")
 
 def test_import_name_stays_slmp_after_package_rename() -> None:
     assert slmp.core.__name__ == "slmp.core"
+
+
+def test_canonical_device_unit_classifier_covers_every_public_device_code() -> None:
+    observed: set[DeviceUnit] = set()
+    for code, metadata in DEVICE_CODES.items():
+        ref = SimpleNamespace(code=code)
+        assert _device_unit(ref) is metadata.unit  # type: ignore[arg-type]
+        observed.add(metadata.unit)
+        if metadata.unit is DeviceUnit.WORD:
+            with unittest.TestCase().assertRaisesRegex(ValueError, "requires a bit device"):
+                _require_bit_device(ref, operation="test")  # type: ignore[arg-type]
+        else:
+            with unittest.TestCase().assertRaisesRegex(ValueError, "requires a word device"):
+                _require_word_device(ref, operation="test")  # type: ignore[arg-type]
+    assert observed == {DeviceUnit.BIT, DeviceUnit.WORD}
+
+
+def test_sync_semantic_bit_surfaces_reject_word_devices_before_request() -> None:
+    client = FakeClient()
+    invalid_calls = (
+        lambda: client.read_devices("D0", 1, bit_unit=True),
+        lambda: client.write_devices("D0", [True], bit_unit=True),
+        lambda: client.read_devices_ext(r"U3E0\HG0", 1, bit_unit=True),
+        lambda: client.write_devices_ext(r"J1\W0", [True], bit_unit=True),
+        lambda: client.write_random_bits({"D0": True}),
+        lambda: client.write_random_bits_ext([(r"U1\G0", True)]),
+        lambda: client.read_block(bit_blocks=[("D0", 1)]),
+        lambda: client.write_block(bit_blocks=[("D0", [1])]),
+        lambda: client.read_block(word_blocks=[("M0", 1)]),
+        lambda: client.write_block(word_blocks=[("M0", [1])]),
+    )
+
+    for call in invalid_calls:
+        with unittest.TestCase().assertRaisesRegex(ValueError, "requires a (bit|word) device"):
+            call()
+        assert client.requests == []
+
+
+def test_sync_explicit_word_read_retains_packed_bit_device_access() -> None:
+    client = FakeClient()
+    client.next_response_data = b"\x34\x12"
+
+    assert client.read_devices("M0", 1, bit_unit=False) == [0x1234]
+    assert client.last_request is not None
+    assert client.last_request[1] == 0x0002
+
+
+def test_raw_extended_builder_can_bypass_only_semantic_unit_policy() -> None:
+    with unittest.TestCase().assertRaisesRegex(ValueError, "requires a bit device"):
+        _operations.build_read_devices_ext_request(
+            "D0",
+            1,
+            extension=_ExtensionSpec(),
+            bit_unit=True,
+            series=None,
+            default_series=PLCSeries.IQR,
+            address_profile="melsec:iq-r",
+        )
+
+    request = _operations.build_read_devices_ext_request(
+        "D0",
+        1,
+        extension=_ExtensionSpec(),
+        bit_unit=True,
+        series=None,
+        default_series=PLCSeries.IQR,
+        address_profile="melsec:iq-r",
+        enforce_semantic_unit=False,
+    )
+    assert request.subcommand == 0x0083
 
 
 class FakeClient(SlmpClient):
@@ -571,8 +644,6 @@ class TestReceiveHelpers(unittest.TestCase):
             client.write_random_bits([("M0", True), ("M0", False)])
         with self.assertRaisesRegex(ValueError, "overlapping word destination range"):
             client.write_block(word_blocks=[("D0", [1, 2]), ("D1", [3])])
-        with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
-            client.write_block(word_blocks=[("M0", [1])], bit_blocks=[("M0", [0])])
         with self.assertRaisesRegex(ValueError, "overlapping bit destination range"):
             client.write_block(bit_blocks=[("M0", [1, 2]), ("M16", [3])])
         self.assertEqual(client.requests, [])
@@ -2883,7 +2954,7 @@ class TestDeviceApi(unittest.TestCase):
         self.assertIn(b"\x90\x00\x01\x00", payload)
         self.assertTrue(payload.endswith(b"\x9d\x00\x00\x00"))
 
-        with self.assertRaisesRegex(ValueError, "does not support G/HG bit entries"):
+        with self.assertRaisesRegex(ValueError, "requires a bit device"):
             client.write_random_bits_ext(
                 bit_values=[(r"U3E0\G10", True)],
             )

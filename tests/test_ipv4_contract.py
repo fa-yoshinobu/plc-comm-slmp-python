@@ -18,7 +18,7 @@ from slmp._network import (
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.core import SlmpTarget
-from slmp.errors import SlmpTimeoutError
+from slmp.errors import SlmpTimeoutError, SlmpTransportError
 
 TARGET = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
 
@@ -189,5 +189,21 @@ async def test_async_complete_operation_deadline_is_not_restarted_after_resoluti
                 await client.connect()
         elapsed = asyncio.get_running_loop().time() - started
 
-    assert 0.05 <= elapsed < 0.12
+    # Windows' proactor clock can fire the final wait a scheduler tick early.
+    assert 0.04 <= elapsed < 0.12
     assert client._writer is None
+
+
+@pytest.mark.asyncio
+async def test_async_transport_timeout_before_connection_deadline_remains_transport_error() -> None:
+    client = AsyncSlmpClient(
+        "192.0.2.10",
+        1025,
+        transport="tcp",
+        default_target=TARGET,
+        plc_profile="melsec:iq-r",
+        timeout=1.0,
+    )
+    with patch("slmp.async_client.asyncio.open_connection", side_effect=TimeoutError("socket timed out")):
+        with pytest.raises(SlmpTransportError, match="socket timed out"):
+            await client.connect()

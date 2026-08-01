@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from . import _operations
 from ._command_policy import classify_command_state
@@ -62,6 +62,7 @@ from .errors import (
 )
 
 _COMMUNICATION_TIMEOUT_MESSAGE = "SLMP communication timeout"
+_DecodedT = TypeVar("_DecodedT")
 
 if TYPE_CHECKING:
     from .core import SlmpPlcProfile
@@ -310,7 +311,45 @@ class SlmpClient:
                 monitoring_timer=monitoring_timer,
                 raise_on_error=effective_raise_on_error,
                 state_changing=effective_state_changing,
+                response_is_final=True,
             )
+
+    def _request_decoded(
+        self,
+        command: int | Command,
+        subcommand: int,
+        data: bytes,
+        decoder: Callable[[SlmpResponse], _DecodedT],
+    ) -> _DecodedT:
+        """Execute a read and publish lifecycle completion after command decoding."""
+        if type(self)._request is not SlmpClient._request:
+            return decoder(self._request(command, subcommand, data))
+        effective_state_changing = classify_command_state(int(command), False)
+        _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
+        with self._operation_queue.turn():
+            response = self._request_unlocked(
+                command,
+                subcommand,
+                data,
+                raise_on_error=self.raise_on_error,
+                state_changing=effective_state_changing,
+                response_is_final=False,
+            )
+            if response.end_code != 0:
+                # A completely framed PLC end-code is definitive even when
+                # raise_on_error=False delegates structured error construction
+                # to the command decoder.
+                return decoder(response)
+            try:
+                result = decoder(response)
+            except BaseException:
+                # A command decoder failure is published at the same lifecycle
+                # boundary as a decoded value. If close linearized first, the
+                # read is still incomplete and the typed closed error wins.
+                self._operation_queue.ensure_current()
+                raise
+            self._operation_queue.ensure_current()
+            return result
 
     def _request_unlocked(
         self,
@@ -323,6 +362,7 @@ class SlmpClient:
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
         state_changing: bool | None = None,
+        response_is_final: bool = True,
     ) -> SlmpResponse:
         """Send an internal SLMP request and return the response.
 
@@ -379,16 +419,18 @@ class SlmpClient:
                 monitoring_timer=monitor,
             )
         )
-        self._operation_queue.ensure_current()
-
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
-        if do_raise and resp.end_code != 0:
-            raise SlmpError(
-                f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
-                end_code=resp.end_code,
-                data=resp.data,
-                error_info=resp.error_info,
-            )
+        if resp.end_code != 0:
+            if do_raise:
+                raise SlmpError(
+                    f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
+                    end_code=resp.end_code,
+                    data=resp.data,
+                    error_info=resp.error_info,
+                )
+            return resp
+        if not response_is_final:
+            self._operation_queue.ensure_current()
         return resp
 
     def raw_command(
@@ -481,8 +523,16 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_devices_response(
+                response,
+                points=points,
+                bit_unit=bit_unit,
+            ),
+        )
 
     def write_devices(
         self,
@@ -542,8 +592,12 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_dwords_response(resp, count=count)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_dwords_response(response, count=count),
+        )
 
     def write_dwords(
         self,
@@ -588,8 +642,12 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_float32s_response(resp, count=count)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_float32s_response(response, count=count),
+        )
 
     def write_float32s(
         self,
@@ -625,8 +683,16 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_devices_response(
+                response,
+                points=points,
+                bit_unit=bit_unit,
+            ),
+        )
 
     def _read_devices_ext_raw(
         self,
@@ -658,9 +724,18 @@ class SlmpClient:
             series=series,
             default_series=self.plc_series,
             address_profile=self.plc_profile,
+            enforce_semantic_unit=False,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_read_devices_response(resp, points=points, bit_unit=bit_unit)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_read_devices_response(
+                response,
+                points=points,
+                bit_unit=bit_unit,
+            ),
+        )
 
     def write_devices_ext(
         self,
@@ -713,6 +788,7 @@ class SlmpClient:
             series=series,
             default_series=self.plc_series,
             address_profile=self.plc_profile,
+            enforce_semantic_unit=False,
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
@@ -737,12 +813,12 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(
+        return self._request_decoded(
             operation.request.command,
-            subcommand=operation.request.subcommand,
-            data=operation.request.payload,
+            operation.request.subcommand,
+            operation.request.payload,
+            lambda response: _operations.decode_read_random_response(response, operation),
         )
-        return _operations.decode_read_random_response(resp, operation)
 
     def read_random_ext(
         self,
@@ -775,12 +851,12 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(
+        return self._request_decoded(
             operation.request.command,
-            subcommand=operation.request.subcommand,
-            data=operation.request.payload,
+            operation.request.subcommand,
+            operation.request.payload,
+            lambda response: _operations.decode_read_random_response(response, operation),
         )
-        return _operations.decode_read_random_response(resp, operation)
 
     def write_random_words(
         self,
@@ -957,8 +1033,16 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(request.command, subcommand=request.subcommand, data=request.payload)
-        return _operations.decode_run_monitor_cycle_response(resp, word_points=word_points, dword_points=dword_points)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_run_monitor_cycle_response(
+                response,
+                word_points=word_points,
+                dword_points=dword_points,
+            ),
+        )
 
     def read_block(
         self,
@@ -979,12 +1063,12 @@ class SlmpClient:
             default_series=self.plc_series,
             address_profile=self.plc_profile,
         )
-        resp = self._request(
+        return self._request_decoded(
             operation.request.command,
-            subcommand=operation.request.subcommand,
-            data=operation.request.payload,
+            operation.request.subcommand,
+            operation.request.payload,
+            lambda response: _operations.decode_read_block_response(response, operation),
         )
-        return _operations.decode_read_block_response(resp, operation)
 
     def write_block(
         self,
@@ -1124,8 +1208,12 @@ class SlmpClient:
 
         """
         request = _operations.build_memory_read_words_request(head_address, word_length)
-        resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_memory_read_words_response(resp, word_length=word_length)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_memory_read_words_response(response, word_length=word_length),
+        )
 
     def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
         """Write 16-bit words to intelligent function module/special function module buffer memory.
@@ -1151,8 +1239,15 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
-        resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_extend_unit_read_bytes_response(resp, byte_length=byte_length)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_extend_unit_read_bytes_response(
+                response,
+                byte_length=byte_length,
+            ),
+        )
 
     def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
         """Read 16-bit words from multiple-CPU shared memory or other extended units.
@@ -1167,8 +1262,15 @@ class SlmpClient:
 
         """
         request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
-        resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_extend_unit_read_words_response(resp, word_length=word_length)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_extend_unit_read_words_response(
+                response,
+                word_length=word_length,
+            ),
+        )
 
     def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
         """Read one 16-bit word from an extend-unit buffer."""
@@ -1298,8 +1400,15 @@ class SlmpClient:
 
         """
         request = _operations.build_self_test_loopback_request(data)
-        resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_self_test_loopback_response(resp, expected=request.payload[2:])
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_self_test_loopback_response(
+                response,
+                expected=request.payload[2:],
+            ),
+        )
 
     # --------------------
     # Label command helpers (typed)
@@ -1323,8 +1432,15 @@ class SlmpClient:
         """
         requested_points = tuple(points)
         request = _operations.build_read_array_labels_request(requested_points, abbreviation_labels=abbreviation_labels)
-        data = self._request(request.command, request.subcommand, request.payload).data
-        return _operations.parse_array_label_read_response(data, requested_points=requested_points)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.parse_array_label_read_response(
+                response.data,
+                requested_points=requested_points,
+            ),
+        )
 
     def write_array_labels(
         self,
@@ -1362,8 +1478,15 @@ class SlmpClient:
         request = _operations.build_read_random_labels_request(
             requested_labels, abbreviation_labels=abbreviation_labels
         )
-        data = self._request(request.command, request.subcommand, request.payload).data
-        return _operations.parse_label_read_random_response(data, expected_points=len(requested_labels))
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.parse_label_read_random_response(
+                response.data,
+                expected_points=len(requested_labels),
+            ),
+        )
 
     def write_random_labels(
         self,
@@ -1385,8 +1508,12 @@ class SlmpClient:
         """Read the PLC model name and code."""
         self._ensure_profile_feature_allowed("type_name")
         request = _operations.build_read_type_name_request()
-        resp = self._request(request.command, request.subcommand, request.payload)
-        return _operations.decode_read_type_name_response(resp)
+        return self._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            _operations.decode_read_type_name_response,
+        )
 
     def read_device_range_catalog_for_plc_profile(
         self,
@@ -1483,7 +1610,7 @@ class SlmpClient:
             except SlmpClosedError as closed:
                 failure = closed
             classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
-            if classified is failure:
+            if classified is err:
                 raise
             raise classified from failure
         finally:
@@ -1513,7 +1640,7 @@ class SlmpClient:
             except SlmpClosedError as closed:
                 failure = closed
             classified = _classify_exchange_failure(failure, state_changing=True, attempted_send=attempted_send)
-            if classified is failure:
+            if classified is err:
                 raise
             raise classified from failure
 
@@ -1571,7 +1698,7 @@ class SlmpClient:
                     state_changing=self._active_state_changing,
                     attempted_send=attempted_send,
                 )
-                if classified is failure:
+                if classified is err:
                     raise
                 raise classified from failure
 

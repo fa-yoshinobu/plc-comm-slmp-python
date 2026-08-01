@@ -517,6 +517,38 @@ class FakeAsyncClient(AsyncSlmpClient):
         )
 
 
+@pytest.mark.asyncio
+async def test_async_semantic_bit_surfaces_reject_word_devices_before_request() -> None:
+    client = FakeAsyncClient()
+    invalid_calls = (
+        lambda: client.read_devices("D0", 1, bit_unit=True),
+        lambda: client.write_devices("D0", [True], bit_unit=True),
+        lambda: client.read_devices_ext(r"U3E0\HG0", 1, bit_unit=True),
+        lambda: client.write_devices_ext(r"J1\W0", [True], bit_unit=True),
+        lambda: client.write_random_bits({"D0": True}),
+        lambda: client.write_random_bits_ext([(r"U1\G0", True)]),
+        lambda: client.read_block(bit_blocks=[("D0", 1)]),
+        lambda: client.write_block(bit_blocks=[("D0", [1])]),
+        lambda: client.read_block(word_blocks=[("M0", 1)]),
+        lambda: client.write_block(word_blocks=[("M0", [1])]),
+    )
+
+    for call in invalid_calls:
+        with pytest.raises(ValueError, match="requires a (bit|word) device"):
+            await call()
+        assert client.last_request is None
+
+
+@pytest.mark.asyncio
+async def test_async_explicit_word_read_retains_packed_bit_device_access() -> None:
+    client = FakeAsyncClient()
+    client.next_response_data = b"\x34\x12"
+
+    assert await client.read_devices("M0", 1, bit_unit=False) == [0x1234]
+    assert client.last_request is not None
+    assert client.last_request[1] == 0x0002
+
+
 # --- Test Cases ---
 
 

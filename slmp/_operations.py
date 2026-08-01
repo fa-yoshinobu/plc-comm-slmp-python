@@ -377,6 +377,7 @@ def build_read_devices_ext_request(
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
+    enforce_semantic_unit: bool = True,
 ) -> OperationRequest:
     """Build an extended-device direct read request."""
 
@@ -389,7 +390,12 @@ def build_read_devices_ext_request(
     )
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
-    _validate_direct_read_device(ref, points=points, bit_unit=bit_unit)
+    _validate_direct_read_device(
+        ref,
+        points=points,
+        bit_unit=bit_unit,
+        enforce_semantic_unit=enforce_semantic_unit,
+    )
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
     _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
@@ -410,6 +416,7 @@ def build_write_devices_ext_request(
     series: PLCSeries | str | None,
     default_series: PLCSeries,
     address_profile: object | None,
+    enforce_semantic_unit: bool = True,
 ) -> OperationRequest:
     """Build an extended-device direct write request."""
 
@@ -425,7 +432,12 @@ def build_write_devices_ext_request(
     )
     effective_series = _effective_series(series, default_series)
     ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
-    _validate_direct_write_device(ref, bit_unit=bit_unit, plc_profile=address_profile)
+    _validate_direct_write_device(
+        ref,
+        bit_unit=bit_unit,
+        plc_profile=address_profile,
+        enforce_semantic_unit=enforce_semantic_unit,
+    )
     _check_temporarily_unsupported_device(ref, access_kind="extended_device")
     _warn_practical_device_path(ref, series=effective_series, access_kind="extended_device")
     if effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:

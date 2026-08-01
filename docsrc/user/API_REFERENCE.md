@@ -90,13 +90,18 @@ another connection or PLC program logic can change the word in the race window,
 and the requests can run in different PLC scans. A possibly-sent write uses the
 outcome-unknown error contract. The helper never retries automatically.
 
-The contiguous and write helpers never split one call into multiple protocol
-requests. `read_named` and `poll` are the read-only exception: after full-plan
-validation they may split only between independent entries, preserve input and
-wire order, and hold one exclusive client turn. They return the complete result
-or raise without a partial dictionary. The chunks are not an atomic PLC
-snapshot. Named entries requiring another command family are rejected before
-transport. Writes that would require multiple requests are rejected before send.
+The contiguous, named, polling, and write helpers never split one call into
+multiple protocol requests. `read_named` and each `poll` cycle validate the
+complete plan, issue exactly one canonical Random Read, or reject before
+transport. Oversized plans and entries requiring another command family must be
+split into explicit application calls. Writes that would require multiple
+requests are also rejected before send.
+
+Semantic bit-unit and bit-entry APIs accept only bit devices. Block word entries
+and typed/named numeric or string values accept only word devices; typed/named
+`BIT` accepts only bit devices. Explicit low-level word-unit direct APIs retain
+protocol-defined packed word access to bit-device ranges. Use `.n` notation or
+`write_bit_in_word` for one bit inside a word device.
 
 ## Target Module I/O Constants
 
@@ -125,6 +130,12 @@ result cannot be known after possible send raises
 `SlmpOutcomeUnknownError(reason=..., cause=...)`; reasons are defined by
 `SlmpOutcomeUnknownReason`, and automatic retry is not performed.
 
+After complete response correlation and command-specific decoding, the result
+is definitive: a later concurrent `close()` does not replace a decoded value,
+acknowledged write, or framed PLC end-code. A read interrupted before that point
+raises `SlmpClosedError`. A state-changing request that may have been sent but
+has no definitive response remains outcome-unknown with reason `CLOSED`.
+
 FIFO queue wait is outside the request deadline. After activation, one absolute
 deadline covers IPv4 resolution, connection and socket configuration, first
 send, complete transmit, receive, route/4E-serial correlation, and response
@@ -147,9 +158,9 @@ function, and dataclass signatures are searchable from the site API reference.
 TCP command payloads are limited to 65,529 bytes. UDP command payloads are limited to 65,492 bytes
 for 3E and 65,488 bytes for 4E so the complete frame fits one datagram. Oversized sync and async
 requests fail with `ValueError` before transport, trace publication, or 4E serial allocation and
-are never truncated. Only read-only named aggregates may split under their
-documented entry-boundary contract. Label builders enforce their aggregate
-size; their largest protocol-representable even payload is 65,528 bytes.
+are never truncated or split automatically. Label builders enforce their
+aggregate size; their largest protocol-representable even payload is 65,528
+bytes.
 
 | Operation category | Effective one-request capacity |
 | --- | --- |

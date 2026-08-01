@@ -9,14 +9,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from slmp import _operations
 from slmp._operation_queue import _AsyncFifoOperationQueue, _SyncFifoOperationQueue
-from slmp.async_client import AsyncSlmpClient
+from slmp.async_client import AsyncSlmpClient, SLMPDatagramProtocol
 from slmp.client import SlmpClient
 from slmp.client import _classify_exchange_failure as classify_sync_failure
-from slmp.constants import Command
+from slmp.constants import Command, FrameType
 from slmp.core import RandomReadResult, SlmpResponse, SlmpTarget
 from slmp.errors import (
     SlmpClosedError,
+    SlmpError,
     SlmpNotConnectedError,
     SlmpOutcomeUnknownError,
     SlmpOutcomeUnknownReason,
@@ -24,6 +26,76 @@ from slmp.errors import (
     SlmpTransportError,
 )
 from slmp.utils import read_named_sync, write_bit_in_word, write_bit_in_word_sync
+
+
+def _completed_4e_response(*, end_code: int = 0, data: bytes = b"") -> bytes:
+    target = SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0)
+    route = (
+        bytes((target.network, target.station)) + target.module_io.to_bytes(2, "little") + bytes((target.multidrop,))
+    )
+    body = end_code.to_bytes(2, "little") + data
+    return b"\xd4\x00\x00\x00\x00\x00" + route + len(body).to_bytes(2, "little") + body
+
+
+class _CompletedSyncClient(SlmpClient):
+    def __init__(self, response: bytes, *, transport: str, trace_hook=None) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(
+            "127.0.0.1",
+            1025,
+            transport=transport,
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+            _maintainer_trace_hook=trace_hook,
+        )
+        self.response = response
+
+    def _send_and_receive(self, _frame: bytes) -> bytes:
+        return self.response
+
+
+class _CompletedAsyncClient(AsyncSlmpClient):
+    def __init__(self, response: bytes, *, transport: str, trace_hook=None) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(
+            "127.0.0.1",
+            1025,
+            transport=transport,
+            default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+            plc_profile="melsec:iq-r",
+            _maintainer_trace_hook=trace_hook,
+        )
+        self.response = response
+
+    async def _send_and_receive(self, _frame: bytes) -> bytes:
+        return self.response
+
+
+class _CloseInterruptSocket:
+    def __init__(self) -> None:
+        self.receive_started = threading.Event()
+        self.closed = threading.Event()
+        self.timeout: float | None = None
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeout = timeout
+
+    def sendall(self, _data: bytes) -> None:
+        return None
+
+    def send(self, data: bytes) -> int:
+        return len(data)
+
+    def recv_into(self, _view: memoryview) -> int:
+        self.receive_started.set()
+        assert self.closed.wait(timeout=1)
+        raise OSError("socket closed locally")
+
+    def recv(self, _size: int) -> bytes:
+        self.receive_started.set()
+        assert self.closed.wait(timeout=1)
+        raise OSError("socket closed locally")
+
+    def close(self) -> None:
+        self.closed.set()
 
 
 def test_sync_operation_queue_is_fifo() -> None:
@@ -93,6 +165,318 @@ def test_state_change_timeout_after_possible_send_is_outcome_unknown() -> None:
 def test_public_transport_error_types_are_pairwise_distinct() -> None:
     types = {SlmpTimeoutError, SlmpClosedError, SlmpNotConnectedError, SlmpTransportError, SlmpOutcomeUnknownError}
     assert len(types) == 5
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_decoded_read_result_wins_close_after_publication(transport: str) -> None:
+    client = _CompletedSyncClient(_completed_4e_response(data=b"\x34\x12"), transport=transport)
+    original_ensure = client._operation_queue.ensure_current  # noqa: SLF001 - deterministic lifecycle barrier
+    calls = 0
+
+    def close_after_publication() -> None:
+        nonlocal calls
+        original_ensure()
+        calls += 1
+        if calls == 2:
+            client.close()
+
+    client._operation_queue.ensure_current = close_after_publication  # type: ignore[method-assign]  # noqa: SLF001
+
+    assert client.read_devices("D0", 1, bit_unit=False) == [0x1234]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_decoded_read_result_wins_close_generation_after_publication(transport: str) -> None:
+    client = _CompletedAsyncClient(_completed_4e_response(data=b"\x34\x12"), transport=transport)
+    original_ensure = client._operation_queue.ensure_current  # noqa: SLF001 - deterministic lifecycle barrier
+    calls = 0
+
+    def close_after_publication() -> None:
+        nonlocal calls
+        original_ensure()
+        calls += 1
+        if calls == 2:
+            client._operation_queue.invalidate()  # noqa: SLF001 - close's linearization point
+
+    client._operation_queue.ensure_current = close_after_publication  # type: ignore[method-assign]  # noqa: SLF001
+
+    assert await client.read_devices("D0", 1, bit_unit=False) == [0x1234]
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_close_before_command_decode_keeps_read_incomplete(transport: str) -> None:
+    client: _CompletedSyncClient
+    client = _CompletedSyncClient(
+        _completed_4e_response(data=b"\x34\x12"),
+        transport=transport,
+        trace_hook=lambda _trace: client.close(),
+    )
+
+    with pytest.raises(SlmpClosedError):
+        client.read_devices("D0", 1, bit_unit=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_close_before_command_decode_keeps_read_incomplete(transport: str) -> None:
+    client: _CompletedAsyncClient
+
+    async def close_during_trace(_trace) -> None:  # type: ignore[no-untyped-def]
+        await client.close()
+
+    client = _CompletedAsyncClient(
+        _completed_4e_response(data=b"\x34\x12"),
+        transport=transport,
+        trace_hook=close_during_trace,
+    )
+
+    with pytest.raises(SlmpClosedError):
+        await client.read_devices("D0", 1, bit_unit=False)
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_close_during_command_decode_error_keeps_read_incomplete(
+    transport: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _CompletedSyncClient(_completed_4e_response(data=b""), transport=transport)
+    original_decoder = _operations.decode_read_devices_response
+
+    def close_before_decode_error(response, *, points: int, bit_unit: bool):  # type: ignore[no-untyped-def]
+        client.close()
+        return original_decoder(response, points=points, bit_unit=bit_unit)
+
+    monkeypatch.setattr(_operations, "decode_read_devices_response", close_before_decode_error)
+
+    with pytest.raises(SlmpClosedError):
+        client.read_devices("D0", 1, bit_unit=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_close_during_command_decode_error_keeps_read_incomplete(
+    transport: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _CompletedAsyncClient(_completed_4e_response(data=b""), transport=transport)
+    original_decoder = _operations.decode_read_devices_response
+
+    def close_before_decode_error(response, *, points: int, bit_unit: bool):  # type: ignore[no-untyped-def]
+        client._operation_queue.invalidate()  # noqa: SLF001 - close's linearization point
+        return original_decoder(response, points=points, bit_unit=bit_unit)
+
+    monkeypatch.setattr(_operations, "decode_read_devices_response", close_before_decode_error)
+
+    with pytest.raises(SlmpClosedError):
+        await client.read_devices("D0", 1, bit_unit=False)
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("raise_on_error", (False, True))
+def test_sync_framed_plc_error_and_acknowledged_write_win_concurrent_close(
+    transport: str,
+    raise_on_error: bool,
+) -> None:
+    error_client: _CompletedSyncClient
+    error_client = _CompletedSyncClient(
+        _completed_4e_response(end_code=0xC051),
+        transport=transport,
+        trace_hook=lambda _trace: error_client.close(),
+    )
+    error_client.raise_on_error = raise_on_error
+    with pytest.raises(SlmpError) as raised:
+        error_client.read_devices("D0", 1, bit_unit=False)
+    assert raised.value.end_code == 0xC051
+
+    write_client: _CompletedSyncClient
+    write_client = _CompletedSyncClient(
+        _completed_4e_response(),
+        transport=transport,
+        trace_hook=lambda _trace: write_client.close(),
+    )
+    write_client.write_devices("D0", [1], bit_unit=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("raise_on_error", (False, True))
+async def test_async_framed_plc_error_and_acknowledged_write_win_concurrent_close(
+    transport: str,
+    raise_on_error: bool,
+) -> None:
+    error_client: _CompletedAsyncClient
+
+    async def close_error_client(_trace) -> None:  # type: ignore[no-untyped-def]
+        await error_client.close()
+
+    error_client = _CompletedAsyncClient(
+        _completed_4e_response(end_code=0xC051),
+        transport=transport,
+        trace_hook=close_error_client,
+    )
+    error_client.raise_on_error = raise_on_error
+    with pytest.raises(SlmpError) as raised:
+        await error_client.read_devices("D0", 1, bit_unit=False)
+    assert raised.value.end_code == 0xC051
+
+    write_client: _CompletedAsyncClient
+
+    async def close_write_client(_trace) -> None:  # type: ignore[no-untyped-def]
+        await write_client.close()
+
+    write_client = _CompletedAsyncClient(
+        _completed_4e_response(),
+        transport=transport,
+        trace_hook=close_write_client,
+    )
+    await write_client.write_devices("D0", [1], bit_unit=False)
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_local_close_during_receive_raises_typed_closed_error(transport: str) -> None:
+    client = SlmpClient(
+        "127.0.0.1",
+        1025,
+        transport=transport,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    sock = _CloseInterruptSocket()
+    client._sock = sock  # type: ignore[assignment]  # noqa: SLF001
+    failure: list[BaseException] = []
+
+    def read() -> None:
+        try:
+            client.read_devices("D0", 1, bit_unit=False)
+        except BaseException as error:
+            failure.append(error)
+
+    worker = threading.Thread(target=read)
+    worker.start()
+    assert sock.receive_started.wait(timeout=1)
+    client.close()
+    worker.join(timeout=1)
+
+    assert not worker.is_alive()
+    assert len(failure) == 1
+    assert isinstance(failure[0], SlmpClosedError)
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_local_close_after_write_send_keeps_outcome_unknown(transport: str) -> None:
+    client = SlmpClient(
+        "127.0.0.1",
+        1025,
+        transport=transport,
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    sock = _CloseInterruptSocket()
+    client._sock = sock  # type: ignore[assignment]  # noqa: SLF001
+    failure: list[BaseException] = []
+
+    def write() -> None:
+        try:
+            client.write_devices("D0", [1], bit_unit=False)
+        except BaseException as error:
+            failure.append(error)
+
+    worker = threading.Thread(target=write)
+    worker.start()
+    assert sock.receive_started.wait(timeout=1)
+    client.close()
+    worker.join(timeout=1)
+
+    assert not worker.is_alive()
+    assert len(failure) == 1
+    assert isinstance(failure[0], SlmpOutcomeUnknownError)
+    assert failure[0].reason is SlmpOutcomeUnknownReason.CLOSED
+    assert isinstance(failure[0].cause, SlmpClosedError)
+
+
+@pytest.mark.asyncio
+async def test_async_tcp_local_close_during_receive_raises_typed_closed_error() -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="tcp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    receive_started = asyncio.Event()
+    released = asyncio.Event()
+
+    async def readexactly(_size: int) -> bytes:
+        receive_started.set()
+        await released.wait()
+        raise asyncio.IncompleteReadError(b"", _size)
+
+    reader = MagicMock()
+    reader.readexactly = AsyncMock(side_effect=readexactly)
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.close.side_effect = released.set
+    writer.wait_closed = AsyncMock()
+    client._reader = reader  # noqa: SLF001
+    client._writer = writer  # noqa: SLF001
+
+    operation = asyncio.create_task(client.read_devices("D0", 1, bit_unit=False))
+    await receive_started.wait()
+    await client.close()
+
+    with pytest.raises(SlmpClosedError):
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_async_udp_local_close_during_receive_raises_typed_closed_error() -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="udp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    send_started = asyncio.Event()
+    protocol = SLMPDatagramProtocol(FrameType.FRAME_4E)
+    transport = MagicMock()
+    transport.sendto.side_effect = lambda _frame: send_started.set()
+    client._udp_protocol = protocol  # noqa: SLF001
+    client._udp_transport = transport  # noqa: SLF001
+
+    operation = asyncio.create_task(client.read_devices("D0", 1, bit_unit=False))
+    await send_started.wait()
+    await client.close()
+
+    with pytest.raises(SlmpClosedError):
+        await operation
+
+
+@pytest.mark.asyncio
+async def test_async_udp_local_close_after_write_send_keeps_outcome_unknown() -> None:
+    client = AsyncSlmpClient(
+        "127.0.0.1",
+        1025,
+        transport="udp",
+        default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        plc_profile="melsec:iq-r",
+    )
+    send_started = asyncio.Event()
+    protocol = SLMPDatagramProtocol(FrameType.FRAME_4E)
+    transport = MagicMock()
+    transport.sendto.side_effect = lambda _frame: send_started.set()
+    client._udp_protocol = protocol  # noqa: SLF001
+    client._udp_transport = transport  # noqa: SLF001
+
+    operation = asyncio.create_task(client.write_devices("D0", [1], bit_unit=False))
+    await send_started.wait()
+    await client.close()
+
+    with pytest.raises(SlmpOutcomeUnknownError) as raised:
+        await operation
+    assert raised.value.reason is SlmpOutcomeUnknownReason.CLOSED
+    assert isinstance(raised.value.cause, SlmpClosedError)
 
 
 def _sync_raw_client_with_receive_timeout() -> tuple[SlmpClient, MagicMock]:
@@ -282,7 +666,7 @@ class _AggregateClient(SlmpClient):
         return RandomReadResult(word={str(device): device.number for device in word_devices}, dword={})
 
 
-def test_named_read_chunks_hold_one_exclusive_turn_and_preserve_order() -> None:
+def test_named_read_uses_one_exclusive_turn_and_preserves_order() -> None:
     client = _AggregateClient()
 
     def competing_operation() -> None:
@@ -292,14 +676,14 @@ def test_named_read_chunks_hold_one_exclusive_turn_and_preserve_order() -> None:
 
     competitor = threading.Thread(target=competing_operation)
     competitor.start()
-    addresses = [f"D{index}:U" for index in range(97)]
+    addresses = [f"D{index}:U" for index in range(3)]
     result = read_named_sync(client, addresses)
     competitor.join(timeout=1)
 
     assert not competitor.is_alive()
-    assert client.calls == ["chunk", "chunk", "external"]
+    assert client.calls == ["chunk", "external"]
     assert list(result) == addresses
-    assert result["D96:U"] == 96
+    assert result["D2:U"] == 2
 
 
 class _SyncRmwClient(SlmpClient):

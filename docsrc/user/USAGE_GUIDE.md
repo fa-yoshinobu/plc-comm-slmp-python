@@ -23,13 +23,10 @@
 The synchronous helpers use the same names with `_sync`.
 
 `read_named` validates and snapshots the complete address plan before transport.
-It preserves the declared entry order and may split an oversized read only
-between independent entries. A scalar/DWord entry is never divided. All chunks
-hold one exclusive client turn, so another operation cannot interleave. The
-result is returned only after every chunk succeeds. This is not one atomic PLC
-observation: later chunks are acquired later and an error returns no partial
-dictionary. Direct/block/long-timer fallback routes remain rejected; use their
-explicit APIs.
+It emits exactly one canonical Random Read or rejects the plan before transport.
+Oversized collections and Direct/block/long-timer routes must be split into
+explicit application calls so different acquisition times and consistency
+requirements remain visible.
 
 `write_named` also has a one-request contract. Word and DWord entries may be
 combined in one random-word request, or bit entries may be combined in one
@@ -260,6 +257,10 @@ control, monitor registration, password operation, or other state-changing
 request may already have been sent, timeout, cancellation, close, transport, or
 malformed-response failure raises `SlmpOutcomeUnknownError`. Inspect its
 `reason` (`SlmpOutcomeUnknownReason`) and `cause`; do not retry blindly.
+Once response correlation and command-specific decoding finish, the decoded
+value, acknowledged write, or framed PLC end-code is definitive and a later
+concurrent `close()` does not replace it. A read closed before that point raises
+`SlmpClosedError`.
 
 ```python
 from slmp import SlmpError, SlmpTimeoutError
@@ -404,10 +405,10 @@ at `M1000` is `0x0005`.
 
 | Family | Bit read example | Packed word read example | Address number format |
 | --- | --- | --- | --- |
-| `M` | `read_named(client, ["M1000:BIT"])` | `read_typed(client, "M1000", "U")` | decimal |
-| `B` | `read_named(client, ["B20:BIT"])` | `read_typed(client, "B20", "U")` | hexadecimal |
-| `X` | `read_named(client, ["X20:BIT"])` | `read_typed(client, "X20", "U")` | profile-dependent |
-| `Y` | `read_named(client, ["Y20:BIT"])` | `read_typed(client, "Y20", "U")` | profile-dependent |
+| `M` | `read_named(client, ["M1000:BIT"])` | `client.read_devices("M1000", 1, bit_unit=False)` | decimal |
+| `B` | `read_named(client, ["B20:BIT"])` | `client.read_devices("B20", 1, bit_unit=False)` | hexadecimal |
+| `X` | `read_named(client, ["X20:BIT"])` | `client.read_devices("X20", 1, bit_unit=False)` | profile-dependent |
+| `Y` | `read_named(client, ["Y20:BIT"])` | `client.read_devices("Y20", 1, bit_unit=False)` | profile-dependent |
 
 Every semantic `DeviceRef` is bound to the exact canonical `plc_profile` used to create it. Passing it to a client configured for any other profile is rejected before request construction or transport activity, including when a unit-specific profile shares a base family with the client. Parse the address again with the destination client's profile instead of reusing it across profiles.
 `DeviceRef(code, number, plc_profile)` therefore stores the profile as part of
@@ -427,7 +428,7 @@ group:
 ```python
 import asyncio
 
-from slmp import SlmpConnectionOptions, open_and_connect, write_typed, SlmpTarget
+from slmp import SlmpConnectionOptions, open_and_connect, SlmpTarget
 
 
 async def main() -> None:
@@ -439,15 +440,16 @@ async def main() -> None:
         default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
     async with await open_and_connect(options) as client:
-        await write_typed(client, "M1000", "U", 0x0005)
+        await client.write_devices("M1000", [0x0005], bit_unit=False)
 
 
 asyncio.run(main())
 ```
 
-This writes the packed pattern for `M1000..M1015`. Use bit access when you
-want individual boolean states; use packed word access when you want one
-16-bit snapshot from a bit-device group.
+This writes the packed pattern for `M1000..M1015`. Typed and named numeric
+dtypes intentionally reject bit devices; use explicit low-level word-unit
+direct access when packed behavior is intended. Use bit access for individual
+Boolean states.
 
 ## Bit in word
 
@@ -665,10 +667,9 @@ protocol-representable payload of 65,528 bytes before the lower UDP limit is app
 
 Sync and async clients raise `ValueError` before connection, send, traffic counters, trace state,
 or 4E serial allocation. Requests are never truncated. Direct, random, block,
-monitor, label, memory, extend-unit, and write operations do not split
-automatically. The sole automatic-split exception is `read_named`/`poll`, under
-the read-only aggregate contract described above. Applications that issue
-several other requests must define ordering, partial-success, and write-atomicity behavior.
+monitor, label, memory, extend-unit, named, polling, and write operations do not
+split automatically. Applications that issue several requests must define
+ordering, partial-success, and write-atomicity behavior.
 
 Operation-specific capacity is the minimum of the selected profile limit, the
 command count-field range, the encoded request-payload limit, and (for reads)
