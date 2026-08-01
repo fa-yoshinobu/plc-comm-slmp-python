@@ -40,6 +40,9 @@ def select_first_ipv4_endpoint(endpoints: Iterable[Any], socket_type: int) -> tu
 
 def resolve_ipv4_endpoint(host: str, port: int, socket_type: int) -> tuple[str, int]:
     """Resolve one synchronous IPv4 endpoint without IPv6 fallback."""
+    literal = _ipv4_literal_endpoint(host, port)
+    if literal is not None:
+        return literal
     return select_first_ipv4_endpoint(
         socket.getaddrinfo(host, port, socket.AF_INET, socket_type),
         socket_type,
@@ -48,6 +51,19 @@ def resolve_ipv4_endpoint(host: str, port: int, socket_type: int) -> tuple[str, 
 
 async def resolve_ipv4_endpoint_async(host: str, port: int, socket_type: int) -> tuple[str, int]:
     """Resolve one asynchronous IPv4 endpoint without IPv6 fallback."""
+    literal = _ipv4_literal_endpoint(host, port)
+    if literal is not None:
+        return literal
     loop = asyncio.get_running_loop()
     endpoints = await loop.getaddrinfo(host, port, family=socket.AF_INET, type=socket_type)
     return select_first_ipv4_endpoint(endpoints, socket_type)
+
+
+def _ipv4_literal_endpoint(host: str, port: int) -> tuple[str, int] | None:
+    try:
+        literal = ip_address(host)
+    except ValueError:
+        return None
+    if literal.version != 4:
+        raise socket.gaierror("host did not resolve to an IPv4 address")
+    return str(literal), port

@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from . import _operations
+from ._command_policy import classify_command_state
 from ._network import normalize_ipv4_host, resolve_ipv4_endpoint
 from ._operation_queue import _SyncFifoOperationQueue
 from ._socket_options import configure_tcp_keepalive
@@ -101,8 +102,10 @@ class SlmpClient:
             host: PLC IPv4 address or hostname that resolves to IPv4. IPv6 is unsupported.
             port: Required PLC port number in range 1..65535.
             transport: Required transport protocol (``"tcp"`` or ``"udp"``).
-            timeout: Timeout for each connection attempt and absolute
-                send-and-response deadline for each request. Defaults to 3.0.
+            timeout: One absolute deadline for each admitted operation. It
+                covers IPv4 resolution through adoption for explicit connect,
+                and lazy connection through response decode for a request.
+                Defaults to 3.0.
             plc_profile: Canonical high-level PLC profile. The standard client
                 route requires this and derives frame type, access profile,
                 and address/range handling from it.
@@ -225,31 +228,26 @@ class SlmpClient:
         """
         with self._operation_queue.turn():
             try:
-                self._connect_unlocked()
+                self._connect_unlocked(deadline=time.monotonic() + self.timeout)
             except SlmpError:
                 raise
             except (OSError, ConnectionError) as err:
                 raise SlmpTransportError(f"SLMP connection failed: {err}") from err
 
-    def _connect_unlocked(self) -> None:
+    def _connect_unlocked(self, *, deadline: float) -> None:
         self._operation_queue.ensure_current()
         if self._sock is not None:
             return
         sock_type = socket.SOCK_STREAM if self.transport == "tcp" else socket.SOCK_DGRAM
-        endpoint = resolve_ipv4_endpoint(self.host, self.port, sock_type)
-        sock = socket.socket(socket.AF_INET, sock_type)
-        try:
-            sock.settimeout(self.timeout)
-            if self.transport == "tcp":
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                configure_tcp_keepalive(sock, idle_seconds=30)
-            sock.connect(endpoint)
-        except BaseException:
-            try:
-                sock.close()
-            except Exception:
-                pass
-            raise
+        sock = _open_ipv4_socket_before_deadline(
+            host=self.host,
+            port=self.port,
+            sock_type=sock_type,
+            configure_tcp=self.transport == "tcp",
+            idle_timeout=self.timeout,
+            deadline=deadline,
+            ensure_current=self._operation_queue.ensure_current,
+        )
         self._sock = sock
         try:
             self._operation_queue.ensure_current()
@@ -288,6 +286,7 @@ class SlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         """Serialize one request on this client connection."""
         if monitoring_timer is not None and (
@@ -298,6 +297,7 @@ class SlmpClient:
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         if raise_on_error is not None and type(raise_on_error) is not bool:
             raise ValueError("raise_on_error must be a boolean when provided")
+        effective_state_changing = classify_command_state(int(command), state_changing)
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
         with self._operation_queue.turn():
@@ -309,6 +309,7 @@ class SlmpClient:
                 target=target,
                 monitoring_timer=monitoring_timer,
                 raise_on_error=effective_raise_on_error,
+                state_changing=effective_state_changing,
             )
 
     def _request_unlocked(
@@ -321,6 +322,7 @@ class SlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         """Send an internal SLMP request and return the response.
 
@@ -358,7 +360,7 @@ class SlmpClient:
             data=data,
         )
         previous_state_changing = self._active_state_changing
-        self._active_state_changing = _is_state_changing_command(cmd)
+        self._active_state_changing = classify_command_state(cmd, state_changing)
         try:
             raw = self._send_and_receive(frame)
         finally:
@@ -398,12 +400,17 @@ class SlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         """Send one maintainer-level raw SLMP command.
 
         The frame serial is always allocated by the client so response
-        correlation cannot be bypassed by public callers.
+        correlation cannot be bypassed by public callers. Unknown raw commands
+        are state-changing by default. Pass ``state_changing=False`` only for a
+        known or vendor-specific read-only command; known state-changing
+        commands cannot be downgraded.
         """
+        effective_state_changing = classify_command_state(int(command), state_changing)
         return self._request(
             command=command,
             subcommand=subcommand,
@@ -411,6 +418,7 @@ class SlmpClient:
             target=target,
             monitoring_timer=monitoring_timer,
             raise_on_error=raise_on_error,
+            state_changing=effective_state_changing,
         )
 
     @staticmethod
@@ -1456,9 +1464,11 @@ class SlmpClient:
         )
         attempted_send = False
         try:
-            self._connect_unlocked()
+            deadline = time.monotonic() + self.timeout
+            self._connect_unlocked(deadline=deadline)
             self._operation_queue.ensure_current()
             assert self._sock is not None
+            self._sock.settimeout(_remaining_timeout(deadline))
             attempted_send = True
             if self.transport == "tcp":
                 self._sock.sendall(frame)
@@ -1517,8 +1527,8 @@ class SlmpClient:
             expected_identity = _request_identity(frame, frame_type=self.frame_type)
             attempted_send = False
             try:
-                self._connect_unlocked()
                 deadline = time.monotonic() + self.timeout
+                self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self._sock is None:
                     raise SlmpNotConnectedError("SLMP transport is not connected")
@@ -1653,30 +1663,95 @@ def _remaining_timeout(deadline: float) -> float:
     return remaining
 
 
-_STATE_CHANGING_COMMANDS = frozenset(
-    {
-        int(Command.DEVICE_WRITE),
-        int(Command.DEVICE_WRITE_RANDOM),
-        int(Command.DEVICE_ENTRY_MONITOR),
-        int(Command.DEVICE_WRITE_BLOCK),
-        int(Command.LABEL_ARRAY_WRITE),
-        int(Command.LABEL_WRITE_RANDOM),
-        int(Command.MEMORY_WRITE),
-        int(Command.EXTEND_UNIT_WRITE),
-        int(Command.REMOTE_RUN),
-        int(Command.REMOTE_STOP),
-        int(Command.REMOTE_PAUSE),
-        int(Command.REMOTE_LATCH_CLEAR),
-        int(Command.REMOTE_RESET),
-        int(Command.REMOTE_PASSWORD_LOCK),
-        int(Command.REMOTE_PASSWORD_UNLOCK),
-        int(Command.CLEAR_ERROR),
-    }
-)
+def _open_ipv4_socket_before_deadline(
+    *,
+    host: str,
+    port: int,
+    sock_type: socket.SocketKind,
+    configure_tcp: bool,
+    idle_timeout: float,
+    deadline: float,
+    ensure_current: Callable[[], None],
+) -> socket.socket:
+    """Resolve and connect on a daemon worker without adopting a late socket."""
+    condition = threading.Condition()
+    state: dict[str, object] = {"abandoned": False, "done": False}
 
+    def worker() -> None:
+        candidate: socket.socket | None = None
+        try:
+            endpoint = resolve_ipv4_endpoint(host, port, sock_type)
+            candidate = socket.socket(socket.AF_INET, sock_type)
+            candidate.settimeout(_remaining_timeout(deadline))
+            if configure_tcp:
+                candidate.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                configure_tcp_keepalive(candidate, idle_seconds=30)
+            candidate.connect(endpoint)
+            candidate.settimeout(_remaining_timeout(deadline))
+            candidate.settimeout(idle_timeout)
+            with condition:
+                if not state["abandoned"]:
+                    state["socket"] = candidate
+                    state["done"] = True
+                    candidate = None
+                    condition.notify_all()
+        except BaseException as err:
+            with condition:
+                if not state["abandoned"]:
+                    state["error"] = err
+                    state["done"] = True
+                    condition.notify_all()
+        finally:
+            if candidate is not None:
+                try:
+                    candidate.close()
+                except Exception:
+                    pass
 
-def _is_state_changing_command(command: int) -> bool:
-    return command in _STATE_CHANGING_COMMANDS
+    threading.Thread(target=worker, name="slmp-ipv4-connect", daemon=True).start()
+    with condition:
+        while not state["done"]:
+            try:
+                ensure_current()
+            except BaseException:
+                state["abandoned"] = True
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                state["abandoned"] = True
+                raise SlmpTimeoutError("SLMP connection timeout")
+            condition.wait(timeout=min(remaining, 0.01))
+        try:
+            ensure_current()
+        except BaseException:
+            state["abandoned"] = True
+            late_socket = state.pop("socket", None)
+            if late_socket is not None:
+                try:
+                    late_socket.close()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            raise
+        if deadline - time.monotonic() <= 0:
+            state["abandoned"] = True
+            late_socket = state.pop("socket", None)
+            if late_socket is not None:
+                try:
+                    late_socket.close()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            raise SlmpTimeoutError("SLMP connection timeout")
+        error = state.get("error")
+        if isinstance(error, BaseException):
+            if isinstance(error, TimeoutError):
+                if deadline - time.monotonic() <= 0:
+                    raise SlmpTimeoutError("SLMP connection timeout") from error
+                raise SlmpTransportError(f"SLMP connection failed before its deadline: {error}") from error
+            raise error
+        connected = state.get("socket")
+        if connected is None:
+            raise SlmpTransportError("SLMP connection did not produce a socket")
+        return connected  # type: ignore[return-value]
 
 
 def _classify_exchange_failure(

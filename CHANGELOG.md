@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Sync and async `raw_command()` now classify unknown commands as state-changing by default. Maintainers may explicitly mark a known or vendor-specific read-only command with `state_changing=False`, but cannot downgrade a known state-changing command; unconfirmed post-send failures remain outcome-unknown.
+- Library: Async UDP now retains only the one response future for the active request. Unsolicited, foreign-route, wrong-serial, duplicate, and post-completion datagrams are discarded without an application-level receive queue.
+- Library: Sync and async TCP/UDP connection establishment now shares one absolute operation deadline from IPv4 resolution through socket configuration and client adoption. IPv4 literals bypass DNS, lazy connection consumes the request's existing deadline, and late resolver/socket results are never adopted.
+- Tests: Added Raw-command safety-override, async UDP single-waiter/discard, delayed-resolution, cumulative connection-deadline, and late-result cleanup coverage.
 - CI: The package gate now installs the real wheel into an isolated virtual environment with checkout and `PYTHONPATH` imports disabled, runs public API/RMW assertions from a generated UTF-8 Python file, and rejects root maintainer/runner files, credentials, caches, and build/release output from wheel and sdist inventories.
 - Tooling: The source-archive gate can synthesize a Git tree from the complete current worktree, including modified, untracked, and deleted paths, then runs both the full extracted-source gate and installed-wheel consumer gate.
 - BREAKING: Removed `QueuedAsyncSlmpClient`; ordinary sync and async clients now own the FIFO operation queue, and `open_and_connect` returns `AsyncSlmpClient` directly.

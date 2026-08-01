@@ -6,9 +6,10 @@ import asyncio
 import math
 import socket
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from . import _operations
+from ._command_policy import classify_command_state
 from ._network import normalize_ipv4_host, resolve_ipv4_endpoint_async
 from ._operation_queue import _AsyncFifoOperationQueue
 from ._socket_options import configure_tcp_keepalive
@@ -66,25 +67,97 @@ if TYPE_CHECKING:
 
 
 class SLMPDatagramProtocol(asyncio.DatagramProtocol):
-    """Internal protocol for async UDP communication."""
+    """Internal single-waiter protocol for async UDP communication."""
 
-    def __init__(self, frame_type: FrameType) -> None:
-        """Initialize the protocol with a frame type."""
+    def __init__(
+        self,
+        frame_type: FrameType,
+        on_datagram: Callable[[int], None] | None = None,
+        on_transport_lost: Callable[[SLMPDatagramProtocol, BaseException], None] | None = None,
+    ) -> None:
+        """Initialize the protocol with a frame type and optional accounting hook."""
         self.frame_type = frame_type
         self.transport: asyncio.DatagramTransport | None = None
-        self.queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._on_datagram = on_datagram
+        self._on_transport_lost = on_transport_lost
+        self._response_waiter: asyncio.Future[bytes] | None = None
+        self._expected_identity: tuple[int | None, SlmpTarget] | None = None
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         """Handle connection made."""
         self.transport = cast(asyncio.DatagramTransport, transport)
 
     def datagram_received(self, data: bytes, _addr: tuple[str | Any, int]) -> None:
-        """Handle received datagram."""
-        self.queue.put_nowait(data)
+        """Resolve the one matching active waiter without retaining datagrams."""
+        if self._on_datagram is not None:
+            self._on_datagram(len(data))
+        waiter = self._response_waiter
+        expected_identity = self._expected_identity
+        if waiter is None or waiter.done() or expected_identity is None:
+            return
+        try:
+            matches = _response_matches_request(
+                data,
+                frame_type=self.frame_type,
+                expected_identity=expected_identity,
+            )
+        except BaseException as err:
+            waiter.set_exception(err)
+            return
+        if matches:
+            waiter.set_result(bytes(data))
 
     def error_received(self, exc: Exception) -> None:
-        """Handle received error."""
-        pass
+        """Fail the active waiter on a connected UDP socket error."""
+        error = SlmpTransportError(f"SLMP UDP transport failed: {exc}")
+        error.__cause__ = exc
+        self._report_transport_loss(error)
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        """Fail the active waiter when its exact UDP generation is lost."""
+        self.transport = None
+        if exc is None:
+            self._report_transport_loss(SlmpClosedError("SLMP UDP transport was closed"))
+        else:
+            error = SlmpTransportError(f"SLMP UDP transport failed: {exc}")
+            error.__cause__ = exc
+            self._report_transport_loss(error)
+
+    def begin_response_wait(
+        self,
+        expected_identity: tuple[int | None, SlmpTarget],
+    ) -> asyncio.Future[bytes]:
+        """Install the one response waiter owned by the active request."""
+        if self._response_waiter is not None and not self._response_waiter.done():
+            raise RuntimeError("an SLMP UDP response waiter is already active")
+        waiter = asyncio.get_running_loop().create_future()
+        self._response_waiter = waiter
+        self._expected_identity = expected_identity
+        return waiter
+
+    def set_datagram_accounting(self, callback: Callable[[int], None]) -> None:
+        """Bind receive accounting to the client that owns this generation."""
+        self._on_datagram = callback
+
+    def forget_response_wait(self, waiter: asyncio.Future[bytes]) -> None:
+        """Forget and cancel the exact active waiter without retaining a result."""
+        if self._response_waiter is not waiter:
+            return
+        self._response_waiter = None
+        self._expected_identity = None
+        if not waiter.done():
+            waiter.cancel()
+
+    def fail_pending(self, error: BaseException) -> None:
+        """Wake the exact active waiter with a transport-generation failure."""
+        waiter = self._response_waiter
+        if waiter is not None and not waiter.done():
+            waiter.set_exception(error)
+
+    def _report_transport_loss(self, error: BaseException) -> None:
+        self.fail_pending(error)
+        if self._on_transport_lost is not None:
+            self._on_transport_lost(self, error)
 
 
 class AsyncSlmpClient:
@@ -108,8 +181,8 @@ class AsyncSlmpClient:
 
         The standard async client route requires ``plc_profile`` and fixes the
         frame type, access profile, and address/range handling from that one
-        explicit PLC profile. ``timeout`` applies separately to connection
-        establishment and to each complete request send and matching response.
+        explicit PLC profile. ``timeout`` is one complete-operation deadline
+        covering connection establishment, request send, and matching response.
         ``host`` must be an IPv4 literal or a hostname that resolves to IPv4;
         IPv6 is unsupported.
         """
@@ -227,72 +300,87 @@ class AsyncSlmpClient:
         """Open the connection to the PLC."""
         async with self._operation_queue.turn():
             try:
-                await self._connect_unlocked()
+                loop = asyncio.get_running_loop()
+                await self._connect_unlocked(deadline=loop.time() + self.timeout)
             except (SlmpError, asyncio.CancelledError):
                 raise
             except (OSError, ConnectionError) as err:
                 raise SlmpTransportError(f"SLMP connection failed: {err}") from err
 
-    async def _connect_unlocked(self) -> None:
+    async def _connect_unlocked(self, *, deadline: float) -> None:
         self._operation_queue.ensure_current()
         if self.transport_type == "tcp" and self._writer is not None:
             return
         if self.transport_type == "udp" and self._udp_transport is not None:
             return
+        loop = asyncio.get_running_loop()
         socket_type = socket.SOCK_STREAM if self.transport_type == "tcp" else socket.SOCK_DGRAM
         try:
             endpoint = await asyncio.wait_for(
                 resolve_ipv4_endpoint_async(self.host, self.port, socket_type),
-                timeout=self.timeout,
+                timeout=_connection_remaining_timeout(deadline, loop=loop),
             )
         except asyncio.TimeoutError as err:
-            raise ConnectionError(f"IPv4 host resolution timed out for {self.host}:{self.port}") from err
+            _raise_connection_timeout_or_transport(err, deadline=deadline, loop=loop)
+        _connection_remaining_timeout(deadline, loop=loop)
+        self._operation_queue.ensure_current()
         if self.transport_type == "tcp":
             fut = asyncio.open_connection(endpoint[0], endpoint[1], family=socket.AF_INET)
             try:
-                reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
+                reader, writer = await asyncio.wait_for(
+                    fut,
+                    timeout=_connection_remaining_timeout(deadline, loop=loop),
+                )
             except asyncio.TimeoutError as err:
-                raise ConnectionError(f"TCP connection timed out to {self.host}:{self.port}") from err
+                _raise_connection_timeout_or_transport(err, deadline=deadline, loop=loop)
             try:
                 raw_socket = writer.get_extra_info("socket")
                 if raw_socket is None:
                     raise ConnectionError("TCP socket is unavailable; required keepalive policy cannot be applied")
                 raw_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 configure_tcp_keepalive(raw_socket, idle_seconds=30)
+                _connection_remaining_timeout(deadline, loop=loop)
+                self._operation_queue.ensure_current()
             except BaseException:
                 try:
                     writer.close()
                 except Exception:
                     pass
                 else:
-                    try:
-                        await writer.wait_closed()
-                    except BaseException:
-                        pass
+                    cleanup_timeout = deadline - loop.time()
+                    if cleanup_timeout > 0:
+                        try:
+                            await asyncio.wait_for(writer.wait_closed(), timeout=cleanup_timeout)
+                        except BaseException:
+                            pass
                 raise
             self._reader = reader
             self._writer = writer
         else:
-            loop = asyncio.get_running_loop()
             try:
-                self._udp_transport, self._udp_protocol = await asyncio.wait_for(
+                udp_transport, udp_protocol = await asyncio.wait_for(
                     loop.create_datagram_endpoint(
-                        lambda: SLMPDatagramProtocol(self.frame_type),
+                        lambda: SLMPDatagramProtocol(
+                            self.frame_type,
+                            self._record_receive,
+                            self._retire_lost_udp_generation,
+                        ),
                         remote_addr=endpoint,
                         family=socket.AF_INET,
                     ),
-                    timeout=self.timeout,
+                    timeout=_connection_remaining_timeout(deadline, loop=loop),
                 )
             except asyncio.TimeoutError as err:
-                raise ConnectionError(f"UDP endpoint creation timed out for {self.host}:{self.port}") from err
-        try:
-            self._operation_queue.ensure_current()
-        except SlmpClosedError:
-            if self.transport_type == "tcp":
-                await self._close_tcp_unlocked()
-            else:
-                self._close_udp_unlocked()
-            raise
+                _raise_connection_timeout_or_transport(err, deadline=deadline, loop=loop)
+            try:
+                _connection_remaining_timeout(deadline, loop=loop)
+                self._operation_queue.ensure_current()
+            except BaseException:
+                udp_protocol.fail_pending(SlmpClosedError("SLMP UDP transport was closed"))
+                udp_transport.close()
+                raise
+            self._udp_transport = udp_transport
+            self._udp_protocol = udp_protocol
 
     async def close(self) -> None:
         """Close transport and reject the active and queued operation generation."""
@@ -315,6 +403,23 @@ class AsyncSlmpClient:
             pass
 
     def _close_udp_unlocked(self) -> None:
+        transport = self._udp_transport
+        protocol = self._udp_protocol
+        self._udp_transport = None
+        self._udp_protocol = None
+        if protocol is not None:
+            protocol.fail_pending(SlmpClosedError("SLMP UDP transport was closed"))
+        if transport is not None:
+            transport.close()
+
+    def _retire_lost_udp_generation(
+        self,
+        protocol: SLMPDatagramProtocol,
+        _error: BaseException,
+    ) -> None:
+        """Retire only the UDP generation that reported asynchronous loss."""
+        if self._udp_protocol is not protocol:
+            return
         transport = self._udp_transport
         self._udp_transport = None
         self._udp_protocol = None
@@ -340,6 +445,7 @@ class AsyncSlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         """Send an SLMP request and receive a response."""
         if monitoring_timer is not None and (
@@ -350,6 +456,7 @@ class AsyncSlmpClient:
             raise ValueError("monitoring_timer must be an integer in range 0..65535 when provided")
         if raise_on_error is not None and type(raise_on_error) is not bool:
             raise ValueError("raise_on_error must be a boolean when provided")
+        effective_state_changing = classify_command_state(int(command), state_changing)
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
         async with self._operation_queue.turn():
             return await self._request_unlocked(
@@ -360,6 +467,7 @@ class AsyncSlmpClient:
                 target=target,
                 monitoring_timer=monitoring_timer,
                 raise_on_error=raise_on_error,
+                state_changing=effective_state_changing,
             )
 
     async def _request_unlocked(
@@ -372,6 +480,7 @@ class AsyncSlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport_type, self.frame_type))
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
@@ -390,7 +499,7 @@ class AsyncSlmpClient:
             data=data,
         )
         previous_state_changing = self._active_state_changing
-        self._active_state_changing = _is_state_changing_command(cmd)
+        self._active_state_changing = classify_command_state(cmd, state_changing)
         try:
             raw = await self._send_and_receive(frame)
         finally:
@@ -431,12 +540,17 @@ class AsyncSlmpClient:
         target: SlmpTarget | None = None,
         monitoring_timer: int | None = None,
         raise_on_error: bool | None = None,
+        state_changing: bool | None = None,
     ) -> SlmpResponse:
         """Send one maintainer-level raw SLMP command.
 
         The frame serial is always allocated by the client so response
-        correlation cannot be bypassed by public callers.
+        correlation cannot be bypassed by public callers. Unknown raw commands
+        are state-changing by default. Pass ``state_changing=False`` only for a
+        known or vendor-specific read-only command; known state-changing
+        commands cannot be downgraded.
         """
+        effective_state_changing = classify_command_state(int(command), state_changing)
         return await self._request(
             command=command,
             subcommand=subcommand,
@@ -444,6 +558,7 @@ class AsyncSlmpClient:
             target=target,
             monitoring_timer=monitoring_timer,
             raise_on_error=raise_on_error,
+            state_changing=effective_state_changing,
         )
 
     # --------------------
@@ -1141,9 +1256,9 @@ class AsyncSlmpClient:
             )
             attempted_send = False
             try:
-                await self._connect_unlocked()
                 loop = asyncio.get_running_loop()
                 deadline = loop.time() + self.timeout
+                await self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self.transport_type == "tcp":
                     if self._writer is None:
@@ -1209,8 +1324,8 @@ class AsyncSlmpClient:
         async with self._operation_queue.turn():
             attempted_send = False
             try:
-                await self._connect_unlocked()
                 deadline = loop.time() + self.timeout
+                await self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self.transport_type == "tcp":
                     if self._writer is None:
@@ -1230,20 +1345,19 @@ class AsyncSlmpClient:
                 else:
                     if self._udp_transport is None or self._udp_protocol is None:
                         raise SlmpNotConnectedError("UDP endpoint is not open")
-                    while not self._udp_protocol.queue.empty():
-                        self._udp_protocol.queue.get_nowait()
+                    protocol = self._udp_protocol
+                    protocol.set_datagram_accounting(self._record_receive)
+                    waiter = protocol.begin_response_wait(expected_identity)
                     attempted_send = True
-                    self._udp_transport.sendto(frame)
-                    self._record_send(len(frame))
-                    while True:
+                    try:
+                        self._udp_transport.sendto(frame)
+                        self._record_send(len(frame))
                         remaining = _remaining_timeout(deadline, loop=loop)
-                        raw = await asyncio.wait_for(self._udp_protocol.queue.get(), timeout=remaining)
-                        self._record_receive(len(raw))
-                        if _response_matches_request(
-                            raw, frame_type=self.frame_type, expected_identity=expected_identity
-                        ):
-                            self._operation_queue.ensure_current()
-                            return raw
+                        raw = await asyncio.wait_for(waiter, timeout=remaining)
+                        self._operation_queue.ensure_current()
+                        return raw
+                    finally:
+                        protocol.forget_response_wait(waiter)
             except BaseException as err:
                 failure = err
                 try:
@@ -1341,30 +1455,22 @@ def _remaining_timeout(deadline: float, *, loop: asyncio.AbstractEventLoop) -> f
     return remaining
 
 
-_STATE_CHANGING_COMMANDS = frozenset(
-    {
-        int(Command.DEVICE_WRITE),
-        int(Command.DEVICE_WRITE_RANDOM),
-        int(Command.DEVICE_ENTRY_MONITOR),
-        int(Command.DEVICE_WRITE_BLOCK),
-        int(Command.LABEL_ARRAY_WRITE),
-        int(Command.LABEL_WRITE_RANDOM),
-        int(Command.MEMORY_WRITE),
-        int(Command.EXTEND_UNIT_WRITE),
-        int(Command.REMOTE_RUN),
-        int(Command.REMOTE_STOP),
-        int(Command.REMOTE_PAUSE),
-        int(Command.REMOTE_LATCH_CLEAR),
-        int(Command.REMOTE_RESET),
-        int(Command.REMOTE_PASSWORD_LOCK),
-        int(Command.REMOTE_PASSWORD_UNLOCK),
-        int(Command.CLEAR_ERROR),
-    }
-)
+def _connection_remaining_timeout(deadline: float, *, loop: asyncio.AbstractEventLoop) -> float:
+    remaining = deadline - loop.time()
+    if remaining <= 0:
+        raise SlmpTimeoutError("SLMP connection timeout")
+    return remaining
 
 
-def _is_state_changing_command(command: int) -> bool:
-    return command in _STATE_CHANGING_COMMANDS
+def _raise_connection_timeout_or_transport(
+    error: TimeoutError,
+    *,
+    deadline: float,
+    loop: asyncio.AbstractEventLoop,
+) -> NoReturn:
+    if deadline - loop.time() <= 0:
+        raise SlmpTimeoutError("SLMP connection timeout") from error
+    raise SlmpTransportError(f"SLMP connection failed before its deadline: {error}") from error
 
 
 def _classify_exchange_failure(
@@ -1378,7 +1484,10 @@ def _classify_exchange_failure(
     if isinstance(error, SlmpClosedError):
         reason = SlmpOutcomeUnknownReason.CLOSED
         definite: BaseException = error
-    elif isinstance(error, (TimeoutError, asyncio.TimeoutError, SlmpTimeoutError)):
+    elif isinstance(error, SlmpTimeoutError):
+        reason = SlmpOutcomeUnknownReason.TIMEOUT
+        definite = error
+    elif isinstance(error, (TimeoutError, asyncio.TimeoutError)):
         reason = SlmpOutcomeUnknownReason.TIMEOUT
         definite = SlmpTimeoutError(_COMMUNICATION_TIMEOUT_MESSAGE)
     elif isinstance(error, asyncio.CancelledError):

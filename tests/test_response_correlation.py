@@ -230,6 +230,41 @@ def _install_clean_async_transport(
     return udp_transport
 
 
+@pytest.mark.asyncio
+async def test_async_udp_protocol_retains_only_the_active_matching_response() -> None:
+    protocol = SLMPDatagramProtocol(FrameType.FRAME_4E)
+    matching = _response(FrameType.FRAME_4E, 7, TARGET, 0x1234)
+    foreign = _response(FrameType.FRAME_4E, 8, TARGET, 0x5678)
+
+    for _ in range(100):
+        protocol.datagram_received(foreign, ("127.0.0.1", 1025))
+    assert protocol._response_waiter is None
+    assert not hasattr(protocol, "queue")
+
+    waiter = protocol.begin_response_wait((7, TARGET))
+    protocol.datagram_received(foreign, ("127.0.0.1", 1025))
+    assert not waiter.done()
+    protocol.datagram_received(matching, ("127.0.0.1", 1025))
+    assert await waiter == matching
+    protocol.forget_response_wait(waiter)
+
+    protocol.datagram_received(matching, ("127.0.0.1", 1025))
+    assert protocol._response_waiter is None
+
+
+@pytest.mark.asyncio
+async def test_async_udp_protocol_reports_malformed_active_datagram_without_retaining_it() -> None:
+    protocol = SLMPDatagramProtocol(FrameType.FRAME_4E)
+    waiter = protocol.begin_response_wait((7, TARGET))
+
+    protocol.datagram_received(b"bad", ("127.0.0.1", 1025))
+
+    with pytest.raises(SlmpError):
+        await waiter
+    protocol.forget_response_wait(waiter)
+    assert protocol._response_waiter is None
+
+
 @pytest.mark.parametrize(("frame_type", "profile"), FRAME_PROFILES)
 @pytest.mark.parametrize("transport", ("tcp", "udp"))
 @pytest.mark.parametrize("field", ROUTE_FIELDS)
