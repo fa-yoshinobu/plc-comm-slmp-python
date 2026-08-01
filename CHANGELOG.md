@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- BREAKING: A present SLMP PLC error-information prefix must match the active request route, command, and subcommand. Mismatches are malformed responses, retire the transport, and become outcome-unknown for possibly applied state changes; trailing PLC error detail remains preserved.
+- BREAKING: Python now rejects every 4E response whose reserved field is not `0x0000`, consistently across sync/async TCP/UDP paths.
+- BREAKING: Standard semantic write, monitor-registration, remote-control, password, memory, label, and other ACK-only APIs now require empty success data. A non-empty success ACK retires the transport and raises `SlmpOutcomeUnknownError(PROTOCOL)`; `raw_command()` continues to return arbitrary success data.
+- Tests: Added 3E/4E sync/async TCP/UDP error-information correlation, non-empty ACK, raw-command escape-hatch, and 4E reserved-field regressions.
 - BREAKING: Device operations now reject a request whose complete consumed span exceeds the selected Q/L 24-bit or iQ-R 32-bit device-number field. This covers contiguous Direct and Extended Device access, Random/Monitor DWord entries, and Block ranges. Packed word access consumes 16 bit-device addresses per word, DWord/float32 consumes two words, Block bit points consume 16 bit devices, native Random/Monitor DWords consume one logical device, and LTN/LSTN current blocks consume one logical device per four transferred words. Random-write overlap checks use the same route widths. Rejection occurs before framing, connection, or traffic accounting.
 - BREAKING: `Jn\...` Extended Device text now accepts ASCII decimal digits only for the network number. Fullwidth, Arabic-Indic, and other Unicode digits are rejected before request construction.
 - Library: The async maintainer trace hook is now called exactly once and its returned object is awaited when awaitable, including callable objects with `async def __call__`; synchronous and awaited hook failures remain diagnostic-only.

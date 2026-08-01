@@ -828,7 +828,7 @@ class TestReceiveHelpers(unittest.TestCase):
         self.assertIsNone(client._sock)  # type: ignore[attr-defined]
 
     def test_slmp_error_exposes_structured_error_information(self) -> None:
-        error_data = bytes.fromhex("00 FF FF 03 00 01 04 01 00")
+        error_data = bytes.fromhex("00 FF FF 03 00 01 04 03 00")
         sock = _SendRecvSocket([_build_4e_response(0, error_data, end_code=0xC051)])
         client = SlmpClient(
             "127.0.0.1",
@@ -852,7 +852,7 @@ class TestReceiveHelpers(unittest.TestCase):
         self.assertEqual(error.error_info.module_io, 0x03FF)
         self.assertEqual(error.error_info.multidrop, 0x00)
         self.assertEqual(error.error_info.command, 0x0401)
-        self.assertEqual(error.error_info.subcommand, 0x0001)
+        self.assertEqual(error.error_info.subcommand, 0x0003)
         self.assertEqual(error.error_info.raw, error_data)
 
     def test_udp_ignores_datagrams_from_unconnected_source(self) -> None:

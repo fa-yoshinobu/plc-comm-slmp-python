@@ -16,6 +16,7 @@ page.
 | Request ordering | Several callers share one client. | Ordinary sync and async clients process valid operations in FIFO order. Async cancellation while queued removes that operation without sending; `close()` rejects the active and queued generation. Do not add a second queue wrapper. |
 | Aggregate size | `read_named` or `poll` exceeds one random-read request. | The complete plan is rejected before transport. Split it into explicit application calls and define the required snapshot/consistency behavior. |
 | Ambiguous write result | A state-changing operation fails after send may have started. | Catch `SlmpOutcomeUnknownError`, inspect `reason` and `cause`, verify PLC state, and do not retry blindly. |
+| Malformed ACK | An ACK-only API raises `SlmpOutcomeUnknownError` with reason `PROTOCOL`. | The PLC returned unexpected success data or another response-identity defect. The transport has been retired; reconcile PLC state before opening a new generation. Use `raw_command()` only for an intentionally data-bearing vendor command. |
 
 ```python
 values = await asyncio.gather(

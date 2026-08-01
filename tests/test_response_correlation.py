@@ -10,11 +10,32 @@ import pytest
 
 from slmp import AsyncSlmpClient, SlmpClient, SlmpError, SlmpTarget, SlmpTimeoutError
 from slmp.async_client import SLMPDatagramProtocol
-from slmp.constants import FrameType
+from slmp.constants import Command, FrameType
+from slmp.core import decode_4e_response
+from slmp.errors import SlmpOutcomeUnknownError, SlmpOutcomeUnknownReason
 
 TARGET = SlmpTarget(network=0x01, station=0x02, module_io=0x1234, multidrop=0x03)
 ROUTE_FIELDS = ("network", "station", "module_io", "multidrop")
 FRAME_PROFILES = ((FrameType.FRAME_3E, "melsec:qnu"), (FrameType.FRAME_4E, "melsec:iq-r"))
+CORRELATION_PROFILES = ((*FRAME_PROFILES[0], 0x0000), (*FRAME_PROFILES[1], 0x0002))
+ERROR_INFO_MISMATCHES = (*ROUTE_FIELDS, "command", "subcommand")
+ACK_COMMANDS = (
+    Command.DEVICE_WRITE,
+    Command.DEVICE_WRITE_RANDOM,
+    Command.DEVICE_ENTRY_MONITOR,
+    Command.DEVICE_WRITE_BLOCK,
+    Command.LABEL_ARRAY_WRITE,
+    Command.LABEL_WRITE_RANDOM,
+    Command.MEMORY_WRITE,
+    Command.EXTEND_UNIT_WRITE,
+    Command.REMOTE_RUN,
+    Command.REMOTE_STOP,
+    Command.REMOTE_PAUSE,
+    Command.REMOTE_LATCH_CLEAR,
+    Command.REMOTE_PASSWORD_LOCK,
+    Command.REMOTE_PASSWORD_UNLOCK,
+    Command.CLEAR_ERROR,
+)
 
 
 def _request_identity(frame: bytes, frame_type: FrameType) -> tuple[int, SlmpTarget]:
@@ -26,14 +47,48 @@ def _request_identity(frame: bytes, frame_type: FrameType) -> tuple[int, SlmpTar
     return 0, SlmpTarget(frame[2], frame[3], int.from_bytes(frame[4:6], "little"), frame[6])
 
 
-def _response(frame_type: FrameType, serial: int, target: SlmpTarget, value: int) -> bytes:
-    body = b"\x00\x00" + value.to_bytes(2, "little")
+def _response_data(frame_type: FrameType, serial: int, target: SlmpTarget, data: bytes) -> bytes:
+    body = b"\x00\x00" + data
     route = (
         target.network.to_bytes(1, "little")
         + target.station.to_bytes(1, "little")
         + int(target.module_io).to_bytes(2, "little")
         + target.multidrop.to_bytes(1, "little")
     )
+    if frame_type == FrameType.FRAME_4E:
+        return b"\xd4\x00" + serial.to_bytes(2, "little") + b"\x00\x00" + route + len(body).to_bytes(2, "little") + body
+    return b"\xd0\x00" + route + len(body).to_bytes(2, "little") + body
+
+
+def _response(frame_type: FrameType, serial: int, target: SlmpTarget, value: int) -> bytes:
+    return _response_data(frame_type, serial, target, value.to_bytes(2, "little"))
+
+
+def _error_response(
+    frame_type: FrameType,
+    serial: int,
+    target: SlmpTarget,
+    *,
+    command: int,
+    subcommand: int,
+    extra: bytes = b"",
+    error_target: SlmpTarget | None = None,
+) -> bytes:
+    route = (
+        target.network.to_bytes(1, "little")
+        + target.station.to_bytes(1, "little")
+        + int(target.module_io).to_bytes(2, "little")
+        + target.multidrop.to_bytes(1, "little")
+    )
+    embedded = error_target or target
+    error_route = (
+        embedded.network.to_bytes(1, "little")
+        + embedded.station.to_bytes(1, "little")
+        + int(embedded.module_io).to_bytes(2, "little")
+        + embedded.multidrop.to_bytes(1, "little")
+    )
+    error_info = error_route + command.to_bytes(2, "little") + subcommand.to_bytes(2, "little") + extra
+    body = b"\x51\xc0" + error_info
     if frame_type == FrameType.FRAME_4E:
         return b"\xd4\x00" + serial.to_bytes(2, "little") + b"\x00\x00" + route + len(body).to_bytes(2, "little") + body
     return b"\xd0\x00" + route + len(body).to_bytes(2, "little") + body
@@ -323,6 +378,298 @@ async def test_async_4e_discards_wrong_serial_then_accepts_match(transport: str)
 
     client, _transport = _async_client(FrameType.FRAME_4E, "melsec:iq-r", transport, factory)
     assert await client.read_devices("D0", 1, bit_unit=False) == [0x2222]
+
+
+@pytest.mark.parametrize(("frame_type", "profile", "subcommand"), CORRELATION_PROFILES)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("state_changing", (False, True))
+@pytest.mark.parametrize("mismatch", ERROR_INFO_MISMATCHES)
+def test_sync_rejects_mismatched_error_information_and_invalidates_transport(
+    frame_type: FrameType,
+    profile: str,
+    subcommand: int,
+    transport: str,
+    state_changing: bool,
+    mismatch: str,
+) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        return [
+            _error_response(
+                frame_type,
+                serial,
+                target,
+                command=0xFFFF if mismatch == "command" else (0x1401 if state_changing else 0x0401),
+                subcommand=0xFFFF if mismatch == "subcommand" else subcommand,
+                error_target=_foreign_target(target, mismatch) if mismatch in ROUTE_FIELDS else target,
+            )
+        ]
+
+    client, sock = _sync_client(frame_type, profile, transport, factory)
+    error_type = SlmpOutcomeUnknownError if state_changing else SlmpError
+    with pytest.raises(error_type) as caught:
+        if state_changing:
+            client.write_devices("D0", [1], bit_unit=False)
+        else:
+            client.read_devices("D0", 1, bit_unit=False)
+    if state_changing:
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert sock.closed
+    assert client._sock is None
+
+
+@pytest.mark.parametrize(("frame_type", "profile", "subcommand"), CORRELATION_PROFILES)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("state_changing", (False, True))
+@pytest.mark.parametrize("mismatch", ERROR_INFO_MISMATCHES)
+async def test_async_rejects_mismatched_error_information_and_invalidates_transport(
+    frame_type: FrameType,
+    profile: str,
+    subcommand: int,
+    transport: str,
+    state_changing: bool,
+    mismatch: str,
+) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        return [
+            _error_response(
+                frame_type,
+                serial,
+                target,
+                command=0xFFFF if mismatch == "command" else (0x1401 if state_changing else 0x0401),
+                subcommand=0xFFFF if mismatch == "subcommand" else subcommand,
+                error_target=_foreign_target(target, mismatch) if mismatch in ROUTE_FIELDS else target,
+            )
+        ]
+
+    client, transport_state = _async_client(frame_type, profile, transport, factory)
+    error_type = SlmpOutcomeUnknownError if state_changing else SlmpError
+    with pytest.raises(error_type) as caught:
+        if state_changing:
+            await client.write_devices("D0", [1], bit_unit=False)
+        else:
+            await client.read_devices("D0", 1, bit_unit=False)
+    if state_changing:
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert transport_state.closed
+    if transport == "tcp":
+        assert client._writer is None
+    else:
+        assert client._udp_transport is None
+
+
+@pytest.mark.parametrize(
+    ("frame_type", "profile", "subcommand"), ((*FRAME_PROFILES[0], 0x0000), (*FRAME_PROFILES[1], 0x0002))
+)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_accepts_matching_error_information_with_trailing_details(
+    frame_type: FrameType, profile: str, subcommand: int, transport: str
+) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        return [
+            _error_response(
+                frame_type,
+                serial,
+                target,
+                command=0x0401,
+                subcommand=subcommand,
+                extra=b"\xaa\xbb",
+            )
+        ]
+
+    client, sock = _sync_client(frame_type, profile, transport, factory)
+    with pytest.raises(SlmpError) as caught:
+        client.read_devices("D0", 1, bit_unit=False)
+    assert caught.value.end_code == 0xC051
+    assert caught.value.data.endswith(b"\xaa\xbb")
+    assert not sock.closed
+
+
+@pytest.mark.parametrize(
+    ("frame_type", "profile", "subcommand"),
+    ((*FRAME_PROFILES[0], 0x0000), (*FRAME_PROFILES[1], 0x0002)),
+)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_accepts_matching_error_information_with_trailing_details(
+    frame_type: FrameType, profile: str, subcommand: int, transport: str
+) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        return [
+            _error_response(
+                frame_type,
+                serial,
+                target,
+                command=0x0401,
+                subcommand=subcommand,
+                extra=b"\xaa\xbb",
+            )
+        ]
+
+    client, transport_state = _async_client(frame_type, profile, transport, factory)
+    with pytest.raises(SlmpError) as caught:
+        await client.read_devices("D0", 1, bit_unit=False)
+    assert caught.value.end_code == 0xC051
+    assert caught.value.data.endswith(b"\xaa\xbb")
+    assert not transport_state.closed
+
+
+@pytest.mark.parametrize("command", ACK_COMMANDS)
+@pytest.mark.parametrize("response_data", (b"", b"\xaa"))
+def test_sync_all_standard_ack_command_families_require_empty_success_data(
+    command: Command, response_data: bytes
+) -> None:
+    client, sock = _sync_client(FrameType.FRAME_4E, "melsec:iq-r", "tcp", lambda _serial, _target: [])
+
+    def exchange(frame: bytes) -> bytes:
+        serial, target = _request_identity(frame, FrameType.FRAME_4E)
+        return _response_data(FrameType.FRAME_4E, serial, target, response_data)
+
+    client._send_and_receive = exchange  # type: ignore[method-assign]
+    if response_data:
+        with pytest.raises(SlmpOutcomeUnknownError) as caught:
+            client._request(command, 0, b"")
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+        assert sock.closed
+    else:
+        assert client._request(command, 0, b"").data == b""
+        assert not sock.closed
+
+
+@pytest.mark.parametrize("command", ACK_COMMANDS)
+@pytest.mark.parametrize("response_data", (b"", b"\xaa"))
+async def test_async_all_standard_ack_command_families_require_empty_success_data(
+    command: Command, response_data: bytes
+) -> None:
+    client, transport_state = _async_client(
+        FrameType.FRAME_4E,
+        "melsec:iq-r",
+        "tcp",
+        lambda _serial, _target: [],
+    )
+
+    async def exchange(frame: bytes) -> bytes:
+        serial, target = _request_identity(frame, FrameType.FRAME_4E)
+        return _response_data(FrameType.FRAME_4E, serial, target, response_data)
+
+    client._send_and_receive = exchange  # type: ignore[method-assign]
+    if response_data:
+        with pytest.raises(SlmpOutcomeUnknownError) as caught:
+            await client._request(command, 0, b"")
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+        assert transport_state.closed
+    else:
+        assert (await client._request(command, 0, b"")).data == b""
+        assert not transport_state.closed
+
+
+@pytest.mark.parametrize(("frame_type", "profile"), FRAME_PROFILES)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_nonempty_standard_ack_is_outcome_unknown_and_invalidates_transport(
+    frame_type: FrameType, profile: str, transport: str
+) -> None:
+    client, sock = _sync_client(
+        frame_type,
+        profile,
+        transport,
+        lambda serial, target: [_response(frame_type, serial, target, 0x2222)],
+    )
+    with pytest.raises(SlmpOutcomeUnknownError) as caught:
+        client.write_devices("D0", [1], bit_unit=False)
+    assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert sock.closed
+    assert client._sock is None
+
+
+@pytest.mark.parametrize(("frame_type", "profile"), FRAME_PROFILES)
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_nonempty_standard_ack_is_outcome_unknown_and_invalidates_transport(
+    frame_type: FrameType, profile: str, transport: str
+) -> None:
+    client, transport_state = _async_client(
+        frame_type,
+        profile,
+        transport,
+        lambda serial, target: [_response(frame_type, serial, target, 0x2222)],
+    )
+    with pytest.raises(SlmpOutcomeUnknownError) as caught:
+        await client.write_devices("D0", [1], bit_unit=False)
+    assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert transport_state.closed
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+def test_sync_raw_command_retains_data_bearing_success_escape_hatch(transport: str) -> None:
+    client, sock = _sync_client(
+        FrameType.FRAME_4E,
+        "melsec:iq-r",
+        transport,
+        lambda serial, target: [_response(FrameType.FRAME_4E, serial, target, 0x2222)],
+    )
+    response = client.raw_command(0x1401, subcommand=0x0000, payload=b"", state_changing=True)
+    assert response.data == b"\x22\x22"
+    assert not sock.closed
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+async def test_async_raw_command_retains_data_bearing_success_escape_hatch(transport: str) -> None:
+    client, transport_state = _async_client(
+        FrameType.FRAME_4E,
+        "melsec:iq-r",
+        transport,
+        lambda serial, target: [_response(FrameType.FRAME_4E, serial, target, 0x2222)],
+    )
+    response = await client.raw_command(0x1401, subcommand=0x0000, payload=b"", state_changing=True)
+    assert response.data == b"\x22\x22"
+    assert not transport_state.closed
+
+
+@pytest.mark.parametrize("reserved", (b"\x01\x00", b"\x00\x01", b"\xff\xff"))
+def test_direct_4e_decoder_rejects_each_nonzero_reserved_field(reserved: bytes) -> None:
+    response = bytearray(_response(FrameType.FRAME_4E, 1, TARGET, 0x2222))
+    response[4:6] = reserved
+    with pytest.raises(SlmpError, match="reserved field"):
+        decode_4e_response(bytes(response))
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("state_changing", (False, True))
+def test_sync_4e_nonzero_reserved_response_field_invalidates_transport(transport: str, state_changing: bool) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        response = bytearray(_response(FrameType.FRAME_4E, serial, target, 0x2222))
+        response[4] = 1
+        return [bytes(response)]
+
+    client, sock = _sync_client(FrameType.FRAME_4E, "melsec:iq-r", transport, factory)
+    error_type = SlmpOutcomeUnknownError if state_changing else SlmpError
+    with pytest.raises(error_type) as caught:
+        if state_changing:
+            client.write_devices("D0", [1], bit_unit=False)
+        else:
+            client.read_devices("D0", 1, bit_unit=False)
+    if state_changing:
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert sock.closed
+
+
+@pytest.mark.parametrize("transport", ("tcp", "udp"))
+@pytest.mark.parametrize("state_changing", (False, True))
+async def test_async_4e_nonzero_reserved_response_field_invalidates_transport(
+    transport: str, state_changing: bool
+) -> None:
+    def factory(serial: int, target: SlmpTarget) -> list[bytes]:
+        response = bytearray(_response(FrameType.FRAME_4E, serial, target, 0x2222))
+        response[5] = 1
+        return [bytes(response)]
+
+    client, transport_state = _async_client(FrameType.FRAME_4E, "melsec:iq-r", transport, factory)
+    error_type = SlmpOutcomeUnknownError if state_changing else SlmpError
+    with pytest.raises(error_type) as caught:
+        if state_changing:
+            await client.write_devices("D0", [1], bit_unit=False)
+        else:
+            await client.read_devices("D0", 1, bit_unit=False)
+    if state_changing:
+        assert caught.value.reason == SlmpOutcomeUnknownReason.PROTOCOL
+    assert transport_state.closed
 
 
 class _DelayedMatchingSyncSocket(_SyncScriptSocket):
