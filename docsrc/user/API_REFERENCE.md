@@ -97,11 +97,31 @@ transport. Oversized plans and entries requiring another command family must be
 split into explicit application calls. Writes that would require multiple
 requests are also rejected before send.
 
+Device requests must fit completely in the device-number field selected by the
+entry's wire layout: 24 bits for Q/L and link-direct `J` entries, and 32 bits
+for other iQ-R entries. A `J`-qualified link-direct device therefore keeps the
+24-bit Q/L device specification even when the client profile is iQ-R. The
+check covers contiguous Direct and Extended Device
+reads/writes, Random/Monitor DWord entries, and Block ranges. A word-unit
+operation on a bit device consumes 16 bit-device addresses per word, so a
+DWord/float32 consumes 32; a Block bit point likewise consumes 16. Ordinary
+word devices consume one address per word, while each four-word LTN/LSTN
+current block consumes one logical long-timer device. If the final consumed
+address would exceed the wire field, sync and async APIs raise `ValueError`
+before framing, connection, or traffic-counter changes. This is a wire-format
+bound, not a guard based on the profile device-range catalog.
+Native LTN/LSTN/LCN/LZ Random and Monitor DWord entries consume one logical
+device, and Random-write overlap checks use these same route-specific widths.
+
 Semantic bit-unit and bit-entry APIs accept only bit devices. Block word entries
 and typed/named numeric or string values accept only word devices; typed/named
 `BIT` accepts only bit devices. Explicit low-level word-unit direct APIs retain
 protocol-defined packed word access to bit-device ranges. Use `.n` notation or
 `write_bit_in_word` for one bit inside a word device.
+
+The decimal network number in a link-direct Extended Device string such as
+`J2\SW10` uses ASCII `0` through `9` only. Unicode digit characters are
+rejected before request construction.
 
 ## Target Module I/O Constants
 

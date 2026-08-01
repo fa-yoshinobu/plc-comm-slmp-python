@@ -43,6 +43,11 @@ User-facing errors do not advertise the maintainer bypass. They report the canon
 
 Normal sync and async clients omit the underscore-prefixed `_maintainer_trace_hook`, so no callback is registered and no trace is automatically written. The callback is an internal diagnostic integration point used by maintained evidence commands, not a user-facing option. When supplied internally it must be callable; invalid values fail during construction before any transport is created.
 
+The async client calls that hook exactly once and inspects the returned object.
+An awaitable return is awaited, including one produced by a callable object
+whose `__call__` is async. Regular exceptions raised by the call or while
+awaiting it remain diagnostic-only and do not replace the PLC operation result.
+
 ## Profile-bound requests
 
 Remove request-level `series=` arguments. Construct the client with the exact canonical PLC profile; device encoding, subcommand family, password shape, frame type, and address rules are derived from that profile.
@@ -705,17 +710,20 @@ Machine-verifiable acceptance criteria:
 - [x] Implementation completed in this repository.
 - [x] Existing deterministic tests explicitly selected for every acceptance criterion.
 - [x] The exact seven-test representative selector passed locally on Windows with Python 3.14.3.
-- [ ] The new Windows CI job passed on GitHub for the final source state.
+- [x] The new Windows CI job passed on GitHub for the final source state.
 - [x] Codex self-review completed after the local representative and complete verification runs.
 - [x] Live PLC checks are not required; all selected behavior uses fake state or localhost loopback.
 - [x] Maintainer CI documentation agrees with the workflow; no user migration note or changelog entry is required.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete.
 
-Verification disposition: the exact selector passed on the local Windows host,
+Verification evidence: the exact selector passed on the local Windows host,
 and the complete local static, unit, documentation, package, and current-worktree
-source gates passed on the same source state. The workflow specifies Python 3.13,
-which is not installed locally; no GitHub-hosted Windows pass is claimed until
-that job runs.
+source gates passed on the same source state. The GitHub-hosted Windows Python
+3.13 representative job passed for reviewed functional source commit
+`a36f238292805451c63b6d9322dfbbed49e0f3cf` in
+[PR #57](https://github.com/fa-yoshinobu/plc-comm-slmp-python/pull/57), with
+the Ubuntu matrix and sample checks also green. The follow-up change records
+that external evidence only and does not change runtime or workflow behavior.
 
 Self-review disposition:
 
@@ -866,8 +874,154 @@ Acceptance criteria:
 - [x] Documentation, migration notes, changelog, and generated API reference agree.
 - [x] Final acceptance criteria verified and the item marked complete.
 
+## SLMP-SPAN-20260801 — Device wire-span validation
+
+Implementation scope: sync/async Direct and Extended Device word/bit
+reads/writes, typed DWord/float32 routes, Random and Monitor word/DWord entries,
+Block ranges, shared operation builders, Q/L 24-bit and iQ-R 32-bit
+device-number formats, tests, user/generated API documentation, and changelog.
+
+Target contract: compute the final consumed device address from the start and
+route-specific width, using Python's non-overflowing integer arithmetic. Reject
+the request with `ValueError` before request framing, connection, serial
+allocation, or traffic accounting when that address exceeds the selected wire
+format. Ordinary word devices consume one address per word. Existing low-level
+word-unit access to bit devices consumes 16 bit addresses per word, so a DWord
+or float32 consumes 32. A Block bit point consumes 16 bit addresses. LTN/LSTN
+current reads consume one logical device per four transferred words. Native
+LTN/LSTN/LCN/LZ Random and Monitor DWord entries consume one logical device,
+and Random-write overlap validation uses the same route-specific widths. Each
+Extended Device entry uses its own link-direct 24-bit or ordinary selected
+series width. Profile catalog usable ranges remain application metadata and are
+not transport guards.
+
+Compatibility impact: requests previously sent with a final address beyond the
+24-bit or 32-bit wire field now fail locally. Requests wholly inside the wire
+field, including addresses above a profile catalog's practical range, retain
+their prior transport behavior.
+
+Acceptance criteria:
+
+1. Q/L and iQ-R accept one word or bit at the maximum wire address and reject
+   two points from that start.
+2. An ordinary word device at maximum minus one accepts one DWord; two DWords
+   there and one DWord at maximum are rejected for Direct, Random, and Monitor
+   read/write routes where those operations apply.
+3. Float32 uses the DWord width; word-unit bit-device access uses 16 addresses
+   per word; Block bit points use 16; LTN/LSTN use one per four-word block;
+   native Random/Monitor DWords use one logical device.
+4. Module and link-direct Extended Device routes validate against their actual
+   32-bit or 24-bit entry layout.
+5. Random-write overlap validation uses the same ordinary, packed-bit, and
+   native DWord widths without accepting overlap or rejecting adjacency.
+6. Sync and async rejection preserves request count, transmit bytes, serial,
+   framing, and connection state.
+7. No profile usable-range transport guard is introduced.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required; address arithmetic and pre-transport ordering are deterministic local behavior.
+- [x] Documentation, migration notes, changelog, and generated API source agree with the implementation.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## SLMP-PY-JASCII-20260801 — ASCII-only J network numbers
+
+Implementation scope: Python Extended Device `J` qualifier parsing, sync/async
+pre-transport validation tests, user/generated API documentation, migration
+notes, and changelog. The other four implementations already use ASCII digits
+or typed integer input and require no change for this item.
+
+Target contract: a `J`-qualified network number accepts only ASCII `0` through
+`9`. Fullwidth, Arabic-Indic, and every other Unicode digit form fail locally
+before request construction or communication activity.
+
+Compatibility impact: Unicode numeric spellings previously accepted only by
+Python are rejected. Ordinary ASCII forms such as `J2\SW10` are unchanged.
+
+Acceptance criteria:
+
+1. `J2\SW10` resolves network number 2.
+2. `J２\SW10` and `J٢\SW10` fail before sync and async request construction.
+3. Rejection leaves connection and traffic state unchanged.
+4. The Python text contract agrees with Node.js, Rust, .NET, and C++.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required; lexical validation and pre-transport ordering are deterministic local behavior.
+- [x] Documentation, migration notes, changelog, and generated API source agree with the implementation.
+- [x] Final acceptance criteria verified and the item marked complete.
+
+## SLMP-PY-TRACE-20260801 — Awaitable async trace callables
+
+Implementation scope: Python's internal async `_maintainer_trace_hook`, its
+single diagnostic emission point, tests, migration notes, and changelog. The
+other implementations expose no equivalent async-callable hook contract.
+
+Target contract: call the configured hook once, inspect that one return value,
+and await it when it is awaitable. This applies equally to sync functions,
+async functions, and callable objects with async `__call__`. Regular exceptions
+raised synchronously or while awaiting remain diagnostic-only.
+
+Compatibility impact: async callable objects that previously produced an
+unawaited coroutine now run to completion without `RuntimeWarning`. Existing
+sync and async function hooks retain their supported behavior.
+
+Acceptance criteria:
+
+1. A sync function is called once and a non-awaitable return is not awaited.
+2. An async function is called once and completes before trace emission returns.
+3. A callable object with async `__call__` is called once, awaited to
+   completion, and emits no unawaited-coroutine `RuntimeWarning`.
+4. Sync and awaited regular exceptions do not escape trace emission or change
+   the PLC operation result.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant static checks, unit tests, integration tests, examples, and package/build checks passed.
+- [x] Codex self-review completed against the approved contract and cross-language consistency requirements.
+- [x] Live PLC checks are not required; hook dispatch and exception isolation are deterministic local behavior.
+- [x] Documentation, migration notes, changelog, and generated API source agree with the implementation.
+- [x] Final acceptance criteria verified and the item marked complete.
+
 Self-review disposition for the 2026-08-01 items:
 
+- Accepted and corrected: the first span implementation treated every Direct
+  point as one device address. The final implementation derives consumed width
+  from the existing route contract: packed bit devices use 16 addresses per
+  word, DWords use two words, Block bit points use 16, and valid LTN/LSTN
+  current reads use one logical device per four words. Random, Monitor, module
+  Extended Device, and 24-bit link-direct entries use the same shared rules.
+- Accepted and corrected: checking only the hook callable's truth value still
+  skipped a valid callable object with false Boolean value. Both the outer
+  emission check and `_emit_trace` now test explicitly for `None`; the hook is
+  called once and its single return value is inspected for awaitability.
+- Accepted and corrected: an early span check could otherwise replace a more
+  fundamental semantic device/route error in Extended Random/Monitor and Block
+  builders. Per-entry semantic validation now precedes span calculation, while
+  the existing aggregate duplicate/overlap checks remain in force.
+- Accepted and corrected: the first Random/Monitor DWord span calculation and
+  Random-write overlap check used the ordinary two-word width for every device.
+  Native LTN/LSTN/LCN/LZ DWords now consume one logical device, while packed
+  bit-device word/DWord writes occupy 16/32 addresses in both boundary and
+  overlap validation. Adjacent native DWords remain valid.
+- Accepted and corrected: the final packed-bit boundary test placed a valid
+  maximum-ending word entry and a valid maximum-ending DWord entry in the same
+  Random Write request. Those ranges intentionally overlap, so the implementation
+  correctly rejected the test fixture. The two independent boundary admissions
+  are now tested in separate non-overlapping requests.
+- Rejected: using profile catalog practical ranges as transport span limits
+  conflicts with the approved wire-width contract. Maximum wire addresses are
+  accepted when the consumed width fits, independent of practical catalog
+  bounds.
+- Rejected: adding the high-level admission rule to private CLI raw-frame
+  evidence probes would remove their intentional ability to investigate PLC
+  behavior outside library policy. All public sync/async APIs and shared
+  semantic builders enforce the target contract; the evidence-only raw path
+  remains explicit and private.
 - Accepted and corrected: typed sync/async helpers initially delegated unit
   validation to a client call, allowing test doubles to bypass the exact
   typed/named contract. All four helpers now validate canonical dtype/unit
@@ -905,12 +1059,14 @@ Self-review disposition for the 2026-08-01 items:
   devices; explicit word-unit APIs remain intentionally asymmetric.
 - Duplicate findings: none. Deferred findings: none.
 
-Verification evidence (2026-08-01): Ruff lint and format, mypy, public API
-docstring coverage (207 definitions and 132 methods), canonical profile drift,
-automatic-publication guard, and version synchronization passed. The full
-suite passed with 504 tests and 317 subtests. The current-worktree source
-archive gate passed, including isolated archive CI, wheel/sdist construction,
-installed-wheel smoke tests, package-content checks, and 23 wheel / 29 sdist
-consumer assertions. This repository does not contain an independent MkDocs
-project; the maintained user Markdown and generated API source were checked by
-the repository gates.
+Final verification evidence (2026-08-01): the canonical profile drift check,
+automatic-publication guard, and package/runtime version synchronization passed.
+The corrected current-worktree source archive gate passed Ruff lint, Ruff format
+over 63 files, Mypy over 16 source files, and public API docstring coverage for
+207 definitions and 132 methods. Pytest passed 546 tests and 317 subtests. The
+isolated archive then built the wheel and sdist, installed the wheel into a fresh
+consumer environment, passed 23 wheel and 29 sdist content assertions, and
+verified a 102-file self-contained source archive. This repository has no
+independent MkDocs project; maintained user Markdown and generated API source
+are covered by the repository gates. No live PLC communication, registry
+publication, commit, or push was performed.
