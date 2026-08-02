@@ -612,6 +612,11 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+The address plan, compact result indexes, and immutable Random Read payload are
+validated and prepared once when the polling iterator is created. Each cycle
+reuses that prepared request while retaining the ordinary client FIFO,
+deadline, cancellation, close, and error contracts.
+
 ## Operational recipes
 
 The repository includes two read-only operational samples for application

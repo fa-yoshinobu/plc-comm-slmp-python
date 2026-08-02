@@ -422,6 +422,21 @@ class SlmpResponse:
 
 
 @dataclass(frozen=True)
+class _SlmpResponseView:
+    """Private successful response whose payload borrows its owned raw frame."""
+
+    serial: int
+    target: SlmpTarget
+    end_code: int
+    data: memoryview
+    raw: bytes
+    error_info: None = None
+
+
+_SlmpDecodedResponse = SlmpResponse | _SlmpResponseView
+
+
+@dataclass(frozen=True)
 class LabelArrayReadPoint:
     """Request point for array label read."""
 
@@ -801,7 +816,7 @@ def encode_4e_request(
     monitoring_timer: int,
     command: int,
     subcommand: int,
-    data: bytes = b"",
+    data: bytes | memoryview = b"",
 ) -> bytes:
     """Encode a full 4E request frame."""
     _check_u16(serial, "serial")
@@ -842,7 +857,7 @@ def encode_3e_request(
     monitoring_timer: int,
     command: int,
     subcommand: int,
-    data: bytes = b"",
+    data: bytes | memoryview = b"",
 ) -> bytes:
     """Encode a full 3E request frame."""
     _check_u16(monitoring_timer, "monitoring_timer")
@@ -882,7 +897,7 @@ def encode_request(
     monitoring_timer: int,
     command: int,
     subcommand: int,
-    data: bytes = b"",
+    data: bytes | memoryview = b"",
 ) -> bytes:
     """Encode an SLMP request frame based on frame_type.
 
@@ -916,8 +931,7 @@ def encode_request(
     )
 
 
-def decode_3e_response(frame: bytes) -> SlmpResponse:
-    """Decode a 3E response frame."""
+def _decode_3e_response(frame: bytes, *, view_data: bool) -> _SlmpDecodedResponse:
     if len(frame) < 11:
         raise SlmpError(f"response too short: {len(frame)} bytes")
     if frame[:2] != FRAME_3E_RESPONSE_SUBHEADER:
@@ -942,9 +956,25 @@ def decode_3e_response(frame: bytes) -> SlmpResponse:
         raise SlmpError(f"invalid response_data_length: {response_data_length}")
 
     end_code = int.from_bytes(frame[9:11], "little")
+    if view_data and end_code == 0:
+        return _SlmpResponseView(
+            serial=0,
+            target=target,
+            end_code=end_code,
+            data=memoryview(frame)[11:],
+            raw=frame,
+        )
     data = frame[11:]
     error_info = SlmpErrorInfo.parse(data) if end_code != 0 else None
     return SlmpResponse(serial=0, target=target, end_code=end_code, data=data, raw=frame, error_info=error_info)
+
+
+def decode_3e_response(frame: bytes) -> SlmpResponse:
+    """Decode a 3E response frame with independently owned public payload data."""
+    response = _decode_3e_response(frame, view_data=False)
+    if not isinstance(response, SlmpResponse):
+        raise AssertionError("public 3E decoding must return owned response data")
+    return response
 
 
 def decode_response(frame: bytes, *, frame_type: FrameType) -> SlmpResponse:
@@ -965,8 +995,14 @@ def decode_response(frame: bytes, *, frame_type: FrameType) -> SlmpResponse:
     return decode_4e_response(frame)
 
 
-def decode_4e_response(frame: bytes) -> SlmpResponse:
-    """Decode a 4E response frame."""
+def _decode_response_view(frame: bytes, *, frame_type: FrameType) -> _SlmpDecodedResponse:
+    """Decode a private typed response with a payload view over its owned frame."""
+    if frame_type == FrameType.FRAME_3E:
+        return _decode_3e_response(frame, view_data=True)
+    return _decode_4e_response(frame, view_data=True)
+
+
+def _decode_4e_response(frame: bytes, *, view_data: bool) -> _SlmpDecodedResponse:
     if len(frame) < 15:
         raise SlmpError(f"response too short: {len(frame)} bytes")
     if frame[:2] != FRAME_4E_RESPONSE_SUBHEADER:
@@ -995,9 +1031,25 @@ def decode_4e_response(frame: bytes) -> SlmpResponse:
         raise SlmpError(f"invalid response_data_length: {response_data_length}")
 
     end_code = int.from_bytes(frame[13:15], "little")
+    if view_data and end_code == 0:
+        return _SlmpResponseView(
+            serial=serial,
+            target=target,
+            end_code=end_code,
+            data=memoryview(frame)[15:],
+            raw=frame,
+        )
     data = frame[15:]
     error_info = SlmpErrorInfo.parse(data) if end_code != 0 else None
     return SlmpResponse(serial=serial, target=target, end_code=end_code, data=data, raw=frame, error_info=error_info)
+
+
+def decode_4e_response(frame: bytes) -> SlmpResponse:
+    """Decode a 4E response frame with independently owned public payload data."""
+    response = _decode_4e_response(frame, view_data=False)
+    if not isinstance(response, SlmpResponse):
+        raise AssertionError("public 4E decoding must return owned response data")
+    return response
 
 
 def resolve_device_subcommand(
@@ -1186,6 +1238,73 @@ def _encode_resolved_extended_device_spec(
     )
 
 
+def _resolved_extended_device_spec_size(
+    *,
+    series: PLCSeries,
+    extension: _ExtensionSpec,
+    include_direct_memory_at_end: bool = True,
+) -> int:
+    """Return the exact encoded size for an already validated extension."""
+    if extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
+        return 11 if include_direct_memory_at_end else 10
+    device_size = 4 if series == PLCSeries.QL else 6
+    return 2 + device_size + 4 + int(include_direct_memory_at_end)
+
+
+def _encode_resolved_extended_device_spec_into(
+    ref: DeviceRef,
+    *,
+    series: PLCSeries,
+    extension: _ExtensionSpec,
+    output: bytearray,
+    offset: int,
+    include_direct_memory_at_end: bool = True,
+) -> int:
+    """Directly encode an already validated extension into a final buffer."""
+    start = offset
+    dev_code = DEVICE_CODES[ref.code].code
+    if extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT:
+        output[offset] = 0
+        output[offset + 1] = 0
+        output[offset + 2] = ref.number & 0xFF
+        output[offset + 3] = (ref.number >> 8) & 0xFF
+        output[offset + 4] = (ref.number >> 16) & 0xFF
+        output[offset + 5] = dev_code & 0xFF
+        output[offset + 6] = 0
+        output[offset + 7] = 0
+        output[offset + 8] = extension.extension_specification & 0xFF
+        output[offset + 9] = 0
+        offset += 10
+        if include_direct_memory_at_end:
+            output[offset] = DIRECT_MEMORY_LINK_DIRECT
+            offset += 1
+        return offset - start
+
+    output[offset] = extension.device_modification_index
+    output[offset + 1] = extension.device_modification_flags
+    offset += 2
+    output[offset] = ref.number & 0xFF
+    output[offset + 1] = (ref.number >> 8) & 0xFF
+    output[offset + 2] = (ref.number >> 16) & 0xFF
+    if series == PLCSeries.QL:
+        output[offset + 3] = dev_code & 0xFF
+        offset += 4
+    else:
+        output[offset + 3] = (ref.number >> 24) & 0xFF
+        output[offset + 4] = dev_code & 0xFF
+        output[offset + 5] = (dev_code >> 8) & 0xFF
+        offset += 6
+    output[offset] = extension.extension_specification_modification
+    output[offset + 1] = 0
+    output[offset + 2] = extension.extension_specification & 0xFF
+    output[offset + 3] = (extension.extension_specification >> 8) & 0xFF
+    offset += 4
+    if include_direct_memory_at_end:
+        output[offset] = extension.direct_memory_specification
+        offset += 1
+    return offset - start
+
+
 def _build_device_modification_flags(
     *,
     series: PLCSeries,
@@ -1246,14 +1365,14 @@ def _apply_semantic_device_modification(
     )
 
 
-def decode_device_words(data: bytes) -> list[int]:
+def decode_device_words(data: bytes | memoryview) -> list[int]:
     """Decode a byte array into a list of 16-bit word values."""
     if len(data) % 2 != 0:
         raise SlmpError(f"word data length must be even: {len(data)}")
     return [int.from_bytes(data[i : i + 2], "little") for i in range(0, len(data), 2)]
 
 
-def decode_device_dwords(data: bytes) -> list[int]:
+def decode_device_dwords(data: bytes | memoryview) -> list[int]:
     """Decode a byte array into a list of 32-bit double-word values."""
     if len(data) % 4 != 0:
         raise SlmpError(f"dword data length must be multiple of 4: {len(data)}")
@@ -1282,7 +1401,7 @@ def pack_bit_values(values: Iterable[bool]) -> bytes:
     return bytes(out)
 
 
-def unpack_bit_values(data: bytes, count: int) -> list[bool]:
+def unpack_bit_values(data: bytes | memoryview, count: int) -> list[bool]:
     """Unpack binary bit data into a list of booleans.
 
     Args:

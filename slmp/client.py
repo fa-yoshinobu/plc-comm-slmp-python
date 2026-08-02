@@ -35,6 +35,7 @@ from .core import (
     TypeNameInfo,
     _apply_semantic_device_modification,
     _build_device_modification_flags,
+    _decode_response_view,
     _ExtensionSpec,
     _format_semantic_extended_device_key,
     _parse_extended_device,
@@ -44,6 +45,7 @@ from .core import (
     _resolve_connection_profile,
     _resolve_extended_device_and_extension,
     _resolve_port,
+    _SlmpDecodedResponse,
     _SlmpTraceFrame,
     _validate_request_payload_length,
     decode_cpu_operation_state,
@@ -281,7 +283,7 @@ class SlmpClient:
         self,
         command: int | Command,
         subcommand: int,
-        data: bytes,
+        data: bytes | memoryview,
         *,
         serial: int | None = None,
         target: SlmpTarget | None = None,
@@ -303,7 +305,7 @@ class SlmpClient:
         _validate_request_payload_length(len(data), _request_payload_limit(self.transport, self.frame_type))
         effective_raise_on_error = self.raise_on_error if raise_on_error is None else raise_on_error
         with self._operation_queue.turn():
-            return self._request_unlocked(
+            response = self._request_unlocked(
                 command,
                 subcommand,
                 data,
@@ -315,13 +317,16 @@ class SlmpClient:
                 response_is_final=True,
                 require_empty_success_data=require_empty_success_data,
             )
+            if not isinstance(response, SlmpResponse):
+                raise AssertionError("public request decoding must return owned response data")
+            return response
 
     def _request_decoded(
         self,
         command: int | Command,
         subcommand: int,
-        data: bytes,
-        decoder: Callable[[SlmpResponse], _DecodedT],
+        data: bytes | memoryview,
+        decoder: Callable[[_SlmpDecodedResponse], _DecodedT],
     ) -> _DecodedT:
         """Execute a read and publish lifecycle completion after command decoding."""
         if type(self)._request is not SlmpClient._request:
@@ -357,7 +362,7 @@ class SlmpClient:
         self,
         command: int | Command,
         subcommand: int,
-        data: bytes,
+        data: bytes | memoryview,
         *,
         serial: int | None = None,
         target: SlmpTarget | None = None,
@@ -366,7 +371,7 @@ class SlmpClient:
         state_changing: bool | None = None,
         response_is_final: bool = True,
         require_empty_success_data: bool = False,
-    ) -> SlmpResponse:
+    ) -> _SlmpDecodedResponse:
         """Send an internal SLMP request and return the response.
 
         Args:
@@ -409,34 +414,39 @@ class SlmpClient:
             raw = self._send_and_receive(frame)
         finally:
             self._active_state_changing = previous_state_changing
-        resp = decode_response(raw, frame_type=self.frame_type)
-        self._emit_trace(
-            _SlmpTraceFrame(
-                serial=serial_no,
-                command=cmd,
-                subcommand=subcommand,
-                request_data=data,
-                request_frame=frame,
-                response_frame=raw,
-                response_end_code=resp.end_code,
-                target=target_info,
-                monitoring_timer=monitor,
-            )
+        resp = (
+            decode_response(raw, frame_type=self.frame_type)
+            if response_is_final
+            else _decode_response_view(raw, frame_type=self.frame_type)
         )
+        if self._trace_hook is not None:
+            self._emit_trace(
+                _SlmpTraceFrame(
+                    serial=serial_no,
+                    command=cmd,
+                    subcommand=subcommand,
+                    request_data=bytes(data),
+                    request_frame=frame,
+                    response_frame=raw,
+                    response_end_code=resp.end_code,
+                    target=target_info,
+                    monitoring_timer=monitor,
+                )
+            )
         do_raise = self.raise_on_error if raise_on_error is None else raise_on_error
         if resp.end_code != 0:
             if do_raise:
                 raise SlmpError(
                     f"SLMP error end_code=0x{resp.end_code:04X} command=0x{cmd:04X} subcommand=0x{subcommand:04X}",
                     end_code=resp.end_code,
-                    data=resp.data,
+                    data=bytes(resp.data),
                     error_info=resp.error_info,
                 )
             return resp
         if require_empty_success_data and resp.data:
             error = SlmpError(
                 "successful SLMP acknowledgement contains unexpected payload data",
-                data=resp.data,
+                data=bytes(resp.data),
             )
             self._close_transport()
             if effective_state_changing:
@@ -1423,7 +1433,7 @@ class SlmpClient:
             request.payload,
             lambda response: _operations.decode_self_test_loopback_response(
                 response,
-                expected=request.payload[2:],
+                expected=bytes(request.payload[2:]),
             ),
         )
 
@@ -1454,7 +1464,7 @@ class SlmpClient:
             request.subcommand,
             request.payload,
             lambda response: _operations.parse_array_label_read_response(
-                response.data,
+                bytes(response.data),
                 requested_points=requested_points,
             ),
         )
@@ -1500,7 +1510,7 @@ class SlmpClient:
             request.subcommand,
             request.payload,
             lambda response: _operations.parse_label_read_random_response(
-                response.data,
+                bytes(response.data),
                 expected_points=len(requested_labels),
             ),
         )
@@ -1559,7 +1569,7 @@ class SlmpClient:
         self,
         command: int | Command,
         subcommand: int,
-        data: bytes,
+        data: bytes | memoryview,
         *,
         serial: int | None = None,
         target: SlmpTarget | None = None,
@@ -1586,7 +1596,7 @@ class SlmpClient:
         self,
         command: int | Command,
         subcommand: int,
-        data: bytes,
+        data: bytes | memoryview,
         *,
         serial: int | None = None,
         target: SlmpTarget | None = None,
@@ -1641,7 +1651,7 @@ class SlmpClient:
                     serial=serial_no,
                     command=int(command),
                     subcommand=subcommand,
-                    request_data=data,
+                    request_data=bytes(data),
                     request_frame=frame,
                     response_frame=b"",
                     response_end_code=None,

@@ -20,7 +20,6 @@ from .core import (
     LabelRandomWritePoint,
     MonitorResult,
     RandomReadResult,
-    SlmpResponse,
     TypeNameInfo,
     _check_block_request_limits,
     _check_direct_device_points,
@@ -37,6 +36,7 @@ from .core import (
     _encode_label_name,
     _encode_remote_password_payload,
     _encode_resolved_extended_device_spec,
+    _encode_resolved_extended_device_spec_into,
     _ExtensionSpec,
     _label_array_data_bytes,
     _label_array_wire_data_bytes,
@@ -47,6 +47,8 @@ from .core import (
     _require_write_u16,
     _require_write_u32,
     _resolve_extended_device_and_extension,
+    _resolved_extended_device_spec_size,
+    _SlmpDecodedResponse,
     _validate_block_read_devices,
     _validate_block_write_devices,
     _validate_block_write_ranges,
@@ -78,7 +80,12 @@ class OperationRequest:
 
     command: Command
     subcommand: int
-    payload: bytes
+    payload: bytes | memoryview
+
+
+def _freeze_owned_payload(payload: bytearray) -> memoryview:
+    """Expose one privately owned final buffer as a read-only zero-copy view."""
+    return memoryview(payload).toreadonly()
 
 
 @dataclass(frozen=True)
@@ -234,7 +241,7 @@ def build_read_devices_request(
 
 
 def decode_read_devices_response(
-    response: SlmpResponse,
+    response: _SlmpDecodedResponse,
     *,
     points: int,
     bit_unit: bool,
@@ -245,7 +252,7 @@ def decode_read_devices_response(
         raise SlmpError(
             f"device read failed with end_code=0x{response.end_code:04X}",
             end_code=response.end_code,
-            data=response.data,
+            data=bytes(response.data),
             error_info=response.error_info,
         )
     if bit_unit:
@@ -335,7 +342,7 @@ def build_read_dwords_request(
     )
 
 
-def decode_read_dwords_response(response: SlmpResponse, *, count: int) -> list[int]:
+def decode_read_dwords_response(response: _SlmpDecodedResponse, *, count: int) -> list[int]:
     """Decode a direct dword read response into unsigned 32-bit values."""
 
     words = [int(value) for value in decode_read_devices_response(response, points=count * 2, bit_unit=False)]
@@ -372,7 +379,7 @@ def build_write_dwords_request(
     )
 
 
-def decode_read_float32s_response(response: SlmpResponse, *, count: int) -> list[float]:
+def decode_read_float32s_response(response: _SlmpDecodedResponse, *, count: int) -> list[float]:
     """Decode a dword read response as little-endian float32 values."""
 
     values: list[float] = []
@@ -586,16 +593,19 @@ def build_register_monitor_devices_ext_request(
         plc_profile=address_profile,
         limit_key="monitor_register_word",
     )
-    payload = bytearray([len(word_devices), len(dword_devices)])
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
+    word_extensions: list[_ExtensionSpec] = []
+    dword_extensions: list[_ExtensionSpec] = []
     link_direct = False
     other_layout = False
+    payload_length = 2
     for dev, ext in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _validate_monitor_register_devices([ref], [])
         word_refs.append(ref)
+        word_extensions.append(effective_extension)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
@@ -605,12 +615,16 @@ def build_register_monitor_devices_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="register_monitor_devices_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        )
     for dev, ext in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(dev, ext, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _validate_monitor_register_devices([], [ref])
         dword_refs.append(ref)
+        dword_extensions.append(effective_extension)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
@@ -620,7 +634,10 @@ def build_register_monitor_devices_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="register_monitor_devices_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        )
     _validate_monitor_register_devices(word_refs, dword_refs)
     subcommand = resolve_device_subcommand(
         bit_unit=False,
@@ -632,7 +649,28 @@ def build_register_monitor_devices_ext_request(
         ),
         extension=True,
     )
-    return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, bytes(payload))
+    payload = bytearray(payload_length)
+    payload[0] = len(word_devices)
+    payload[1] = len(dword_devices)
+    offset = 2
+    for ref, extension in zip(word_refs, word_extensions, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+    for ref, extension in zip(dword_refs, dword_extensions, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+    assert offset == len(payload)
+    return OperationRequest(Command.DEVICE_ENTRY_MONITOR, subcommand, _freeze_owned_payload(payload))
 
 
 def build_run_monitor_cycle_request(
@@ -658,7 +696,7 @@ def build_run_monitor_cycle_request(
 
 
 def decode_run_monitor_cycle_response(
-    response: SlmpResponse,
+    response: _SlmpDecodedResponse,
     *,
     word_points: int,
     dword_points: int,
@@ -681,17 +719,17 @@ def build_read_type_name_request() -> OperationRequest:
     return OperationRequest(Command.READ_TYPE_NAME, 0x0000, b"")
 
 
-def decode_read_type_name_response(response: SlmpResponse) -> TypeNameInfo:
+def decode_read_type_name_response(response: _SlmpDecodedResponse) -> TypeNameInfo:
     """Decode a type-name response into model text and model code metadata."""
 
     data = response.data
     model = ""
     model_code = None
     if len(data) >= 16:
-        model = data[:16].split(b"\x00", 1)[0].decode("ascii", errors="ignore").strip()
+        model = bytes(data[:16]).split(b"\x00", 1)[0].decode("ascii", errors="ignore").strip()
     if len(data) >= 18:
         model_code = int.from_bytes(data[16:18], "little")
-    return TypeNameInfo(raw=data, model=model, model_code=model_code)
+    return TypeNameInfo(raw=bytes(data), model=model, model_code=model_code)
 
 
 def build_remote_run_request(*, force: bool, clear_mode: int) -> OperationRequest:
@@ -847,18 +885,21 @@ def build_read_random_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    payload = bytearray([len(word_devices), len(dword_devices)])
     words: list[DeviceRef] = []
     dwords: list[DeviceRef] = []
+    word_extensions: list[_ExtensionSpec] = []
+    dword_extensions: list[_ExtensionSpec] = []
     word_keys: list[str] = []
     dword_keys: list[str] = []
     link_direct = False
     other_layout = False
+    payload_length = 2
     for device, extension, result_key in word_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _validate_random_read_devices([ref], [])
         words.append(ref)
+        word_extensions.append(effective_extension)
         word_keys.append(result_key)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
@@ -869,12 +910,16 @@ def build_read_random_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="read_random_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        )
     for device, extension, result_key in dword_devices:
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
         _validate_random_read_devices([], [ref])
         dwords.append(ref)
+        dword_extensions.append(effective_extension)
         dword_keys.append(result_key)
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
@@ -885,7 +930,10 @@ def build_read_random_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="read_random_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        )
     _validate_random_read_devices(words, dwords)
     _validate_random_result_keys(word_keys, dword_keys)
     subcommand = resolve_device_subcommand(
@@ -898,8 +946,29 @@ def build_read_random_ext_request(
         ),
         extension=True,
     )
+    payload = bytearray(payload_length)
+    payload[0] = len(word_devices)
+    payload[1] = len(dword_devices)
+    offset = 2
+    for ref, extension in zip(words, word_extensions, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+    for ref, extension in zip(dwords, dword_extensions, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+    assert offset == len(payload)
     return RandomReadOperation(
-        request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, bytes(payload)),
+        request=OperationRequest(Command.DEVICE_READ_RANDOM, subcommand, _freeze_owned_payload(payload)),
         word_refs=tuple(words),
         dword_refs=tuple(dwords),
         word_keys=tuple(word_keys),
@@ -907,7 +976,7 @@ def build_read_random_ext_request(
     )
 
 
-def decode_read_random_response(response: SlmpResponse, operation: RandomReadOperation) -> RandomReadResult:
+def decode_read_random_response(response: _SlmpDecodedResponse, operation: RandomReadOperation) -> RandomReadResult:
     """Decode a random read response using its original operation metadata."""
 
     expected = len(operation.word_refs) * 2 + len(operation.dword_refs) * 4
@@ -921,6 +990,21 @@ def decode_read_random_response(response: SlmpResponse, operation: RandomReadOpe
     return RandomReadResult(
         word={key: value for key, value in zip(operation.word_keys, word_values, strict=True)},
         dword={key: value for key, value in zip(operation.dword_keys, dword_values, strict=True)},
+    )
+
+
+def decode_prepared_random_read_values(
+    response: _SlmpDecodedResponse,
+    operation: RandomReadOperation,
+) -> tuple[list[int], list[int]]:
+    """Decode private prepared random-read values without per-cycle key maps."""
+    expected = len(operation.word_refs) * 2 + len(operation.dword_refs) * 4
+    if len(response.data) != expected:
+        raise SlmpError(f"random read response size mismatch: expected={expected}, actual={len(response.data)}")
+    word_bytes = len(operation.word_refs) * 2
+    return (
+        decode_device_words(response.data[:word_bytes]),
+        decode_device_dwords(response.data[word_bytes:]),
     )
 
 
@@ -1004,13 +1088,15 @@ def build_write_random_words_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    payload = bytearray([len(word_values), len(dword_values)])
     word_refs: list[DeviceRef] = []
     dword_refs: list[DeviceRef] = []
     word_extensions: list[_ExtensionSpec] = []
     dword_extensions: list[_ExtensionSpec] = []
+    encoded_word_values: list[int] = []
+    encoded_dword_values: list[int] = []
     link_direct = False
     other_layout = False
+    payload_length = 2
     for index, (device, value, extension) in enumerate(word_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
@@ -1031,8 +1117,11 @@ def build_write_random_words_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="write_random_words_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-        payload += _require_write_u16(value, f"word_values[{index}]").to_bytes(2, "little", signed=False)
+        encoded_word_values.append(_require_write_u16(value, f"word_values[{index}]"))
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        ) + 2
     for index, (device, value, extension) in enumerate(dword_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
@@ -1053,8 +1142,11 @@ def build_write_random_words_ext_request(
             series=_extended_wire_series(effective_series, effective_extension),
             operation="write_random_words_ext",
         )
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
-        payload += _require_write_u32(value, f"dword_values[{index}]").to_bytes(4, "little", signed=False)
+        encoded_dword_values.append(_require_write_u32(value, f"dword_values[{index}]"))
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        ) + 4
     _validate_random_write_word_devices(
         word_refs,
         dword_refs,
@@ -1072,7 +1164,36 @@ def build_write_random_words_ext_request(
         ),
         extension=True,
     )
-    return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
+    payload = bytearray(payload_length)
+    payload[0] = len(word_values)
+    payload[1] = len(dword_values)
+    offset = 2
+    for ref, extension, value in zip(word_refs, word_extensions, encoded_word_values, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+        payload[offset] = value & 0xFF
+        payload[offset + 1] = (value >> 8) & 0xFF
+        offset += 2
+    for ref, extension, value in zip(dword_refs, dword_extensions, encoded_dword_values, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+        payload[offset] = value & 0xFF
+        payload[offset + 1] = (value >> 8) & 0xFF
+        payload[offset + 2] = (value >> 16) & 0xFF
+        payload[offset + 3] = (value >> 24) & 0xFF
+        offset += 4
+    assert offset == len(payload)
+    return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, _freeze_owned_payload(payload))
 
 
 def build_write_random_bits_request(
@@ -1131,11 +1252,12 @@ def build_write_random_bits_ext_request(
         extension=True,
         plc_profile=address_profile,
     )
-    payload = bytearray([len(bit_values)])
     refs: list[DeviceRef] = []
     extensions: list[_ExtensionSpec] = []
+    encoded_states: list[int] = []
     link_direct = False
     other_layout = False
+    payload_length = 1
     for index, (device, state, extension) in enumerate(bit_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
@@ -1144,12 +1266,12 @@ def build_write_random_bits_ext_request(
         is_link_direct = effective_extension.direct_memory_specification == DIRECT_MEMORY_LINK_DIRECT
         link_direct = link_direct or is_link_direct
         other_layout = other_layout or not is_link_direct
-        payload += _encode_resolved_extended_device_spec(ref, series=effective_series, extension=effective_extension)
         encoded_state = _require_write_bit(state, f"bit_values[{index}]")
-        if effective_series == PLCSeries.IQR and not is_link_direct:
-            payload += b"\x01\x00" if encoded_state else b"\x00\x00"
-        else:
-            payload += b"\x01" if encoded_state else b"\x00"
+        encoded_states.append(encoded_state)
+        payload_length += _resolved_extended_device_spec_size(
+            series=effective_series,
+            extension=effective_extension,
+        ) + (2 if effective_series == PLCSeries.IQR and not is_link_direct else 1)
     _validate_random_write_bit_devices(refs, plc_profile=address_profile, namespaces=extensions)
     subcommand = resolve_device_subcommand(
         bit_unit=True,
@@ -1161,7 +1283,24 @@ def build_write_random_bits_ext_request(
         ),
         extension=True,
     )
-    return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, bytes(payload))
+    payload = bytearray(payload_length)
+    payload[0] = len(bit_values)
+    offset = 1
+    for ref, extension, encoded_state_value in zip(refs, extensions, encoded_states, strict=True):
+        offset += _encode_resolved_extended_device_spec_into(
+            ref,
+            series=effective_series,
+            extension=extension,
+            output=payload,
+            offset=offset,
+        )
+        payload[offset] = encoded_state_value
+        offset += 1
+        if effective_series == PLCSeries.IQR and extension.direct_memory_specification != DIRECT_MEMORY_LINK_DIRECT:
+            payload[offset] = 0
+            offset += 1
+    assert offset == len(payload)
+    return OperationRequest(Command.DEVICE_WRITE_RANDOM, subcommand, _freeze_owned_payload(payload))
 
 
 def build_read_block_request(
@@ -1224,7 +1363,7 @@ def build_read_block_request(
     )
 
 
-def decode_read_block_response(response: SlmpResponse, operation: BlockReadOperation) -> BlockReadResult:
+def decode_read_block_response(response: _SlmpDecodedResponse, operation: BlockReadOperation) -> BlockReadResult:
     """Decode a block read response using its original operation metadata."""
 
     offset = 0
@@ -1334,7 +1473,7 @@ def build_self_test_loopback_request(data: bytes | str) -> OperationRequest:
     return OperationRequest(Command.SELF_TEST, 0x0000, payload)
 
 
-def decode_self_test_loopback_response(response: SlmpResponse, *, expected: bytes) -> bytes:
+def decode_self_test_loopback_response(response: _SlmpDecodedResponse, *, expected: bytes) -> bytes:
     """Decode a self-test loopback response body."""
 
     data = response.data
@@ -1348,7 +1487,7 @@ def decode_self_test_loopback_response(response: SlmpResponse, *, expected: byte
         raise SlmpError(f"self test response length mismatch: expected={len(expected)}, actual={size}")
     if body != expected:
         raise SlmpError("self test response payload mismatch")
-    return body
+    return bytes(body)
 
 
 def build_memory_read_words_request(head_address: int, word_length: int) -> OperationRequest:
@@ -1361,7 +1500,7 @@ def build_memory_read_words_request(head_address: int, word_length: int) -> Oper
     return OperationRequest(Command.MEMORY_READ, 0x0000, payload)
 
 
-def decode_memory_read_words_response(response: SlmpResponse, *, word_length: int) -> list[int]:
+def decode_memory_read_words_response(response: _SlmpDecodedResponse, *, word_length: int) -> list[int]:
     """Decode a direct memory word-read response."""
 
     words = decode_device_words(response.data)
@@ -1397,12 +1536,12 @@ def build_extend_unit_read_bytes_request(head_address: int, byte_length: int, mo
     return OperationRequest(Command.EXTEND_UNIT_READ, 0x0000, payload)
 
 
-def decode_extend_unit_read_bytes_response(response: SlmpResponse, *, byte_length: int) -> bytes:
+def decode_extend_unit_read_bytes_response(response: _SlmpDecodedResponse, *, byte_length: int) -> bytes:
     """Decode an extension-unit byte-read response."""
 
     if len(response.data) != byte_length:
         raise SlmpError(f"extend unit read size mismatch: expected={byte_length}, actual={len(response.data)}")
-    return response.data
+    return bytes(response.data)
 
 
 def build_extend_unit_read_words_request(head_address: int, word_length: int, module_no: int) -> OperationRequest:
@@ -1414,7 +1553,7 @@ def build_extend_unit_read_words_request(head_address: int, word_length: int, mo
     return build_extend_unit_read_bytes_request(head_address, word_length * 2, module_no)
 
 
-def decode_extend_unit_read_words_response(response: SlmpResponse, *, word_length: int) -> list[int]:
+def decode_extend_unit_read_words_response(response: _SlmpDecodedResponse, *, word_length: int) -> list[int]:
     """Decode an extension-unit word-read response."""
 
     data = decode_extend_unit_read_bytes_response(response, byte_length=word_length * 2)
@@ -1706,7 +1845,7 @@ def parse_array_label_read_response(
                 "array label read response truncated in data payload: "
                 f"needed={data_size}, remaining={len(data) - offset}"
             )
-        raw = data[offset : offset + data_size]
+        raw = bytes(data[offset : offset + data_size])
         offset += data_size
         out.append(
             LabelArrayReadResult(
@@ -1749,7 +1888,7 @@ def parse_label_read_random_response(
                 "label random read response truncated in data payload: "
                 f"needed={read_data_length}, remaining={len(data) - offset}"
             )
-        raw = data[offset : offset + read_data_length]
+        raw = bytes(data[offset : offset + read_data_length])
         offset += read_data_length
         out.append(
             LabelRandomReadResult(

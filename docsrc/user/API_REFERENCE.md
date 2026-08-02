@@ -74,7 +74,7 @@ logical length; malformed or trailing data raises `SlmpError`.
 | Connection helper | `open_and_connect`, `open_and_connect_sync` |
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
 | Typed values | `read_typed`, `write_typed` |
-| Named read/write collections | `read_named`, `write_named`, `poll` |
+| Named read/write collections | `read_named`, `write_named`, `poll` (the polling iterator prepares its immutable Random Read payload and compact decode indexes once) |
 | Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
 | Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
 | Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
@@ -96,6 +96,10 @@ complete plan, issue exactly one canonical Random Read, or reject before
 transport. Oversized plans and entries requiring another command family must be
 split into explicit application calls. Writes that would require multiple
 requests are also rejected before send.
+
+Typed command decoding uses private response-frame views internally. Public
+raw command results, trace frames, error data, and APIs whose result is bytes
+remain owned `bytes`; callers never receive a borrowed view.
 
 Device requests must fit completely in the device-number field selected by the
 entry's wire layout: 24 bits for Q/L and link-direct `J` entries, and 32 bits

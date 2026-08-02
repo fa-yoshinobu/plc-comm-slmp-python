@@ -9,7 +9,7 @@ import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from . import _operations
 from .constants import DeviceUnit, FrameType, PLCSeries
@@ -64,6 +64,7 @@ class _ReadPlanEntry:
     dtype: str
     bit_index: int | None
     batch_kind: str | None
+    batch_index: int | None
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,15 @@ class _ReadPlan:
     entries: tuple[_ReadPlanEntry, ...]
     word_devices: tuple[DeviceRef, ...]
     dword_devices: tuple[DeviceRef, ...]
+
+
+@dataclass(frozen=True)
+class _PreparedReadPlan:
+    owner: AsyncSlmpClient | SlmpClient
+    plc_profile: object
+    plc_series: object
+    frame_type: object
+    operation: _operations.RandomReadOperation
 
 
 @dataclass(frozen=True)
@@ -924,13 +934,14 @@ def _compile_read_plan(
     entries: list[_ReadPlanEntry] = []
     word_devices: list[DeviceRef] = []
     dword_devices: list[DeviceRef] = []
-    seen_words: set[DeviceRef] = set()
-    seen_dwords: set[DeviceRef] = set()
+    word_indexes: dict[DeviceRef, int] = {}
+    dword_indexes: dict[DeviceRef, int] = {}
 
     for address in addresses:
         base, dtype, bit_index = _parse_address(address)
         device = _parse_device_for_address_profile(base, address_profile)
         batch_kind: str | None = None
+        batch_index: int | None = None
         long_timer_read = _get_long_timer_read(device)
 
         if dtype == "BIT_IN_WORD":
@@ -939,9 +950,10 @@ def _compile_read_plan(
             _validate_bit_in_word_target(address, device)
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
-                if device not in seen_words:
+                if device not in word_indexes:
+                    word_indexes[device] = len(word_devices)
                     word_devices.append(device)
-                    seen_words.add(device)
+                batch_index = word_indexes[device]
         else:
             dtype = _resolve_dtype_for_address(address, device, dtype, bit_index)
             _validate_device_dtype(address, device, dtype)
@@ -954,32 +966,36 @@ def _compile_read_plan(
             )
         if long_timer_read is not None:
             batch_kind = "DWORD"
-            if device not in seen_dwords:
+            if device not in dword_indexes:
+                dword_indexes[device] = len(dword_devices)
                 dword_devices.append(device)
-                seen_dwords.add(device)
+            batch_index = dword_indexes[device]
         elif dtype == "BIT":
             bit_word = _plain_bit_word_read(device)
             if bit_word is not None:
                 device, bit_index = bit_word
                 dtype = "BIT_IN_WORD"
                 batch_kind = "WORD"
-                if device not in seen_words:
+                if device not in word_indexes:
+                    word_indexes[device] = len(word_devices)
                     word_devices.append(device)
-                    seen_words.add(device)
+                batch_index = word_indexes[device]
         elif dtype in _WORD_DTYPES:
             if _is_batchable_word_device(device):
                 batch_kind = "WORD"
-                if device not in seen_words:
+                if device not in word_indexes:
+                    word_indexes[device] = len(word_devices)
                     word_devices.append(device)
-                    seen_words.add(device)
+                batch_index = word_indexes[device]
         elif dtype in _DWORD_DTYPES:
             if _is_batchable_word_device(device):
                 batch_kind = "DWORD"
-                if device not in seen_dwords:
+                if device not in dword_indexes:
+                    dword_indexes[device] = len(dword_devices)
                     dword_devices.append(device)
-                    seen_dwords.add(device)
+                batch_index = dword_indexes[device]
 
-        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind))
+        entries.append(_ReadPlanEntry(address, device, dtype, bit_index, batch_kind, batch_index))
 
     unsupported = [entry.address for entry in entries if entry.batch_kind not in {"WORD", "DWORD"}]
     if unsupported:
@@ -1113,7 +1129,7 @@ def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> in
 def _prepare_read_plan(
     client: AsyncSlmpClient | SlmpClient,
     plan: _ReadPlan,
-) -> _operations.RandomReadOperation:
+) -> _PreparedReadPlan:
     """Validate and encode the one named-read request before transport."""
     client._ensure_profile_feature_allowed("random")
     _, default_series, _, _, _ = _resolve_connection_profile(
@@ -1122,65 +1138,121 @@ def _prepare_read_plan(
         frame_type=None,
         address_profile=None,
     )
-    return _operations.build_read_random_request(
+    operation = _operations.build_read_random_request(
         word_devices=plan.word_devices,
         dword_devices=plan.dword_devices,
         series=None,
         default_series=default_series,
         address_profile=client.plc_profile,
     )
+    return _PreparedReadPlan(
+        owner=client,
+        plc_profile=client.plc_profile,
+        plc_series=client.plc_series,
+        frame_type=client.frame_type,
+        operation=operation,
+    )
 
 
 def _decode_read_plan(
     output: dict[str, int | float | bool],
     plan: _ReadPlan,
-    random_result: Any,
+    random_values: tuple[list[int], list[int]],
 ) -> None:
+    word_values, dword_values = random_values
     for entry in plan.entries:
+        if entry.batch_index is None:
+            raise RuntimeError(f"read plan has no compact decode index for {entry.address!r}")
         if entry.batch_kind == "WORD":
-            word = random_result.word[str(entry.device)]
+            word = word_values[entry.batch_index]
             if entry.dtype == "BIT_IN_WORD":
                 bit_index = _require_bit_in_word_index(entry.address, entry.bit_index)
                 output[entry.address] = bool((word >> bit_index) & 1)
             else:
                 output[entry.address] = _decode_word_value(word, entry.dtype)
         else:
-            output[entry.address] = _decode_dword_value(random_result.dword[str(entry.device)], entry.dtype)
+            output[entry.address] = _decode_dword_value(dword_values[entry.batch_index], entry.dtype)
+
+
+def _validate_prepared_read_binding(
+    client: AsyncSlmpClient | SlmpClient,
+    prepared: _PreparedReadPlan,
+) -> None:
+    if prepared.owner is not client:
+        raise ValueError("prepared named-read plan belongs to a different client")
+    if (
+        prepared.plc_profile != client.plc_profile
+        or prepared.plc_series != client.plc_series
+        or prepared.frame_type != client.frame_type
+    ):
+        raise ValueError("prepared named-read plan does not match the client profile, frame, or compatibility mode")
 
 
 async def _read_named_with_plan(
     client: AsyncSlmpClient,
     plan: _ReadPlan,
+    prepared: _PreparedReadPlan | None = None,
 ) -> dict[str, int | float | bool]:
-    operation = _prepare_read_plan(client, plan)
+    prepared = _prepare_read_plan(client, plan) if prepared is None else prepared
+    _validate_prepared_read_binding(client, prepared)
+    operation = prepared.operation
     result: dict[str, int | float | bool] = {}
     from .async_client import AsyncSlmpClient
 
-    turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
-    async with turn:
-        random_result = await client.read_random(
-            word_devices=list(operation.word_refs),
-            dword_devices=list(operation.dword_refs),
+    if isinstance(client, AsyncSlmpClient) and type(client).read_random is AsyncSlmpClient.read_random:
+        request = operation.request
+        random_values = await client._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_prepared_random_read_values(response, operation),
         )
-        _decode_read_plan(result, plan, random_result)
+    else:
+        turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
+        async with turn:
+            random_result = await client.read_random(
+                word_devices=list(operation.word_refs),
+                dword_devices=list(operation.dword_refs),
+            )
+        random_values = (
+            [random_result.word[key] for key in operation.word_keys],
+            [random_result.dword[key] for key in operation.dword_keys],
+        )
+    _decode_read_plan(result, plan, random_values)
     return result
 
 
 def _read_named_with_plan_sync(
     client: SlmpClient,
     plan: _ReadPlan,
+    prepared: _PreparedReadPlan | None = None,
 ) -> dict[str, int | float | bool]:
-    operation = _prepare_read_plan(client, plan)
+    prepared = _prepare_read_plan(client, plan) if prepared is None else prepared
+    _validate_prepared_read_binding(client, prepared)
+    operation = prepared.operation
     result: dict[str, int | float | bool] = {}
     from .client import SlmpClient
 
-    turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
-    with turn:
-        random_result = client.read_random(
-            word_devices=list(operation.word_refs),
-            dword_devices=list(operation.dword_refs),
+    if isinstance(client, SlmpClient) and type(client).read_random is SlmpClient.read_random:
+        request = operation.request
+        random_values = client._request_decoded(
+            request.command,
+            request.subcommand,
+            request.payload,
+            lambda response: _operations.decode_prepared_random_read_values(response, operation),
         )
-        _decode_read_plan(result, plan, random_result)
+    else:
+        turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
+        with turn:
+            random_result = client.read_random(
+                word_devices=list(operation.word_refs),
+                dword_devices=list(operation.dword_refs),
+            )
+        random_values = (
+            [random_result.word[key] for key in operation.word_keys],
+            [random_result.dword[key] for key in operation.dword_keys],
+        )
+    _decode_read_plan(result, plan, random_values)
     return result
 
 
@@ -1204,8 +1276,9 @@ async def poll(
     The address list is compiled once and reused for every cycle.
     """
     plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
+    prepared = _prepare_read_plan(client, plan)
     while True:
-        yield await _read_named_with_plan(client, plan)
+        yield await _read_named_with_plan(client, plan, prepared)
         await asyncio.sleep(interval)
 
 
@@ -1216,8 +1289,9 @@ def poll_sync(
 ) -> Iterator[dict[str, int | float | bool]]:
     """Synchronously yield mixed read results at a fixed interval."""
     plan = _compile_read_plan(addresses, address_profile=_client_address_profile(client))
+    prepared = _prepare_read_plan(client, plan)
     while True:
-        yield _read_named_with_plan_sync(client, plan)
+        yield _read_named_with_plan_sync(client, plan, prepared)
         time.sleep(interval)
 
 

@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Named polling now prepares and validates its immutable Random Read payload and compact decode indexes once per stream, then reuses them for every FIFO-controlled cycle without changing timing, cancellation, close, or error behavior.
+- Library: Typed command decoders now parse a private `memoryview` over the owned response frame; public raw/trace/error and byte-result surfaces still expose owned `bytes`. Extended Random and Monitor builders now use a validated exact-size two-pass encoder with one final payload allocation and no per-device encoded buffers.
+- Tests: Added allocation/encoding counters and regressions for one-time polling preparation, compact indexed decode, typed/raw response ownership, and exact-size Extended payload construction.
 - Docs: Made typed, bit-in-word, extended-device, link-direct, packed-bit, password-lock, monitor-registration, and Clear Error examples explicit controlled-test operations; confirmed writes now attempt to restore saved values before propagating readback failures, while outcome-unknown state changes require manual reconciliation.
 - Tests: Added getting-started/usage fence compilation and confirmed-write cleanup checks for the state-changing examples.
 - BREAKING: A present SLMP PLC error-information prefix must match the active request route, command, and subcommand. Mismatches are malformed responses, retire the transport, and become outcome-unknown for possibly applied state changes; trailing PLC error detail remains preserved.
