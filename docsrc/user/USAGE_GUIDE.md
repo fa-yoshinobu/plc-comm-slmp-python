@@ -66,6 +66,10 @@ Remote password lock/unlock commands are available through the async and sync cl
 The Python high-level connection does not automatically unlock or lock a remote password.
 If your PLC route uses remote password protection, unlock after opening the connection
 and lock before closing it.
+Always attempt re-lock after a confirmed unlock, including when the protected
+operation fails. If unlock or re-lock has an outcome-unknown result, do not
+retry automatically; reopen, inspect the PLC lock state, and reconcile it
+explicitly because access may remain unlocked.
 
 ```python
 async with await open_and_connect(options) as client:
@@ -160,12 +164,25 @@ with SlmpClient(
     default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     plc_profile="melsec:iq-r",
 ) as client:
-    values = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
-    client.write_devices_ext("U3\\G100", [1, 2, 3, 4], bit_unit=False)
-    print(values)
+    original = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
+    write_confirmed = False
+    try:
+        client.write_devices_ext("U3\\G100", [1, 2, 3, 4], bit_unit=False)
+        write_confirmed = True
+        readback = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
+        print(readback)
+    finally:
+        if write_confirmed:
+            client.write_devices_ext("U3\\G100", original, bit_unit=False)
 ```
 
 `Un` is the module number in hexadecimal text, for example `U3` or `U3E0`.
+Use only a configured module-buffer range reserved for controlled testing. The
+example attempts to restore the original words after a confirmed write,
+including when readback fails. If restoration fails, inspect and reconcile the
+buffer explicitly. If the write raises `SlmpOutcomeUnknownError`, the example
+deliberately does not issue another write: reopen the session, inspect the
+buffer, and choose the recovery action explicitly.
 
 Typed modification example:
 
@@ -194,17 +211,31 @@ the PLC has monitor registration sends the cycle request and returns the PLC
 response or error unchanged. The combined expected count must be nonzero and
 cannot exceed the selected profile's monitor-registration limit.
 
+Monitor registration changes the PLC's active monitor set. Use only a known
+device list on a controlled PLC. If registration has an outcome-unknown result,
+do not register again automatically; reconnect and reconcile the monitor state
+explicitly.
+
 ```python
 client.register_monitor_devices(word_devices=["D120"], dword_devices=["D200"])
 result = client.run_monitor_cycle(word_points=1, dword_points=1)
 
 echo = client.self_test_loopback(b"A1B2C3D4")
-client.clear_error()
 ```
 
 Self-test accepts only 1–960 ASCII `0-9/A-F` bytes and requires the returned
-declared length, actual length, and echo bytes to match exactly. `clear_error`
-always sends the fixed command with an empty payload.
+declared length, actual length, and echo bytes to match exactly.
+
+Clear Error is a separate state-changing maintenance action. It clears the
+PLC's current error state and cannot restore the diagnostic state that existed
+before the command. Capture the required diagnostics first and run it only on
+a controlled PLC when clearing the error is explicitly intended:
+
+```python
+client.clear_error()
+```
+
+`clear_error` always sends the fixed command with an empty payload.
 
 ### Link direct device access
 
@@ -217,7 +248,7 @@ through the connected PLC.
 | Bit read/write | `J1\X10`, `J1\SB10` |
 
 ```python
-from slmp import SlmpClient, SlmpTarget
+from slmp import SlmpClient, SlmpOutcomeUnknownError, SlmpTarget
 
 
 with SlmpClient(
@@ -229,13 +260,35 @@ with SlmpClient(
 ) as client:
     value = client.read_devices_ext("J2\\SW10", 1, bit_unit=False)
     bits = client.read_devices_ext("J1\\X10", 16, bit_unit=True)
-    client.write_devices_ext("J1\\SW14", [2], bit_unit=False)
-    client.write_devices_ext("J1\\X11", [True], bit_unit=True)
-    print(value, bits)
+    original_word = client.read_devices_ext("J1\\SW14", 1, bit_unit=False)
+    original_bit = client.read_devices_ext("J1\\X11", 1, bit_unit=True)
+    word_write_confirmed = False
+    bit_write_confirmed = False
+    outcome_unknown = False
+    try:
+        client.write_devices_ext("J1\\SW14", [2], bit_unit=False)
+        word_write_confirmed = True
+        client.write_devices_ext("J1\\X11", [True], bit_unit=True)
+        bit_write_confirmed = True
+        print(value, bits)
+    except SlmpOutcomeUnknownError:
+        outcome_unknown = True
+        raise
+    finally:
+        if not outcome_unknown:
+            if bit_write_confirmed:
+                client.write_devices_ext("J1\\X11", original_bit, bit_unit=True)
+            if word_write_confirmed:
+                client.write_devices_ext("J1\\SW14", original_word, bit_unit=False)
 ```
 
 The available link direct device families depend on the PLC route and link
-module configuration.
+module configuration. Use only link devices reserved for controlled testing.
+The example attempts to restore confirmed writes in reverse order. If either
+write has an unknown outcome, it stops all further writes so failed cleanup
+cannot hide that result; reopen the session, inspect both link devices, and
+reconcile them explicitly. If either restoration fails, stop and reconcile
+both test locations manually.
 
 Write the `J` network number with ASCII decimal digits (`0` through `9`). For
 example, `J2\SW10` is valid; visually similar Unicode digits are rejected
@@ -343,15 +396,23 @@ async def main() -> None:
     )
     async with await open_and_connect(options) as client:
         original = await read_typed(client, "D100", "U")
+        write_confirmed = False
         try:
             await write_typed(client, "D100", "U", 42)
+            write_confirmed = True
             print("wrote D100")
         finally:
-            await write_typed(client, "D100", "U", original)
+            if write_confirmed:
+                await write_typed(client, "D100", "U", original)
 
 
 asyncio.run(main())
 ```
+
+Use only a register reserved for controlled testing. A confirmed write is
+restored before the example exits. If the write outcome is unknown, do not
+restore or retry blindly; reopen, inspect `D100`, and reconcile it explicitly.
+If restoration fails, the register also requires manual reconciliation.
 
 ## Named read collection
 
@@ -456,7 +517,16 @@ async def main() -> None:
         default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     )
     async with await open_and_connect(options) as client:
-        await client.write_devices("M1000", [0x0005], bit_unit=False)
+        original = await client.read_devices("M1000", 1, bit_unit=False)
+        write_confirmed = False
+        try:
+            await client.write_devices("M1000", [0x0005], bit_unit=False)
+            write_confirmed = True
+            readback = await client.read_devices("M1000", 1, bit_unit=False)
+            print(readback)
+        finally:
+            if write_confirmed:
+                await client.write_devices("M1000", original, bit_unit=False)
 
 
 asyncio.run(main())
@@ -465,7 +535,10 @@ asyncio.run(main())
 This writes the packed pattern for `M1000..M1015`. Typed and named numeric
 dtypes intentionally reject bit devices; use explicit low-level word-unit
 direct access when packed behavior is intended. Use bit access for individual
-Boolean states.
+Boolean states. Use only a 16-bit range reserved for controlled testing. An
+unknown write outcome requires explicit state inspection rather than an
+automatic restore or retry. A failed restoration likewise requires manual
+inspection and reconciliation of the complete packed-bit range.
 
 ## Bit in word
 
@@ -495,16 +568,22 @@ async def main() -> None:
     )
     async with await open_and_connect(options) as client:
         original = await read_named(client, ["D50.3"])
+        write_confirmed = False
         try:
             await write_bit_in_word(client, "D50", bit_index=3, value=True)
+            write_confirmed = True
             snapshot = await read_named(client, ["D50.3"])
             print(f"D50.3={snapshot['D50.3']}")
         finally:
-            await write_bit_in_word(client, "D50", bit_index=3, value=bool(original["D50.3"]))
+            if write_confirmed:
+                await write_bit_in_word(client, "D50", bit_index=3, value=bool(original["D50.3"]))
 
 
 asyncio.run(main())
 ```
+
+If the confirmed-write restoration fails, inspect and reconcile the complete
+word manually. Do not assume that the original bit value was restored.
 
 ## Polling
 

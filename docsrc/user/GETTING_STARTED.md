@@ -93,16 +93,25 @@ async def main() -> None:
     )
     async with await open_and_connect(options) as client:
         original = await read_typed(client, "D100", "U")
+        write_confirmed = False
         try:
             await write_typed(client, "D100", "U", 42)
+            write_confirmed = True
             value = await read_typed(client, "D100", "U")
             print(f"D100={value}")
         finally:
-            await write_typed(client, "D100", "U", original)
+            if write_confirmed:
+                await write_typed(client, "D100", "U", original)
 
 
 asyncio.run(main())
 ```
+
+The example restores the saved value after a confirmed write, including when
+readback fails. If the write result is outcome-unknown, it deliberately avoids
+a blind restore or retry: reopen the client, inspect `D100`, and reconcile the
+actual value explicitly. If restoration fails, also inspect and reconcile the
+register manually; do not assume that the saved value was restored.
 
 Expected output:
 
@@ -117,7 +126,8 @@ D100=42
 3. Confirm PLC-side RUN-time write permission before running a write example where the PLC exposes that setting.
 4. Confirm `plc_profile` matches your PLC family.
 5. Confirm the first read uses a simple word register such as `D100`.
-6. Confirm writes use only a known-safe test address and restore the original value.
+6. Confirm writes use only a known-safe test address, restore confirmed writes,
+   and explicitly reconcile any outcome-unknown result.
 7. Confirm the value read back matches the test value you wrote.
 
 ## If it does not work

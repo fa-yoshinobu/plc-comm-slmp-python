@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Docs: Made typed, bit-in-word, extended-device, link-direct, packed-bit, password-lock, monitor-registration, and Clear Error examples explicit controlled-test operations; confirmed writes now attempt to restore saved values before propagating readback failures, while outcome-unknown state changes require manual reconciliation.
+- Tests: Added getting-started/usage fence compilation and confirmed-write cleanup checks for the state-changing examples.
 - BREAKING: A present SLMP PLC error-information prefix must match the active request route, command, and subcommand. Mismatches are malformed responses, retire the transport, and become outcome-unknown for possibly applied state changes; trailing PLC error detail remains preserved.
 - BREAKING: Python now rejects every 4E response whose reserved field is not `0x0000`, consistently across sync/async TCP/UDP paths.
 - BREAKING: Standard semantic write, monitor-registration, remote-control, password, memory, label, and other ACK-only APIs now require empty success data. A non-empty success ACK retires the transport and raises `SlmpOutcomeUnknownError(PROTOCOL)`; `raw_command()` continues to return arbitrary success data.
