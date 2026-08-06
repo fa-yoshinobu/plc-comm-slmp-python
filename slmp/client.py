@@ -167,6 +167,7 @@ class SlmpClient:
 
         self._serial = 0
         self._operation_queue = _SyncFifoOperationQueue()
+        self._active_deadline: float | None = None
         self._stats_lock = threading.Lock()
         self._active_state_changing = False
         self._sock: socket.socket | None = None
@@ -1618,7 +1619,7 @@ class SlmpClient:
         )
         attempted_send = False
         try:
-            deadline = time.monotonic() + self.timeout
+            deadline = self._active_deadline if self._active_deadline is not None else time.monotonic() + self.timeout
             self._connect_unlocked(deadline=deadline)
             self._operation_queue.ensure_current()
             assert self._sock is not None
@@ -1681,7 +1682,7 @@ class SlmpClient:
             expected_identity = _request_identity(frame, frame_type=self.frame_type)
             attempted_send = False
             try:
-                deadline = time.monotonic() + self.timeout
+                deadline = self._active_deadline if self._active_deadline is not None else time.monotonic() + self.timeout
                 self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self._sock is None:

@@ -22,6 +22,7 @@ from slmp.errors import (
     SlmpNotConnectedError,
     SlmpOutcomeUnknownError,
     SlmpOutcomeUnknownReason,
+    SlmpProfileFeatureError,
     SlmpTimeoutError,
     SlmpTransportError,
 )
@@ -687,24 +688,30 @@ def test_named_read_uses_one_exclusive_turn_and_preserves_order() -> None:
 
 
 class _SyncRmwClient(SlmpClient):
-    def __init__(self) -> None:
+    def __init__(self, plc_profile: str = "melsec:iq-r") -> None:
         super().__init__(
             "127.0.0.1",
             1025,
             transport="tcp",
             default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
-            plc_profile="melsec:iq-r",
+            plc_profile=plc_profile,
         )
         self.calls: list[int] = []
+        self.subcommands: list[int] = []
+        self.payloads: list[bytes] = []
+        self.deadlines: list[float | None] = []
         self.read_started = threading.Event()
 
     def _request_unlocked(self, command, subcommand, data, **kwargs):  # type: ignore[no-untyped-def]
-        del subcommand, data, kwargs
+        del kwargs
         self.calls.append(int(command))
+        self.subcommands.append(int(subcommand))
+        self.payloads.append(bytes(data))
+        self.deadlines.append(self._active_deadline)
         if int(command) == int(Command.DEVICE_READ):
             self.read_started.set()
             time.sleep(0.02)
-            response_data = b"\x00\x00"
+            response_data = b"\x08\x00"
         else:
             response_data = b""
         return SlmpResponse(serial=0, target=self.default_target, end_code=0, data=response_data, raw=b"")
@@ -733,28 +740,78 @@ def test_sync_bit_in_word_rmw_preflights_and_holds_one_fifo_turn() -> None:
     assert not starter.is_alive()
     assert not competitor.is_alive()
     assert client.calls == [int(Command.DEVICE_READ), int(Command.DEVICE_WRITE), int(Command.SELF_TEST)]
+    assert client.deadlines[0] is not None
+    assert client.deadlines[0] == client.deadlines[1]
+    assert client.deadlines[2] is None
+    assert client._active_deadline is None
+
+
+@pytest.mark.parametrize(
+    ("address", "profile"),
+    [(r"U2\G100", "melsec:qnudv"), (r"J1\W0", "melsec:iq-f")],
+)
+def test_sync_bit_in_word_blocked_qualified_route_sends_nothing(
+    address: str, profile: str
+) -> None:
+    client = _SyncRmwClient(profile)
+
+    with pytest.raises(SlmpProfileFeatureError):
+        write_bit_in_word_sync(client, address, 3, True)
+
+    assert client.calls == []
+    assert client._active_deadline is None
+
+
+@pytest.mark.parametrize(
+    ("address", "expected_subcommand"),
+    [(r"U1\G0", 0x0082), (r"J2\SW10", 0x0080)],
+)
+def test_sync_bit_in_word_preserves_each_qualified_route(
+    address: str, expected_subcommand: int
+) -> None:
+    invalid_client = _SyncRmwClient()
+    with pytest.raises(ValueError, match="bit_index must be 0-15"):
+        write_bit_in_word_sync(invalid_client, address, 16, True)
+    assert invalid_client.calls == []
+
+    client = _SyncRmwClient()
+
+    write_bit_in_word_sync(client, address, 3, True)
+
+    assert client.calls == [int(Command.DEVICE_READ), int(Command.DEVICE_WRITE)]
+    assert client.subcommands == [expected_subcommand, expected_subcommand]
+    assert client.payloads[1][:-2] == client.payloads[0]
+    assert client.payloads[1][-2:] == b"\x08\x00"
+    assert client.deadlines[0] is not None
+    assert client.deadlines[0] == client.deadlines[1]
 
 
 class _AsyncRmwClient(AsyncSlmpClient):
-    def __init__(self) -> None:
+    def __init__(self, plc_profile: str = "melsec:iq-r") -> None:
         super().__init__(
             "127.0.0.1",
             1025,
             transport="tcp",
             default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
-            plc_profile="melsec:iq-r",
+            plc_profile=plc_profile,
         )
         self.calls: list[int] = []
+        self.subcommands: list[int] = []
+        self.payloads: list[bytes] = []
+        self.deadlines: list[float | None] = []
         self.read_started = asyncio.Event()
         self.release_read = asyncio.Event()
 
     async def _request_unlocked(self, command, subcommand, data, **kwargs):  # type: ignore[no-untyped-def]
-        del subcommand, data, kwargs
+        del kwargs
         self.calls.append(int(command))
+        self.subcommands.append(int(subcommand))
+        self.payloads.append(bytes(data))
+        self.deadlines.append(self._active_deadline)
         if int(command) == int(Command.DEVICE_READ):
             self.read_started.set()
             await self.release_read.wait()
-            response_data = b"\x00\x00"
+            response_data = b"\x08\x00"
         else:
             response_data = b""
         return SlmpResponse(serial=0, target=self.default_target, end_code=0, data=response_data, raw=b"")
@@ -771,3 +828,65 @@ async def test_async_bit_in_word_rmw_holds_one_fifo_turn() -> None:
     await asyncio.gather(rmw, competitor)
 
     assert client.calls == [int(Command.DEVICE_READ), int(Command.DEVICE_WRITE), int(Command.SELF_TEST)]
+    assert client.deadlines[0] is not None
+    assert client.deadlines[0] == client.deadlines[1]
+    assert client.deadlines[2] is None
+    assert client._active_deadline is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("address", "profile"),
+    [(r"U2\G100", "melsec:qnudv"), (r"J1\W0", "melsec:iq-f")],
+)
+async def test_async_bit_in_word_blocked_qualified_route_sends_nothing(
+    address: str, profile: str
+) -> None:
+    client = _AsyncRmwClient(profile)
+
+    with pytest.raises(SlmpProfileFeatureError):
+        await write_bit_in_word(client, address, 3, True)
+
+    assert client.calls == []
+    assert client._active_deadline is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("address", "expected_subcommand"),
+    [(r"U1\G0", 0x0082), (r"J2\SW10", 0x0080)],
+)
+async def test_async_bit_in_word_preserves_each_qualified_route(
+    address: str, expected_subcommand: int
+) -> None:
+    invalid_client = _AsyncRmwClient()
+    invalid_client.release_read.set()
+    with pytest.raises(ValueError, match="bit_index must be 0-15"):
+        await write_bit_in_word(invalid_client, address, 16, True)
+    assert invalid_client.calls == []
+
+    client = _AsyncRmwClient()
+    client.release_read.set()
+
+    await write_bit_in_word(client, address, 3, True)
+
+    assert client.calls == [int(Command.DEVICE_READ), int(Command.DEVICE_WRITE)]
+    assert client.subcommands == [expected_subcommand, expected_subcommand]
+    assert client.payloads[1][:-2] == client.payloads[0]
+    assert client.payloads[1][-2:] == b"\x08\x00"
+    assert client.deadlines[0] is not None
+    assert client.deadlines[0] == client.deadlines[1]
+
+
+@pytest.mark.asyncio
+async def test_async_bit_in_word_cancellation_before_write_clears_compound_deadline() -> None:
+    client = _AsyncRmwClient()
+    rmw = asyncio.create_task(write_bit_in_word(client, "D0", 3, True))
+    await client.read_started.wait()
+
+    rmw.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await rmw
+
+    assert client.calls == [int(Command.DEVICE_READ)]
+    assert client._active_deadline is None

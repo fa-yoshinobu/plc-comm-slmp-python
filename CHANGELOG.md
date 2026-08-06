@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-08-07
+
 - Library: Named polling now prepares and validates its immutable Random Read payload and compact decode indexes once per stream, then reuses them for every FIFO-controlled cycle without changing timing, cancellation, close, or error behavior.
 - Library: Typed command decoders now parse a private `memoryview` over the owned response frame; public raw/trace/error and byte-result surfaces still expose owned `bytes`. Extended Random and Monitor builders now use a validated exact-size two-pass encoder with one final payload allocation and no per-device encoded buffers.
 - Tests: Added allocation/encoding counters and regressions for one-time polling preparation, compact indexed decode, typed/raw response ownership, and exact-size Extended payload construction.
@@ -56,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- Library: Sync and async `write_bit_in_word` now cover Direct and qualified U module-buffer / J link-direct complete-word routes, prevalidate the immutable route, own one FIFO turn, and use one absolute post-admission deadline for the mandatory read followed by write. The write is sent even when the bit is unchanged; the pair is not PLC-atomic, never retries, and a possibly transmitted unconfirmed write uses the outcome-unknown error contract.
 - Library: Every individual bit-write API now accepts native `bool` values only. Integers including `0` and `1`, strings, bytes, `None`, and truthy objects are rejected before request construction or transport; applications must convert their data explicitly.
 - Library: Device-range catalog reads no longer probe candidate addresses or infer a smaller range from PLC errors. Catalogs use only canonical fixed rules and the selected profile's SD-register block, and acquisition errors propagate to the caller.
 - Library: Sync and async TCP/UDP connections are now IPv4-only. IPv6 literals are rejected before socket creation, hostnames use the first IPv4 resolver result, and callers using IPv6 must migrate to IPv4.

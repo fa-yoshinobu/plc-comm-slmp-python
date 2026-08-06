@@ -2,6 +2,18 @@
 
 This document records source migrations required by the cross-library quality overhaul. The approved rationale and acceptance history remain in the workspace decision records.
 
+## SLMP-BIT-RMW-20260807 — Complete-route bit-in-word contract
+
+Scope: synchronous and asynchronous Direct and qualified Extended Device complete-word routes.
+
+Target contract: `write_bit_in_word` and `write_bit_in_word_sync` prevalidate the exact immutable route and both requests, own one FIFO turn, and use one absolute post-admission deadline. A successful read always produces one write even when unchanged. The pair is non-PLC-atomic, never retries, and an unconfirmed possibly transmitted write is outcome unknown.
+
+Compatibility impact: the existing functions now accept U module-buffer and J link-direct qualified addresses; the compound timeout no longer restarts between requests.
+
+- [x] Implementation and targeted sync/async route tests completed.
+- [ ] Full repository release gate completed.
+- [x] User/API/changelog/migration sources updated.
+
 ## Legacy validation scripts
 
 The repository no longer ships one-off scripts that select frame/series

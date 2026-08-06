@@ -15,6 +15,7 @@ from . import _operations
 from .constants import DeviceUnit, FrameType, PLCSeries
 from .core import (
     DeviceRef,
+    SlmpExtendedDevice,
     SlmpTarget,
     _check_direct_device_points,
     _check_temporarily_unsupported_device,
@@ -370,50 +371,93 @@ def write_typed_sync(
 
 async def write_bit_in_word(
     client: AsyncSlmpClient,
-    device: str | DeviceRef,
+    device: str | DeviceRef | SlmpExtendedDevice,
     bit_index: int,
     value: bool,
 ) -> None:
     """Set or clear one bit inside one word device.
 
-    This helper is only for word devices such as ``D50``. Direct bit devices
+    This helper is only for word devices such as ``D50``. Qualified U module-
+    buffer and J link-direct word addresses use their immutable Extended Device
+    route for both requests. Direct bit devices
     such as ``M1000`` should be written with :func:`write_typed` using
     ``"BIT"``. It holds one client FIFO turn across a word read followed by a
     word write. That prevents same-client interleaving but is not atomic at the
     PLC: another connection or PLC logic can change the word between requests.
     A possibly-sent write uses the outcome-unknown error contract. The helper
-    never retries automatically.
+    never retries automatically. One absolute deadline starts after FIFO
+    admission and covers both requests, and a successful read is always followed
+    by the write even when the selected bit is unchanged.
     """
-    ref, normalized_index, normalized_value = _prepare_bit_in_word_rmw(client, device, bit_index, value)
+    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(
+        client, device, bit_index, value
+    )
     from .async_client import AsyncSlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
     async with turn:
-        words = await client.read_devices(ref, 1, bit_unit=False)
-        updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
-        await client.write_devices(ref, [updated], bit_unit=False)
+        prior_deadline = client._active_deadline if isinstance(client, AsyncSlmpClient) else None
+        if isinstance(client, AsyncSlmpClient):
+            client._active_deadline = asyncio.get_running_loop().time() + client.timeout
+        try:
+            qualified_target = cast(str | SlmpExtendedDevice, target)
+            direct_target = cast(str | DeviceRef, target)
+            words = (
+                await client.read_devices_ext(qualified_target, 1, bit_unit=False)
+                if is_extended
+                else await client.read_devices(direct_target, 1, bit_unit=False)
+            )
+            updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
+            if is_extended:
+                await client.write_devices_ext(qualified_target, [updated], bit_unit=False)
+            else:
+                await client.write_devices(direct_target, [updated], bit_unit=False)
+        finally:
+            if isinstance(client, AsyncSlmpClient):
+                client._active_deadline = prior_deadline
 
 
 def write_bit_in_word_sync(
     client: SlmpClient,
-    device: str | DeviceRef,
+    device: str | DeviceRef | SlmpExtendedDevice,
     bit_index: int,
     value: bool,
 ) -> None:
     """Synchronously update one word bit while holding one client FIFO turn.
 
-    The read and write are two non-atomic PLC requests. Another connection or
+    Direct and qualified Extended Device routes are supported. The selected
+    route is immutable across the two non-atomic PLC requests. Another connection or
     PLC logic can race with them, possibly-sent writes use the outcome-unknown
-    error contract, and the helper never retries automatically.
+    error contract, and the helper never retries automatically. One absolute
+    deadline covers both requests after FIFO admission, and the write is always
+    sent after a successful read.
     """
-    ref, normalized_index, normalized_value = _prepare_bit_in_word_rmw(client, device, bit_index, value)
+    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(
+        client, device, bit_index, value
+    )
     from .client import SlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
     with turn:
-        words = client.read_devices(ref, 1, bit_unit=False)
-        updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
-        client.write_devices(ref, [updated], bit_unit=False)
+        prior_deadline = client._active_deadline if isinstance(client, SlmpClient) else None
+        if isinstance(client, SlmpClient):
+            client._active_deadline = time.monotonic() + client.timeout
+        try:
+            qualified_target = cast(str | SlmpExtendedDevice, target)
+            direct_target = cast(str | DeviceRef, target)
+            words = (
+                client.read_devices_ext(qualified_target, 1, bit_unit=False)
+                if is_extended
+                else client.read_devices(direct_target, 1, bit_unit=False)
+            )
+            updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
+            if is_extended:
+                client.write_devices_ext(qualified_target, [updated], bit_unit=False)
+            else:
+                client.write_devices(direct_target, [updated], bit_unit=False)
+        finally:
+            if isinstance(client, SlmpClient):
+                client._active_deadline = prior_deadline
 
 
 async def read_bits(
@@ -1041,20 +1085,48 @@ def _encode_dword_words(value: int | float, dtype: str) -> list[int]:
 
 def _prepare_bit_in_word_rmw(
     client: object,
-    device: str | DeviceRef,
+    device: str | DeviceRef | SlmpExtendedDevice,
     bit_index: int,
     value: bool,
-) -> tuple[DeviceRef, int, bool]:
+) -> tuple[str | DeviceRef | SlmpExtendedDevice, int, bool, bool]:
     if type(bit_index) is not int or not 0 <= bit_index <= 15:
         raise ValueError(f"bit_index must be 0-15, got {bit_index}")
     normalized_value = _require_typed_bool(value)
-    ref = _parse_device_for_client(client, device)
-    if _device_unit(ref) is not DeviceUnit.WORD:
-        raise ValueError("write_bit_in_word is only valid for word devices; use write_typed for bit devices")
-
     from .async_client import AsyncSlmpClient
     from .client import SlmpClient
 
+    is_extended = isinstance(device, SlmpExtendedDevice) or (
+        isinstance(device, str) and ("\\" in device or "/" in device)
+    )
+    if isinstance(client, (SlmpClient, AsyncSlmpClient)) and is_extended:
+        client._ensure_profile_feature_allowed("direct")  # noqa: SLF001
+        qualified_device = cast(str | SlmpExtendedDevice, device)
+        address, ref, extension = client._resolve_semantic_extended_device(qualified_device)  # noqa: SLF001
+        if _device_unit(ref) is not DeviceUnit.WORD:
+            raise ValueError("write_bit_in_word is only valid for word devices; use write_typed for bit devices")
+        _operations.build_read_devices_ext_request(
+            address,
+            1,
+            extension=extension,
+            bit_unit=False,
+            series=None,
+            default_series=client.plc_series,
+            address_profile=client.plc_profile,
+        )
+        _operations.build_write_devices_ext_request(
+            address,
+            [0],
+            extension=extension,
+            bit_unit=False,
+            series=None,
+            default_series=client.plc_series,
+            address_profile=client.plc_profile,
+        )
+        return device, bit_index, normalized_value, True
+
+    ref = _parse_device_for_client(client, cast(str | DeviceRef, device))
+    if _device_unit(ref) is not DeviceUnit.WORD:
+        raise ValueError("write_bit_in_word is only valid for word devices; use write_typed for bit devices")
     if isinstance(client, (SlmpClient, AsyncSlmpClient)):
         client._ensure_profile_feature_allowed("direct")  # noqa: SLF001 - same-package aggregate preflight
         _check_direct_device_points(
@@ -1075,7 +1147,7 @@ def _prepare_bit_in_word_rmw(
         _check_temporarily_unsupported_device(ref)
         encode_device_spec(ref, series=client.plc_series)
         resolve_device_subcommand(bit_unit=False, series=client.plc_series, extension=False)
-    return ref, bit_index, normalized_value
+    return ref, bit_index, normalized_value, False
 
 
 def _update_bit_in_word_value(current: int, bit_index: int, value: bool) -> int:

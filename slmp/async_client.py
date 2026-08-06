@@ -241,6 +241,7 @@ class AsyncSlmpClient:
 
         self._serial = 0
         self._operation_queue = _AsyncFifoOperationQueue()
+        self._active_deadline: float | None = None
         # Retained as a private test/diagnostic alias; operation ownership is
         # managed by _operation_queue.
         self._lock = self._operation_queue.lock
@@ -1416,7 +1417,7 @@ class AsyncSlmpClient:
             attempted_send = False
             try:
                 loop = asyncio.get_running_loop()
-                deadline = loop.time() + self.timeout
+                deadline = self._active_deadline if self._active_deadline is not None else loop.time() + self.timeout
                 await self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self.transport_type == "tcp":
@@ -1483,7 +1484,7 @@ class AsyncSlmpClient:
         async with self._operation_queue.turn():
             attempted_send = False
             try:
-                deadline = loop.time() + self.timeout
+                deadline = self._active_deadline if self._active_deadline is not None else loop.time() + self.timeout
                 await self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self.transport_type == "tcp":

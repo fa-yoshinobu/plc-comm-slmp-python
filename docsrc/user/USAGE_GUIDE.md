@@ -553,6 +553,13 @@ different PLC scans. A failure after possible write transmission is
 outcome-unknown. The helper never retries automatically; verify PLC state before
 issuing another update.
 
+The same function accepts a qualified U module-buffer or J link-direct word
+address (including `SlmpExtendedDevice`). The selected direct or Extended
+Device route is immutable across both requests. FIFO wait is outside the
+timeout; one absolute deadline covers both requests after admission. A
+successful read always proceeds to the write even when the bit is unchanged.
+Unsupported profile/route combinations fail before the read.
+
 ```python
 import asyncio
 from slmp import SlmpConnectionOptions, open_and_connect, read_named, write_bit_in_word, SlmpTarget

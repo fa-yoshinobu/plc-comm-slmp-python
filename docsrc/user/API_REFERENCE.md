@@ -78,7 +78,7 @@ logical length; malformed or trailing data raises `SlmpError`.
 | Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
 | Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
 | Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
-| Bit-in-word write | `write_bit_in_word` |
+| Bit-in-word write | `write_bit_in_word`, `write_bit_in_word_sync` (direct or qualified Extended Device route) |
 
 `write_named` emits exactly one random-write request. It rejects mixed
 bit/word command families and bit-in-word read-modify-write entries. The
@@ -89,6 +89,9 @@ prevents same-client interleaving only. The operation is not atomic at the PLC:
 another connection or PLC program logic can change the word in the race window,
 and the requests can run in different PLC scans. A possibly-sent write uses the
 outcome-unknown error contract. The helper never retries automatically.
+One absolute deadline starts after FIFO admission and covers both requests; a
+successful read always proceeds to the write. Qualified U module-buffer and J
+link-direct word addresses retain that exact Extended Device route throughout.
 
 The contiguous, named, polling, and write helpers never split one call into
 multiple protocol requests. `read_named` and each `poll` cycle validate the
