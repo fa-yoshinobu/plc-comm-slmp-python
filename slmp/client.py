@@ -1682,7 +1682,11 @@ class SlmpClient:
             expected_identity = _request_identity(frame, frame_type=self.frame_type)
             attempted_send = False
             try:
-                deadline = self._active_deadline if self._active_deadline is not None else time.monotonic() + self.timeout
+                deadline = (
+                    self._active_deadline
+                    if self._active_deadline is not None
+                    else time.monotonic() + self.timeout
+                )
                 self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()
                 if self._sock is None:
