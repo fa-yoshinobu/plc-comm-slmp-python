@@ -11,8 +11,11 @@ Target contract: `write_bit_in_word` and `write_bit_in_word_sync` prevalidate th
 Compatibility impact: the existing functions now accept U module-buffer and J link-direct qualified addresses; the compound timeout no longer restarts between requests.
 
 - [x] Implementation and targeted sync/async route tests completed.
-- [ ] Full repository release gate completed.
+- [x] Full repository release gate completed.
 - [x] User/API/changelog/migration sources updated.
+
+Release-gate evidence (2026-08-07): `release_check.bat` passed lint, typing, unit,
+generated-document, package, source-archive, and registry-duplicate checks for candidate `5.0.0`.
 
 ## Legacy validation scripts
 
