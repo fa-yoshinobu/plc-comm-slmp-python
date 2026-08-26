@@ -690,7 +690,9 @@ Remove `--dry-run` when you are ready to open PLC connections.
 
 ## Device range catalog
 
-`read_device_range_catalog()` reads live device range bounds from the SD registers for the canonical profile selected on the client. It does not auto-discover the PLC model, probe candidate device addresses, or infer a range boundary from a PLC error. If the canonical SD-register read fails, that error is returned to the caller.
+`read_device_range_catalog()` reads live device range bounds for the canonical profile selected on the client. Most bounds come from the profile's SD-register block. For QCPU, LCPU, QnU, and QnUDV base/unit profiles, it also performs the canonical runtime checks needed where SD values are insufficient: QCPU `Z15` selects a 10- or 16-point Z range, and readable `ZR` addresses are found by doubling followed by binary search (capped at 1,048,576 points). The R range is `min(ZR, 32768)`.
+
+A nonzero PLC end code for a candidate runtime read means only that candidate is unreadable. Timeout, cancellation, transport, lifecycle, malformed-response, and local-validation failures abort the complete catalog read and propagate to the caller; no partial catalog is returned. The full SD/probe sequence owns one client FIFO turn, preventing another operation from interleaving. It does not auto-discover the PLC model.
 The catalog is for diagnostics and application-layer validation. Normal read/write helpers do not use it to reject addresses by configured upper bound before sending a request.
 The source rules for this catalog are maintained in the shared [SLMP device ranges](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/device-ranges/) reference.
 

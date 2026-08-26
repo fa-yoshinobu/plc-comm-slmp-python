@@ -1111,9 +1111,19 @@ class AsyncSlmpClient:
         plc_profile: SlmpPlcProfile | str,
     ) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for one canonical explicit PLC profile."""
-        from .device_ranges import read_device_range_catalog_for_plc_profile
+        from .device_ranges import normalize_plc_profile, read_device_range_catalog_for_plc_profile
 
-        return await read_device_range_catalog_for_plc_profile(self, plc_profile)
+        normalized_profile = normalize_plc_profile(plc_profile)
+        if self.plc_profile != normalized_profile.value:
+            raise ValueError(
+                f"Requested plc_profile {normalized_profile.value!r} does not match "
+                f"client plc_profile {self.plc_profile!r}."
+            )
+
+        async with self._operation_queue.turn():
+            catalog = await read_device_range_catalog_for_plc_profile(self, normalized_profile)
+            self._operation_queue.ensure_current()
+            return catalog
 
     async def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for this client's explicit PLC profile."""

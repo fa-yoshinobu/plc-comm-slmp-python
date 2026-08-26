@@ -179,9 +179,9 @@ transport generation, so another operation must establish a new generation and
 cannot consume a late connection or response result. An explicit `connect()`
 uses the same one-deadline rule from resolution through client adoption.
 
-Device-range catalog reads use the canonical profile rules and the profile's
-documented SD-register block only. They do not probe candidate device addresses
-or translate PLC errors into inferred range boundaries.
+Device-range catalog reads follow the canonical SD/runtime rules as one FIFO
+operation and never publish partial results. See [Device range catalog](USAGE_GUIDE.md#device-range-catalog)
+for the probe and error-classification contract.
 
 ## Generated API Details
 

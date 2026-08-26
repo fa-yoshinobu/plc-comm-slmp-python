@@ -1548,9 +1548,19 @@ class SlmpClient:
         plc_profile: SlmpPlcProfile | str,
     ) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for one canonical explicit PLC profile."""
-        from .device_ranges import read_device_range_catalog_for_plc_profile_sync
+        from .device_ranges import normalize_plc_profile, read_device_range_catalog_for_plc_profile_sync
 
-        return read_device_range_catalog_for_plc_profile_sync(self, plc_profile)
+        normalized_profile = normalize_plc_profile(plc_profile)
+        if self.plc_profile != normalized_profile.value:
+            raise ValueError(
+                f"Requested plc_profile {normalized_profile.value!r} does not match "
+                f"client plc_profile {self.plc_profile!r}."
+            )
+
+        with self._operation_queue.turn():
+            catalog = read_device_range_catalog_for_plc_profile_sync(self, normalized_profile)
+            self._operation_queue.ensure_current()
+            return catalog
 
     def read_device_range_catalog(self) -> SlmpDeviceRangeCatalog:
         """Read the configured device-range catalog for this client's explicit PLC profile."""

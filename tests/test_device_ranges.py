@@ -6,11 +6,15 @@ import asyncio
 import json
 import unittest
 from pathlib import Path
+from typing import Any
+from unittest.mock import patch
 
+import slmp.device_ranges as device_ranges
 from slmp.async_client import AsyncSlmpClient
 from slmp.client import SlmpClient
 from slmp.constants import Command, PLCSeries
 from slmp.core import (
+    DeviceRef,
     SlmpPlcProfile,
     SlmpResponse,
     SlmpTarget,
@@ -23,7 +27,7 @@ from slmp.device_ranges import (
     build_device_range_catalog_for_plc_profile,
     normalize_plc_profile,
 )
-from slmp.errors import SlmpError, SlmpTimeoutError
+from slmp.errors import SlmpClosedError, SlmpError, SlmpTimeoutError, SlmpTransportError
 
 
 def _pack_words(values: list[int]) -> bytes:
@@ -35,6 +39,34 @@ def _pack_words(values: list[int]) -> bytes:
 
 def _build_word_block(start: int, count: int, values: dict[int, int]) -> bytes:
     return _pack_words([values.get(start + index, 0) for index in range(count)])
+
+
+def _plc_error(end_code: int = 0x4031) -> SlmpError:
+    return SlmpError("candidate rejected", end_code=end_code)
+
+
+def _ql_read_payload(profile: SlmpPlcProfile, device: str, number: int, points: int = 1) -> bytes:
+    return encode_device_spec(DeviceRef(device, number, profile), series=PLCSeries.QL) + points.to_bytes(2, "little")
+
+
+def _fake_response(client: Any, command: int | Command, subcommand: int, data: bytes) -> SlmpResponse:
+    client.last_request = (int(command), subcommand, data)
+    client.requests.append(client.last_request)
+    client.operation_depths.append(client._operation_queue._depth)
+    outcome = client.queued_outcomes.pop(0) if client.queued_outcomes else client.next_response_data
+    if client.invalidate_on_request == len(client.requests):
+        client._operation_queue.invalidate()
+    if isinstance(outcome, BaseException):
+        raise outcome
+    if client.next_error is not None:
+        raise client.next_error
+    return SlmpResponse(
+        serial=0,
+        target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
+        end_code=0,
+        data=outcome,
+        raw=b"",
+    )
 
 
 def _load_canonical_device_range_rules() -> dict[str, object]:
@@ -93,22 +125,17 @@ class _FakeSyncClient(SlmpClient):
         kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
+        self.requests: list[tuple[int, int, bytes]] = []
+        self.operation_depths: list[int] = []
         self.next_response_data = b""
         self.next_error: BaseException | None = None
+        self.queued_outcomes: list[bytes | BaseException] = []
+        self.invalidate_on_request: int | None = None
 
     def _request(
         self, command: int | Command, subcommand: int = 0x0000, data: bytes = b"", **_: object
     ) -> SlmpResponse:
-        self.last_request = (int(command), subcommand, data)
-        if self.next_error is not None:
-            raise self.next_error
-        return SlmpResponse(
-            serial=0,
-            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
-            end_code=0,
-            data=self.next_response_data,
-            raw=b"",
-        )
+        return _fake_response(self, command, subcommand, data)
 
 
 class _FakeAsyncClient(AsyncSlmpClient):
@@ -119,8 +146,12 @@ class _FakeAsyncClient(AsyncSlmpClient):
         kwargs.setdefault("default_target", SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0))
         super().__init__("127.0.0.1", **kwargs)
         self.last_request: tuple[int, int, bytes] | None = None
+        self.requests: list[tuple[int, int, bytes]] = []
+        self.operation_depths: list[int] = []
         self.next_response_data = b""
         self.next_error: BaseException | None = None
+        self.queued_outcomes: list[bytes | BaseException] = []
+        self.invalidate_on_request: int | None = None
 
     async def _request(
         self,
@@ -129,22 +160,94 @@ class _FakeAsyncClient(AsyncSlmpClient):
         data: bytes = b"",
         **_: object,
     ) -> SlmpResponse:
-        self.last_request = (int(command), subcommand, data)
-        if self.next_error is not None:
-            raise self.next_error
-        return SlmpResponse(
-            serial=0,
-            target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
-            end_code=0,
-            data=self.next_response_data,
-            raw=b"",
-        )
+        return _fake_response(self, command, subcommand, data)
 
 
 class TestSyncDeviceRanges(unittest.TestCase):
     def test_family_alias_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported PLC profile"):
             normalize_plc_profile("iqf")
+
+    def test_runtime_probe_profiles_match_canonical_required_profile_list(self) -> None:
+        payload = _load_canonical_device_range_rules()
+        runtime_probes = payload["runtime_probes"]
+        assert isinstance(runtime_probes, dict)
+        required_profiles = runtime_probes["applies_to"]
+        assert isinstance(required_profiles, list)
+
+        self.assertEqual(
+            {profile.value for profile in device_ranges._RUNTIME_RANGE_PROFILES},
+            set(required_profiles),
+        )
+        self.assertEqual(device_ranges._MAX_RUNTIME_RANGE_PROBE_COUNT, runtime_probes["max_probe_count"])
+
+    def test_qnudv_unit_runtime_probe_uses_doubling_binary_search_and_base_address_rules(self) -> None:
+        profile = SlmpPlcProfile.QnUDVQj71E71100
+        client = _FakeSyncClient(plc_profile=SlmpPlcProfile.QnUDVQj71E71100.value)
+        probe_addresses = [0, 1, 3, 7, 15, 31, 23, 19, 17, 16]
+        end_codes = iter((0xD123, 0x4031, 0xC061, 0xC200, 0xCEE0))
+        client.queued_outcomes = [_build_word_block(286, 26, {306: 999})] + [
+            b"\x00\x00" if address < 16 else _plc_error(next(end_codes)) for address in probe_addresses
+        ]
+
+        catalog = client.read_device_range_catalog()
+
+        entries = {entry.device: entry for entry in catalog.entries}
+        self.assertEqual(catalog.plc_profile, profile)
+        self.assertEqual((entries["ZR"].point_count, entries["ZR"].address_range), (16, "ZR0-ZR15"))
+        self.assertEqual(entries["ZR"].source, "Runtime access check")
+        self.assertEqual((entries["R"].point_count, entries["R"].address_range), (16, "R0-R15"))
+        self.assertEqual(
+            [request[2] for request in client.requests],
+            [_ql_read_payload(profile, "SD", 286, 26)]
+            + [_ql_read_payload(profile, "ZR", address) for address in probe_addresses],
+        )
+        self.assertEqual(set(client.operation_depths), {1})
+
+    def test_qcpu_unit_runtime_probe_resolves_z_and_zr_from_success_or_any_plc_end_code(self) -> None:
+        profile = SlmpPlcProfile.QCpuQj71E71100
+        for z15_outcome, expected_z_count in ((b"\x00\x00", 16), (_plc_error(0xD123), 10)):
+            with self.subTest(expected_z_count=expected_z_count):
+                client = _FakeSyncClient(plc_profile=profile.value)
+                client.queued_outcomes = [
+                    _build_word_block(290, 15, {}),
+                    z15_outcome,
+                    _plc_error(0xC200),
+                ]
+
+                entries = {entry.device: entry for entry in client.read_device_range_catalog().entries}
+
+                self.assertEqual(entries["Z"].point_count, expected_z_count)
+                self.assertEqual((entries["ZR"].point_count, entries["R"].point_count), (0, 0))
+                self.assertEqual(
+                    [request[2] for request in client.requests],
+                    [
+                        _ql_read_payload(profile, "SD", 290, 15),
+                        _ql_read_payload(profile, "Z", 15),
+                        _ql_read_payload(profile, "ZR", 0),
+                    ],
+                )
+
+    def test_runtime_probe_cap_and_r_derivation(self) -> None:
+        client = _FakeSyncClient(plc_profile=SlmpPlcProfile.LCpu.value)
+        client.queued_outcomes = [_build_word_block(286, 26, {})] + [b"\x00\x00"] * 21
+
+        catalog = client.read_device_range_catalog()
+
+        entries = {entry.device: entry for entry in catalog.entries}
+        self.assertEqual(entries["ZR"].point_count, 1_048_576)
+        self.assertEqual(entries["ZR"].address_range, "ZR0-ZR1048575")
+        self.assertEqual(entries["R"].point_count, 32_768)
+        self.assertEqual(entries["R"].address_range, "R0-R32767")
+        self.assertEqual(client.requests[-1][2], _ql_read_payload(SlmpPlcProfile.LCpu, "ZR", 1_048_575))
+
+    def test_catalog_rejects_close_generation_after_final_probe(self) -> None:
+        client = _FakeSyncClient(plc_profile=SlmpPlcProfile.QnU.value)
+        client.queued_outcomes = [_build_word_block(286, 26, {}), _plc_error()]
+        client.invalidate_on_request = 2
+
+        with self.assertRaises(SlmpClosedError):
+            client.read_device_range_catalog()
 
     def test_iqf_reads_one_sd_block_and_formats_xy_in_octal(self) -> None:
         client = _FakeSyncClient(plc_profile="melsec:iq-f")
@@ -405,9 +508,37 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
 
                 self.assertIs(raised.exception, expected)
 
+    async def test_runtime_probe_propagates_non_plc_failures_without_publishing_partial_catalog(self) -> None:
+        errors: list[BaseException] = [
+            SlmpTimeoutError("deadline expired"),
+            asyncio.CancelledError("cancelled"),
+            SlmpTransportError("disconnected"),
+            SlmpClosedError("client closed"),
+            SlmpError("malformed response"),
+            ValueError("local validation failed"),
+        ]
+
+        for expected in errors:
+            with self.subTest(error=repr(expected)):
+                client = _FakeAsyncClient(plc_profile=SlmpPlcProfile.QCpuQj71E71100.value)
+                client.queued_outcomes = [
+                    _build_word_block(290, 15, {}),
+                    b"\x00\x00",  # Z15 succeeds before the later aggregate failure.
+                    expected,
+                ]
+                with patch(
+                    "slmp.device_ranges._replace_fixed_point_count",
+                    wraps=device_ranges._replace_fixed_point_count,
+                ) as replace_point_count:
+                    with self.assertRaises(type(expected)) as raised:
+                        await client.read_device_range_catalog()
+
+                self.assertIs(raised.exception, expected)
+                replace_point_count.assert_not_called()
+
     async def test_qnu_uses_sd300_for_st_and_fixed_z_range(self) -> None:
         client = _FakeAsyncClient(plc_profile="melsec:qnu")
-        client.next_response_data = _build_word_block(
+        sd_block = _build_word_block(
             286,
             26,
             {
@@ -429,12 +560,13 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
                 310: 8192,
             },
         )
+        client.queued_outcomes = [sd_block, SlmpError("ZR0 rejected", end_code=0x4031)]
 
         catalog = await client.read_device_range_catalog_for_plc_profile(SlmpPlcProfile.QnU)
 
         self.assertEqual(catalog.plc_profile, SlmpPlcProfile.QnU)
         self.assertEqual(
-            client.last_request,
+            client.requests[0],
             (
                 int(Command.DEVICE_READ),
                 0x0000,
@@ -453,3 +585,4 @@ class TestAsyncDeviceRanges(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entries["Z"].address_range, "Z0-Z19")
         self.assertEqual(entries["R"].point_count, 0)
         self.assertIsNone(entries["R"].address_range)
+        self.assertEqual(set(client.operation_depths), {1})

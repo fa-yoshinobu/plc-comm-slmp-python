@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Restored canonical Q-series device-range runtime discovery for QCPU, LCPU, QnU, and QnUDV base/unit profiles. QCPU probes Z15, all affected profiles discover ZR by capped doubling and binary search, and R is derived as `min(ZR, 32768)`.
+- Library: Runtime candidate reads classify every nonzero PLC end code as unreadable while preserving timeout, cancellation, transport, lifecycle, protocol, and local-validation failures; the complete SD/probe acquisition owns one FIFO turn and never returns a partial catalog.
+
 ## [5.0.0] - 2026-08-07
 
 - Library: Named polling now prepares and validates its immutable Random Read payload and compact decode indexes once per stream, then reuses them for every FIFO-controlled cycle without changing timing, cancellation, close, or error behavior.

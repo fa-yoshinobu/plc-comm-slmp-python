@@ -1,9 +1,9 @@
-"""Device-range catalogs resolved from one PLC-profile-specific SD block read."""
+"""Device-range catalogs resolved from profile SD data and required live probes."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, cast
 
@@ -119,6 +119,21 @@ _ORDERED_ITEMS = (
     "SM",
     "SD",
 )
+
+_MAX_RUNTIME_RANGE_PROBE_COUNT = 1_048_576
+_RUNTIME_RANGE_PROFILES = frozenset(
+    {
+        SlmpPlcProfile.QCpu,
+        SlmpPlcProfile.QCpuQj71E71100,
+        SlmpPlcProfile.LCpu,
+        SlmpPlcProfile.LCpuLj71E71100,
+        SlmpPlcProfile.QnU,
+        SlmpPlcProfile.QnUQj71E71100,
+        SlmpPlcProfile.QnUDV,
+        SlmpPlcProfile.QnUDVQj71E71100,
+    }
+)
+_QCPU_RUNTIME_RANGE_PROFILES = frozenset({SlmpPlcProfile.QCpu, SlmpPlcProfile.QCpuQj71E71100})
 
 _ROWS: dict[str, _RangeRow] = {
     "X": _RangeRow(SlmpDeviceRangeCategory.Bit, (("X", True),), SlmpDeviceRangeNotation.Base16),
@@ -599,7 +614,7 @@ def read_device_range_catalog_for_plc_profile_sync(
     client: Any,
     plc_profile: SlmpPlcProfile | str,
 ) -> SlmpDeviceRangeCatalog:
-    """Read one canonical profile SD window in a single request and build a catalog."""
+    """Read the canonical SD window and required runtime limits for one profile."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
     if client.plc_profile != normalized_profile.value:
@@ -611,18 +626,19 @@ def read_device_range_catalog_for_plc_profile_sync(
     words = cast(
         list[int],
         client.read_devices(
-            DeviceRef("SD", profile.register_start, normalized_profile.value), profile.register_count, bit_unit=False
+            _probe_device_ref(normalized_profile, "SD", profile.register_start), profile.register_count, bit_unit=False
         ),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
-    return build_device_range_catalog_for_plc_profile(normalized_profile, registers)
+    catalog = build_device_range_catalog_for_plc_profile(normalized_profile, registers)
+    return _resolve_runtime_limits_sync(client, catalog)
 
 
 async def read_device_range_catalog_for_plc_profile(
     client: Any,
     plc_profile: SlmpPlcProfile | str,
 ) -> SlmpDeviceRangeCatalog:
-    """Async variant of the canonical explicit-profile device-range catalog read."""
+    """Async variant of the canonical SD and runtime device-range read."""
 
     normalized_profile = normalize_plc_profile(plc_profile)
     if client.plc_profile != normalized_profile.value:
@@ -634,11 +650,177 @@ async def read_device_range_catalog_for_plc_profile(
     words = cast(
         list[int],
         await client.read_devices(
-            DeviceRef("SD", profile.register_start, normalized_profile.value), profile.register_count, bit_unit=False
+            _probe_device_ref(normalized_profile, "SD", profile.register_start), profile.register_count, bit_unit=False
         ),
     )
     registers = {profile.register_start + index: int(value) for index, value in enumerate(words)}
-    return build_device_range_catalog_for_plc_profile(normalized_profile, registers)
+    catalog = build_device_range_catalog_for_plc_profile(normalized_profile, registers)
+    return await _resolve_runtime_limits_async(client, catalog)
+
+
+def _resolve_runtime_limits_sync(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
+    if catalog.plc_profile not in _RUNTIME_RANGE_PROFILES:
+        return catalog
+
+    z_count: int | None = None
+    if catalog.plc_profile in _QCPU_RUNTIME_RANGE_PROFILES:
+        z_count = 16 if _can_read_one_word_sync(client, catalog.plc_profile, "Z", 15) else 10
+
+    zr_count = _resolve_readable_point_count_sync(client, catalog.plc_profile, "ZR")
+    if z_count is not None:
+        catalog = _replace_fixed_point_count(
+            catalog,
+            "Z",
+            z_count,
+            "QCPU Z register count is selected by probing Z15.",
+        )
+    catalog = _replace_fixed_point_count(
+        catalog,
+        "ZR",
+        zr_count,
+        "ZR register count is selected by probing readable ZR addresses.",
+    )
+    return _replace_fixed_point_count(
+        catalog,
+        "R",
+        min(zr_count, 32768),
+        "R register count follows the probed ZR count and is capped at R32767.",
+    )
+
+
+async def _resolve_runtime_limits_async(client: Any, catalog: SlmpDeviceRangeCatalog) -> SlmpDeviceRangeCatalog:
+    if catalog.plc_profile not in _RUNTIME_RANGE_PROFILES:
+        return catalog
+
+    z_count: int | None = None
+    if catalog.plc_profile in _QCPU_RUNTIME_RANGE_PROFILES:
+        z_count = 16 if await _can_read_one_word_async(client, catalog.plc_profile, "Z", 15) else 10
+
+    zr_count = await _resolve_readable_point_count_async(client, catalog.plc_profile, "ZR")
+    if z_count is not None:
+        catalog = _replace_fixed_point_count(
+            catalog,
+            "Z",
+            z_count,
+            "QCPU Z register count is selected by probing Z15.",
+        )
+    catalog = _replace_fixed_point_count(
+        catalog,
+        "ZR",
+        zr_count,
+        "ZR register count is selected by probing readable ZR addresses.",
+    )
+    return _replace_fixed_point_count(
+        catalog,
+        "R",
+        min(zr_count, 32768),
+        "R register count follows the probed ZR count and is capped at R32767.",
+    )
+
+
+def _resolve_readable_point_count_sync(client: Any, plc_profile: SlmpPlcProfile, device: str) -> int:
+    if not _can_read_one_word_sync(client, plc_profile, device, 0):
+        return 0
+
+    upper_limit = _MAX_RUNTIME_RANGE_PROBE_COUNT - 1
+    low = 0
+    high = 1
+    while high < upper_limit and _can_read_one_word_sync(client, plc_profile, device, high):
+        low = high
+        high = min(upper_limit, (high * 2) + 1)
+
+    if high == upper_limit and _can_read_one_word_sync(client, plc_profile, device, high):
+        return _MAX_RUNTIME_RANGE_PROBE_COUNT
+
+    left = low + 1
+    right = high - 1
+    while left <= right:
+        mid = left + ((right - left) // 2)
+        if _can_read_one_word_sync(client, plc_profile, device, mid):
+            low = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return low + 1
+
+
+async def _resolve_readable_point_count_async(client: Any, plc_profile: SlmpPlcProfile, device: str) -> int:
+    if not await _can_read_one_word_async(client, plc_profile, device, 0):
+        return 0
+
+    upper_limit = _MAX_RUNTIME_RANGE_PROBE_COUNT - 1
+    low = 0
+    high = 1
+    while high < upper_limit and await _can_read_one_word_async(client, plc_profile, device, high):
+        low = high
+        high = min(upper_limit, (high * 2) + 1)
+
+    if high == upper_limit and await _can_read_one_word_async(client, plc_profile, device, high):
+        return _MAX_RUNTIME_RANGE_PROBE_COUNT
+
+    left = low + 1
+    right = high - 1
+    while left <= right:
+        mid = left + ((right - left) // 2)
+        if await _can_read_one_word_async(client, plc_profile, device, mid):
+            low = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return low + 1
+
+
+def _probe_device_ref(plc_profile: SlmpPlcProfile, device: str, number: int) -> str | DeviceRef:
+    # QCPU is an abstract range/address profile and cannot be constructed as a
+    # public DeviceRef. Its selectable Ethernet-unit profile remains bound.
+    if plc_profile is SlmpPlcProfile.QCpu:
+        return f"{device}{number}"
+    return DeviceRef(device, number, plc_profile.value)
+
+
+def _can_read_one_word_sync(client: Any, plc_profile: SlmpPlcProfile, device: str, number: int) -> bool:
+    try:
+        client.read_devices(_probe_device_ref(plc_profile, device, number), 1, bit_unit=False)
+        return True
+    except SlmpError as exc:
+        if exc.end_code is not None:
+            return False
+        raise
+
+
+async def _can_read_one_word_async(client: Any, plc_profile: SlmpPlcProfile, device: str, number: int) -> bool:
+    try:
+        await client.read_devices(_probe_device_ref(plc_profile, device, number), 1, bit_unit=False)
+        return True
+    except SlmpError as exc:
+        if exc.end_code is not None:
+            return False
+        raise
+
+
+def _replace_fixed_point_count(
+    catalog: SlmpDeviceRangeCatalog,
+    device: str,
+    point_count: int,
+    note: str,
+) -> SlmpDeviceRangeCatalog:
+    upper_bound = None if point_count <= 0 else point_count - 1
+    entries = [
+        replace(
+            entry,
+            upper_bound=upper_bound,
+            point_count=point_count,
+            address_range=_format_address_range(entry.device, entry.notation, upper_bound),
+            source="Runtime access check",
+            notes=note if not entry.notes else f"{entry.notes} {note}",
+        )
+        if entry.device == device
+        else entry
+        for entry in catalog.entries
+    ]
+    return replace(catalog, entries=entries)
 
 
 def _evaluate_point_count(spec: _RangeValueSpec, registers: Mapping[int, int]) -> int | None:
