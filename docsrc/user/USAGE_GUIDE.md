@@ -12,6 +12,7 @@
 | `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed named collection. |
 | `write_named` | `async def write_named(client, updates) -> None` | Write one word/DWord family or one bit family in one random-write request. |
 | `read_words_single_request` | `async def read_words_single_request(client, device, count) -> list[int]` | Read one contiguous 16-bit range in one request. |
+| `read_bits_single_request` / `write_bits_single_request` | Async and synchronous (`*_sync`) helpers | Read or write one contiguous direct-bit range in one request. |
 | `read_dwords_single_request` | `async def read_dwords_single_request(client, device, count) -> list[int]` | Read one contiguous 32-bit range in one request. |
 | `write_bit_in_word` | `async def write_bit_in_word(client, device, bit_index, value) -> None` | Set or clear one bit in a word device. |
 | `poll` | `async def poll(client, addresses, interval)` | Yield repeated named read results. |
@@ -437,6 +438,24 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Profile request limits
+
+Batch planners can read the selected profile's canonical request limit without
+opening a connection or communicating with a PLC:
+
+```python
+from slmp import SlmpProfileLimitKey, profile_limit
+
+limit = profile_limit("melsec:qnudv", SlmpProfileLimitKey.RANDOM_READ_WORD)
+if limit is not None:
+    print(limit.max_points)  # 192
+```
+
+`weighted_max_points` is non-`None` only for commands, such as random
+Word/DWord writes, that enforce an encoded-entry weight in addition to the point
+count. The lookup returns `None` when no canonical profile/key value exists and
+does not invent a family fallback.
+
 ## Block reads
 
 ```python
@@ -466,9 +485,14 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Contiguous helpers issue exactly one request and reject counts above the
-protocol limit. If multiple snapshots are acceptable, split them explicitly
-in application code so their different acquisition times remain visible.
+The canonical contiguous helpers `read_words_single_request*`,
+`write_words_single_request*`, `read_dwords_single_request*`,
+`write_dwords_single_request*`, `read_bits_single_request*`, and
+`write_bits_single_request*` issue exactly one request or reject invalid counts
+before transport. The older `read_words*`, `read_bits*`, and `write_bits*`
+names remain only as deprecated compatibility delegates. If multiple snapshots
+are acceptable, split them explicitly in application code so their different
+acquisition times remain visible.
 
 ## Packed bit-device word access
 

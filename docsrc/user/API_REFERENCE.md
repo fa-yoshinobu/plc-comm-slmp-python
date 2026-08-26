@@ -73,9 +73,11 @@ logical length; malformed or trailing data raises `SlmpError`.
 | --- | --- |
 | Connection helper | `open_and_connect`, `open_and_connect_sync` |
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
+| Profile request limits | `profile_limit`, `SlmpProfileLimitKey`, `SlmpProfileLimit` |
 | Typed values | `read_typed`, `write_typed` |
 | Named read/write collections | `read_named`, `write_named`, `poll` (the polling iterator prepares its immutable Random Read payload and compact decode indexes once) |
-| Single-request word/dword reads | `read_words_single_request`, `read_dwords_single_request` |
+| Single-request word/dword read/write | `read_words_single_request`, `read_dwords_single_request`, `write_words_single_request`, `write_dwords_single_request` and synchronous `*_sync` forms |
+| Single-request bit read/write | `read_bits_single_request`, `write_bits_single_request` and synchronous `*_sync` forms |
 | Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
 | Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word`, `write_bit_in_word_sync` (direct or qualified Extended Device route) |

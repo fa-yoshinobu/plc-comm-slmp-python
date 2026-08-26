@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
-from .capability_profiles import display_name, is_profile_read_only_device, profile_limit
+from .capability_profiles import _capability_limit, display_name, is_profile_read_only_device
 from .constants import (
     DEVICE_CODES,
     DIRECT_MEMORY_CPU_BUFFER,
@@ -1492,10 +1492,10 @@ def _check_direct_device_points(
 ) -> None:
     if bit_unit:
         fallback = 3584 if _uses_iqf_direct_bit_limit(plc_profile) else 7168
-        limit_info = profile_limit(plc_profile, "direct_bit_write" if write else "direct_bit_read")
+        limit_info = _capability_limit(plc_profile, "direct_bit_write" if write else "direct_bit_read")
     else:
         fallback = 960
-        limit_info = profile_limit(plc_profile, "direct_word_write" if write else "direct_word_read")
+        limit_info = _capability_limit(plc_profile, "direct_word_write" if write else "direct_word_read")
     limit = limit_info.max if limit_info is not None else fallback
     unit = "bit" if bit_unit else "word"
     if points < 1 or points > limit:
@@ -1518,7 +1518,7 @@ def _check_random_read_like_counts(
         )
     total = word_points + dword_points
     effective_limit_key = f"{limit_key}_ext" if extension else limit_key
-    limit_info = profile_limit(plc_profile, effective_limit_key)
+    limit_info = _capability_limit(plc_profile, effective_limit_key)
     fallback_limit = 96 if extension or series == PLCSeries.IQR else 192
     limit = limit_info.max if limit_info is not None else fallback_limit
     if total < 1 or total > limit:
@@ -1536,7 +1536,7 @@ def _check_random_bit_write_count(
     extension: bool = False,
     plc_profile: object | None = None,
 ) -> None:
-    limit_info = profile_limit(plc_profile, "random_write_bit_ext" if extension else "random_write_bit")
+    limit_info = _capability_limit(plc_profile, "random_write_bit_ext" if extension else "random_write_bit")
     fallback_limit = 94 if extension or series == PLCSeries.IQR else 188
     limit = limit_info.max if limit_info is not None else fallback_limit
     if points < 1 or points > limit:
@@ -1556,7 +1556,7 @@ def _check_random_write_word_counts(
     if total < 1:
         raise ValueError(f"{name} word/dword access points out of range: word={word_points}, dword={dword_points}")
     weighted = word_points * 12 + dword_points * 14
-    limit_info = profile_limit(plc_profile, "random_write_word_ext" if extension else "random_write_word")
+    limit_info = _capability_limit(plc_profile, "random_write_word_ext" if extension else "random_write_word")
     if limit_info is not None:
         count_limit = limit_info.max
         if total > count_limit:
@@ -1611,7 +1611,7 @@ def _check_block_request_limits(
         per_block_overhead = 9 if series == PLCSeries.IQR else 4
         limit_value += total_blocks * per_block_overhead
     limit_key = "direct_word_write" if write else "direct_word_read"
-    limit_info = profile_limit(plc_profile, limit_key)
+    limit_info = _capability_limit(plc_profile, limit_key)
     limit = limit_info.max if limit_info is not None else 960
     if limit_value > limit:
         detail = f"weighted={limit_value}, total_points={total_points}" if write else f"total_points={total_points}"

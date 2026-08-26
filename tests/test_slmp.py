@@ -2998,7 +2998,7 @@ class TestDeviceApi(unittest.TestCase):
             return SimpleNamespace(max=limits[key])
 
         client = FakeClient(plc_profile="melsec:iq-r")
-        with patch.object(slmp.core, "profile_limit", side_effect=fake_profile_limit):
+        with patch.object(slmp.core, "_capability_limit", side_effect=fake_profile_limit):
             client.next_response_data = b"\x00\x00" * 2
             self.assertEqual(client.read_devices("D0", 2, bit_unit=False), [0, 0])
             with self.assertRaisesRegex(ValueError, r"1\.\.2"):

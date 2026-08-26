@@ -12,7 +12,7 @@ The primary user-facing entry points are:
 __version__ = "5.0.0"
 
 from .async_client import AsyncSlmpClient
-from .capability_profiles import display_name
+from .capability_profiles import SlmpProfileLimit, SlmpProfileLimitKey, display_name, profile_limit
 from .client import SlmpClient
 from .constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from .core import (
@@ -87,6 +87,8 @@ from .utils import (
     poll,
     poll_sync,
     read_bits,
+    read_bits_single_request,
+    read_bits_single_request_sync,
     read_bits_sync,
     read_dwords,
     read_dwords_single_request,
@@ -104,6 +106,8 @@ from .utils import (
     write_bit_in_word,
     write_bit_in_word_sync,
     write_bits,
+    write_bits_single_request,
+    write_bits_single_request_sync,
     write_bits_sync,
     write_dwords_single_request,
     write_dwords_single_request_sync,
@@ -151,6 +155,8 @@ __all__ = [
     "available_plc_profiles",
     "SlmpProfileFeatureError",
     "SlmpPracticalPathWarning",
+    "SlmpProfileLimit",
+    "SlmpProfileLimitKey",
     "SlmpTimeoutError",
     "SlmpTransportError",
     "SlmpUnsupportedDeviceError",
@@ -178,11 +184,14 @@ __all__ = [
     "open_and_connect_sync",
     "parse_address",
     "plc_profile_descriptors",
+    "profile_limit",
     "parse_device",
     "poll",
     "poll_sync",
     "read_bits",
     "read_bits_sync",
+    "read_bits_single_request",
+    "read_bits_single_request_sync",
     "read_dwords",
     "read_dwords_single_request",
     "read_dwords_single_request_sync",
@@ -201,6 +210,8 @@ __all__ = [
     "write_bit_in_word_sync",
     "write_bits",
     "write_bits_sync",
+    "write_bits_single_request",
+    "write_bits_single_request_sync",
     "write_dwords_single_request",
     "write_dwords_single_request_sync",
     "write_named",

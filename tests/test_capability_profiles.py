@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import fields
 from pathlib import Path
 
+import pytest
+
+from slmp import SlmpProfileLimit, SlmpProfileLimitKey, profile_limit
 from slmp.capability_profiles import BUILTIN_CAPABILITY_PROFILES, display_name
 from slmp.core import SlmpPlcProfile, plc_profile_descriptors
 
@@ -28,6 +32,31 @@ def test_builtin_capability_profiles_match_canonical_fixture() -> None:
             assert actual_limit.max == expected_limit["max"]
             assert actual_limit.weighted_max == expected_limit.get("weighted_max")
         assert actual.write_policy == expected_profile["write_policy"]
+
+
+def test_public_profile_limit_lookup_exposes_operational_values_only() -> None:
+    assert len(SlmpProfileLimitKey) == 12
+    assert all(profile_limit("melsec:iq-r", key) is not None for key in SlmpProfileLimitKey)
+    assert profile_limit(
+        "melsec:iq-r",
+        SlmpProfileLimitKey.RANDOM_READ_WORD,
+    ) == SlmpProfileLimit(max_points=96)
+    assert profile_limit(
+        "melsec:qnudv",
+        SlmpProfileLimitKey.RANDOM_READ_WORD,
+    ) == SlmpProfileLimit(max_points=192)
+    assert profile_limit(
+        "melsec:iq-r",
+        SlmpProfileLimitKey.RANDOM_WRITE_WORD,
+    ) == SlmpProfileLimit(max_points=80, weighted_max_points=960)
+    assert profile_limit(None, SlmpProfileLimitKey.RANDOM_READ_WORD) is None
+    assert [field.name for field in fields(SlmpProfileLimit)] == [
+        "max_points",
+        "weighted_max_points",
+    ]
+
+    with pytest.raises(TypeError, match="SlmpProfileLimitKey"):
+        profile_limit("melsec:iq-r", "random_read_word")  # type: ignore[arg-type]
 
 
 def test_profile_descriptors_match_canonical_profile_metadata() -> None:

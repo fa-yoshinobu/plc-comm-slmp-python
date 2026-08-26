@@ -7,6 +7,7 @@ capability/slmp_ethernet_profiles.json
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 CANONICAL_SOURCE = "plc-comm-slmp-profiles main capability/slmp_ethernet_profiles.json"
@@ -30,6 +31,31 @@ class CapabilityLimit:
     source: str
     weighted_max: int | None = None
     note: str | None = None
+
+
+class SlmpProfileLimitKey(str, Enum):
+    """Canonical key for one profile-specific SLMP request limit."""
+
+    DIRECT_WORD_READ = "direct_word_read"
+    DIRECT_WORD_WRITE = "direct_word_write"
+    DIRECT_BIT_READ = "direct_bit_read"
+    DIRECT_BIT_WRITE = "direct_bit_write"
+    RANDOM_READ_WORD = "random_read_word"
+    RANDOM_WRITE_WORD = "random_write_word"
+    RANDOM_WRITE_BIT = "random_write_bit"
+    MONITOR_REGISTER_WORD = "monitor_register_word"
+    RANDOM_READ_WORD_EXT = "random_read_word_ext"
+    RANDOM_WRITE_WORD_EXT = "random_write_word_ext"
+    RANDOM_WRITE_BIT_EXT = "random_write_bit_ext"
+    MONITOR_REGISTER_WORD_EXT = "monitor_register_word_ext"
+
+
+@dataclass(frozen=True)
+class SlmpProfileLimit:
+    """Operational limits for one PLC profile and limit key."""
+
+    max_points: int
+    weighted_max_points: int | None = None
 
 
 @dataclass(frozen=True)
@@ -381,12 +407,28 @@ def display_name(plc_profile: object | None) -> str:
         raise ValueError(f"Unsupported plc_profile: {plc_profile!r}.") from exc
 
 
-def profile_limit(plc_profile: object | None, key: str) -> CapabilityLimit | None:
-    """Return a profile limit, if present."""
+def _capability_limit(plc_profile: object | None, key: str) -> CapabilityLimit | None:
+    """Return an internal capability limit, if present."""
     profile = capability_profile(plc_profile)
     if profile is None:
         return None
     return profile.limits.get(key)
+
+
+def profile_limit(
+    plc_profile: object | None,
+    key: SlmpProfileLimitKey,
+) -> SlmpProfileLimit | None:
+    """Return operational request limits without performing PLC communication."""
+    if not isinstance(key, SlmpProfileLimitKey):
+        raise TypeError("key must be a SlmpProfileLimitKey")
+    limit = _capability_limit(plc_profile, key.value)
+    if limit is None:
+        return None
+    return SlmpProfileLimit(
+        max_points=limit.max,
+        weighted_max_points=limit.weighted_max,
+    )
 
 
 def is_profile_read_only_device(plc_profile: object | None, device_code: str) -> bool:

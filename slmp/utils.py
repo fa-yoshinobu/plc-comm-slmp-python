@@ -6,6 +6,7 @@ import asyncio
 import math
 import struct
 import time
+import warnings
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
@@ -460,40 +461,92 @@ def write_bit_in_word_sync(
                 client._active_deadline = prior_deadline
 
 
-async def read_bits(
+async def read_bits_single_request(
     client: AsyncSlmpClient,
     device: str | DeviceRef,
     count: int,
 ) -> list[bool]:
-    """Read a contiguous bit-device range as booleans."""
-    return _bool_values(await client.read_devices(device, count, bit_unit=True))
+    """Read contiguous direct bits with exactly one request or reject before transport."""
+    ref = _parse_device_for_client(client, device)
+    if _device_unit(ref) is not DeviceUnit.BIT:
+        raise ValueError("read_bits_single_request requires a bit device")
+    _check_direct_device_points(count, bit_unit=True, name="read_bits_single_request", plc_profile=client.plc_profile)
+    return _bool_values(await client.read_devices(ref, count, bit_unit=True))
 
 
-def read_bits_sync(
+def read_bits_single_request_sync(
     client: SlmpClient,
     device: str | DeviceRef,
     count: int,
 ) -> list[bool]:
-    """Synchronously read a contiguous bit-device range as booleans."""
-    return _bool_values(client.read_devices(device, count, bit_unit=True))
+    """Synchronously read contiguous direct bits with exactly one request."""
+    ref = _parse_device_for_client(client, device)
+    if _device_unit(ref) is not DeviceUnit.BIT:
+        raise ValueError("read_bits_single_request_sync requires a bit device")
+    _check_direct_device_points(
+        count, bit_unit=True, name="read_bits_single_request_sync", plc_profile=client.plc_profile
+    )
+    return _bool_values(client.read_devices(ref, count, bit_unit=True))
 
 
-async def write_bits(
+async def write_bits_single_request(
     client: AsyncSlmpClient,
     device: str | DeviceRef,
     values: list[bool],
 ) -> None:
-    """Write a contiguous bit-device range from booleans."""
-    await client.write_devices(device, _bool_values(values), bit_unit=True)
+    """Write contiguous direct bits with exactly one request or reject before transport."""
+    ref = _parse_device_for_client(client, device)
+    if _device_unit(ref) is not DeviceUnit.BIT:
+        raise ValueError("write_bits_single_request requires a bit device")
+    normalized = _bool_values(values)
+    _check_direct_device_points(
+        len(normalized), bit_unit=True, write=True, name="write_bits_single_request", plc_profile=client.plc_profile
+    )
+    await client.write_devices(ref, normalized, bit_unit=True)
 
 
-def write_bits_sync(
+def write_bits_single_request_sync(
     client: SlmpClient,
     device: str | DeviceRef,
     values: list[bool],
 ) -> None:
-    """Synchronously write a contiguous bit-device range from booleans."""
-    client.write_devices(device, _bool_values(values), bit_unit=True)
+    """Synchronously write contiguous direct bits with exactly one request."""
+    ref = _parse_device_for_client(client, device)
+    if _device_unit(ref) is not DeviceUnit.BIT:
+        raise ValueError("write_bits_single_request_sync requires a bit device")
+    normalized = _bool_values(values)
+    _check_direct_device_points(
+        len(normalized),
+        bit_unit=True,
+        write=True,
+        name="write_bits_single_request_sync",
+        plc_profile=client.plc_profile,
+    )
+    client.write_devices(ref, normalized, bit_unit=True)
+
+
+async def read_bits(client: AsyncSlmpClient, device: str | DeviceRef, count: int) -> list[bool]:
+    """Deprecated compatibility delegate; use :func:`read_bits_single_request`."""
+    warnings.warn("read_bits is deprecated; use read_bits_single_request", DeprecationWarning, stacklevel=2)
+    return await read_bits_single_request(client, device, count)
+
+
+def read_bits_sync(client: SlmpClient, device: str | DeviceRef, count: int) -> list[bool]:
+    """Deprecated compatibility delegate; use :func:`read_bits_single_request_sync`."""
+    warnings.warn("read_bits_sync is deprecated; use read_bits_single_request_sync", DeprecationWarning, stacklevel=2)
+    return read_bits_single_request_sync(client, device, count)
+
+
+async def write_bits(client: AsyncSlmpClient, device: str | DeviceRef, values: list[bool]) -> None:
+    """Deprecated compatibility delegate; use :func:`write_bits_single_request`."""
+    warnings.warn("write_bits is deprecated; use write_bits_single_request", DeprecationWarning, stacklevel=2)
+    await write_bits_single_request(client, device, values)
+
+
+def write_bits_sync(client: SlmpClient, device: str | DeviceRef, values: list[bool]) -> None:
+    """Deprecated compatibility delegate; use :func:`write_bits_single_request_sync`."""
+    warnings.warn("write_bits_sync is deprecated; use write_bits_single_request_sync", DeprecationWarning, stacklevel=2)
+    write_bits_single_request_sync(client, device, values)
 
 
 # ---------------------------------------------------------------------------
@@ -1179,9 +1232,9 @@ def _unpack_dword_words(words: list[int], count: int) -> list[int]:
 def _validate_unsplit_word_count(count: int, max_per_request: int) -> int:
     if max_per_request <= 0:
         raise ValueError("max_per_request must be at least 1")
-    if count > max_per_request:
+    if type(count) is not int or count < 1 or count > max_per_request:
         raise ValueError(
-            f"count {count} exceeds the single-request limit {max_per_request}; "
+            f"count {count!r} must be in the single-request range 1..{max_per_request}; "
             "issue multiple explicit requests with application-level consistency handling"
         )
     return max_per_request
@@ -1190,9 +1243,9 @@ def _validate_unsplit_word_count(count: int, max_per_request: int) -> int:
 def _validate_unsplit_dword_count(count: int, max_dwords_per_request: int) -> int:
     if max_dwords_per_request <= 0:
         raise ValueError("max_dwords_per_request must be at least 1")
-    if count > max_dwords_per_request:
+    if type(count) is not int or count < 1 or count > max_dwords_per_request:
         raise ValueError(
-            f"count {count} exceeds the single-request dword limit {max_dwords_per_request}; "
+            f"count {count!r} must be in the single-request dword range 1..{max_dwords_per_request}; "
             "issue multiple explicit requests with application-level consistency handling"
         )
     return max_dwords_per_request
@@ -1383,6 +1436,7 @@ async def read_words_single_request(
     the application together with its required consistency checks.
     """
 
+    _validate_unsplit_word_count(count, 960)
     ref = _parse_device_for_client(client, device)
     return list(await client.read_devices(ref, count, bit_unit=False))
 
@@ -1398,6 +1452,7 @@ async def read_dwords_single_request(
     across requests by this helper.
     """
 
+    _validate_unsplit_dword_count(count, 480)
     ref = _validate_dword_read_target(client, device)
     words = await read_words_single_request(client, ref, count * 2)
     return _unpack_dword_words(words, count)
@@ -1414,8 +1469,10 @@ async def write_words_single_request(
     write operation.
     """
 
+    _validate_unsplit_word_count(len(values), 960)
+    ref = _parse_device_for_client(client, device)
     await client.write_devices(
-        device,
+        ref,
         [_require_write_u16(value, f"values[{index}]") for index, value in enumerate(values)],
         bit_unit=False,
     )
@@ -1439,8 +1496,8 @@ async def read_words(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Read a contiguous word-device range using exactly one request."""
-    _validate_unsplit_word_count(count, 960)
+    """Deprecated compatibility delegate; use :func:`read_words_single_request`."""
+    warnings.warn("read_words is deprecated; use read_words_single_request", DeprecationWarning, stacklevel=2)
     return await read_words_single_request(client, device, count)
 
 
@@ -1466,6 +1523,7 @@ def read_words_single_request_sync(
 ) -> list[int]:
     """Synchronously read contiguous 16-bit values using one protocol request."""
 
+    _validate_unsplit_word_count(count, 960)
     ref = _parse_device_for_client(client, device)
     return list(client.read_devices(ref, count, bit_unit=False))
 
@@ -1477,6 +1535,7 @@ def read_dwords_single_request_sync(
 ) -> list[int]:
     """Synchronously read contiguous unsigned 32-bit values using one protocol request."""
 
+    _validate_unsplit_dword_count(count, 480)
     ref = _validate_dword_read_target(client, device)
     words = read_words_single_request_sync(client, ref, count * 2)
     return _unpack_dword_words(words, count)
@@ -1489,8 +1548,10 @@ def write_words_single_request_sync(
 ) -> None:
     """Synchronously write contiguous 16-bit values using one protocol request."""
 
+    _validate_unsplit_word_count(len(values), 960)
+    ref = _parse_device_for_client(client, device)
     client.write_devices(
-        device,
+        ref,
         [_require_write_u16(value, f"values[{index}]") for index, value in enumerate(values)],
         bit_unit=False,
     )
@@ -1511,8 +1572,8 @@ def read_words_sync(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Synchronously read a contiguous word-device range using one request."""
-    _validate_unsplit_word_count(count, 960)
+    """Deprecated compatibility delegate; use :func:`read_words_single_request_sync`."""
+    warnings.warn("read_words_sync is deprecated; use read_words_single_request_sync", DeprecationWarning, stacklevel=2)
     return read_words_single_request_sync(client, device, count)
 
 

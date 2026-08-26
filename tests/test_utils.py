@@ -14,6 +14,7 @@ from slmp.utils import (
     open_and_connect,
     parse_address,
     poll_sync,
+    read_bits_single_request_sync,
     read_bits_sync,
     read_dwords_single_request_sync,
     read_dwords_sync,
@@ -24,6 +25,7 @@ from slmp.utils import (
     read_words_sync,
     try_parse_address,
     write_bit_in_word_sync,
+    write_bits_single_request_sync,
     write_bits_sync,
     write_dwords_single_request_sync,
     write_named,
@@ -615,6 +617,16 @@ class TestWriteNamedSync(unittest.TestCase):
 
 
 class TestReadWordsSyncSingleRequest(unittest.TestCase):
+    def test_canonical_word_and_dword_counts_reject_zero_and_negative_before_transport(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        for count in (0, -1):
+            with self.assertRaises(ValueError):
+                read_words_single_request_sync(client, "D0", count)
+            with self.assertRaises(ValueError):
+                read_dwords_single_request_sync(client, "D0", count)
+        client.read_devices.assert_not_called()
+
     def test_read_words_single_request_sync(self):
         client = _make_sync_client(list(range(4)))
         result = read_words_single_request_sync(client, "D0", 4)
@@ -623,14 +635,16 @@ class TestReadWordsSyncSingleRequest(unittest.TestCase):
 
     def test_no_split_within_limit(self):
         client = _make_sync_client(list(range(10)))
-        result = read_words_sync(client, "D0", 10)
+        with self.assertWarns(DeprecationWarning):
+            result = read_words_sync(client, "D0", 10)
         self.assertEqual(result, list(range(10)))
 
     def test_no_split_exceeds_limit_raises(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-        with self.assertRaises(ValueError):
-            read_words_sync(client, "D0", 961)
+        with self.assertWarns(DeprecationWarning):
+            with self.assertRaises(ValueError):
+                read_words_sync(client, "D0", 961)
         client.read_devices.assert_not_called()
 
     def test_read_dwords_sync(self):
@@ -649,32 +663,60 @@ class TestReadWordsSyncSingleRequest(unittest.TestCase):
 
 
 class TestWriteWordsSyncSingleRequest(unittest.TestCase):
+    def test_canonical_word_and_dword_writes_reject_empty_before_transport(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        with self.assertRaises(ValueError):
+            write_words_single_request_sync(client, "D0", [])
+        with self.assertRaises(ValueError):
+            write_dwords_single_request_sync(client, "D0", [])
+        client.write_devices.assert_not_called()
+
     def test_write_words_single_request_sync(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         write_words_single_request_sync(client, "D0", [1, 2, 3])
-        client.write_devices.assert_called_once_with("D0", [1, 2, 3], bit_unit=False)
+        client.write_devices.assert_called_once_with(DeviceRef("D", 0, "melsec:iq-r"), [1, 2, 3], bit_unit=False)
 
     def test_write_dwords_single_request_sync(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         write_dwords_single_request_sync(client, "D0", [1, 2])
-        client.write_devices.assert_called_once_with("D0", [1, 0, 2, 0], bit_unit=False)
+        client.write_devices.assert_called_once_with(DeviceRef("D", 0, "melsec:iq-r"), [1, 0, 2, 0], bit_unit=False)
 
 
 class TestBitBlockHelpers(unittest.TestCase):
+    def test_canonical_bit_helpers_issue_one_request(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        client.read_devices.return_value = [True, False]
+        self.assertEqual(read_bits_single_request_sync(client, "M100", 2), [True, False])
+        client.read_devices.assert_called_once_with(DeviceRef("M", 100, "melsec:iq-r"), 2, bit_unit=True)
+        write_bits_single_request_sync(client, "M100", [True, False])
+        client.write_devices.assert_called_once_with(DeviceRef("M", 100, "melsec:iq-r"), [True, False], bit_unit=True)
+        with self.assertRaises(ValueError):
+            read_bits_single_request_sync(client, "D0", 1)
+        with self.assertRaises(ValueError):
+            write_bits_single_request_sync(client, "M100", [False] * 7169)
+        client.read_devices.assert_called_once()
+        client.write_devices.assert_called_once()
+
     def test_read_bits_sync(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
         client.read_devices.return_value = [True, False, True]
-        self.assertEqual(read_bits_sync(client, "M100", 3), [True, False, True])
-        client.read_devices.assert_called_once_with("M100", 3, bit_unit=True)
+        with self.assertWarns(DeprecationWarning):
+            self.assertEqual(read_bits_sync(client, "M100", 3), [True, False, True])
+        client.read_devices.assert_called_once_with(DeviceRef("M", 100, "melsec:iq-r"), 3, bit_unit=True)
 
     def test_write_bits_sync(self):
         client = MagicMock()
         client.plc_profile = "melsec:iq-r"
-        write_bits_sync(client, "M100", [True, False, True])
-        client.write_devices.assert_called_once_with("M100", [True, False, True], bit_unit=True)
+        with self.assertWarns(DeprecationWarning):
+            write_bits_sync(client, "M100", [True, False, True])
+        client.write_devices.assert_called_once_with(
+            DeviceRef("M", 100, "melsec:iq-r"), [True, False, True], bit_unit=True
+        )
 
 
 # ---------------------------------------------------------------------------

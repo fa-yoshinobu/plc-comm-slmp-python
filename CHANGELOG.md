@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added the typed public `profile_limit` lookup, `SlmpProfileLimitKey`, and `SlmpProfileLimit`, exposing operational point and weighted limits from the same canonical capability table used by request validation.
+- Library: Added canonical async/sync `read_bits_single_request` and `write_bits_single_request` helpers. Existing `read_bits*` / `write_bits*` and short `read_words*` names remain deprecated one-release delegates to their canonical single-request helpers.
 - Library: Restored canonical Q-series device-range runtime discovery for QCPU, LCPU, QnU, and QnUDV base/unit profiles. QCPU probes Z15, all affected profiles discover ZR by capped doubling and binary search, and R is derived as `min(ZR, 32768)`.
 - Library: Runtime candidate reads classify every nonzero PLC end code as unreadable while preserving timeout, cancellation, transport, lifecycle, protocol, and local-validation failures; the complete SD/probe acquisition owns one FIFO turn and never returns a partial catalog.
 
