@@ -22,13 +22,7 @@ from slmp.utils import poll_sync
 
 def _response_3e(payload: bytes, *, end_code: int = 0) -> bytes:
     target = bytes([0x00, 0xFF, 0xFF, 0x03, 0x00])
-    return (
-        b"\xD0\x00"
-        + target
-        + (len(payload) + 2).to_bytes(2, "little")
-        + end_code.to_bytes(2, "little")
-        + payload
-    )
+    return b"\xd0\x00" + target + (len(payload) + 2).to_bytes(2, "little") + end_code.to_bytes(2, "little") + payload
 
 
 def test_private_response_decode_views_payload_but_public_decode_owns_bytes() -> None:

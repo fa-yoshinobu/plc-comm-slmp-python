@@ -1693,9 +1693,7 @@ class SlmpClient:
             attempted_send = False
             try:
                 deadline = (
-                    self._active_deadline
-                    if self._active_deadline is not None
-                    else time.monotonic() + self.timeout
+                    self._active_deadline if self._active_deadline is not None else time.monotonic() + self.timeout
                 )
                 self._connect_unlocked(deadline=deadline)
                 self._operation_queue.ensure_current()

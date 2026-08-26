@@ -750,9 +750,7 @@ def test_sync_bit_in_word_rmw_preflights_and_holds_one_fifo_turn() -> None:
     ("address", "profile"),
     [(r"U2\G100", "melsec:qnudv"), (r"J1\W0", "melsec:iq-f")],
 )
-def test_sync_bit_in_word_blocked_qualified_route_sends_nothing(
-    address: str, profile: str
-) -> None:
+def test_sync_bit_in_word_blocked_qualified_route_sends_nothing(address: str, profile: str) -> None:
     client = _SyncRmwClient(profile)
 
     with pytest.raises(SlmpProfileFeatureError):
@@ -766,9 +764,7 @@ def test_sync_bit_in_word_blocked_qualified_route_sends_nothing(
     ("address", "expected_subcommand"),
     [(r"U1\G0", 0x0082), (r"J2\SW10", 0x0080)],
 )
-def test_sync_bit_in_word_preserves_each_qualified_route(
-    address: str, expected_subcommand: int
-) -> None:
+def test_sync_bit_in_word_preserves_each_qualified_route(address: str, expected_subcommand: int) -> None:
     invalid_client = _SyncRmwClient()
     with pytest.raises(ValueError, match="bit_index must be 0-15"):
         write_bit_in_word_sync(invalid_client, address, 16, True)
@@ -839,9 +835,7 @@ async def test_async_bit_in_word_rmw_holds_one_fifo_turn() -> None:
     ("address", "profile"),
     [(r"U2\G100", "melsec:qnudv"), (r"J1\W0", "melsec:iq-f")],
 )
-async def test_async_bit_in_word_blocked_qualified_route_sends_nothing(
-    address: str, profile: str
-) -> None:
+async def test_async_bit_in_word_blocked_qualified_route_sends_nothing(address: str, profile: str) -> None:
     client = _AsyncRmwClient(profile)
 
     with pytest.raises(SlmpProfileFeatureError):
@@ -856,9 +850,7 @@ async def test_async_bit_in_word_blocked_qualified_route_sends_nothing(
     ("address", "expected_subcommand"),
     [(r"U1\G0", 0x0082), (r"J2\SW10", 0x0080)],
 )
-async def test_async_bit_in_word_preserves_each_qualified_route(
-    address: str, expected_subcommand: int
-) -> None:
+async def test_async_bit_in_word_preserves_each_qualified_route(address: str, expected_subcommand: int) -> None:
     invalid_client = _AsyncRmwClient()
     invalid_client.release_read.set()
     with pytest.raises(ValueError, match="bit_index must be 0-15"):

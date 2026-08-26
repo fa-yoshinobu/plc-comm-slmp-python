@@ -1118,10 +1118,13 @@ def build_write_random_words_ext_request(
             operation="write_random_words_ext",
         )
         encoded_word_values.append(_require_write_u16(value, f"word_values[{index}]"))
-        payload_length += _resolved_extended_device_spec_size(
-            series=effective_series,
-            extension=effective_extension,
-        ) + 2
+        payload_length += (
+            _resolved_extended_device_spec_size(
+                series=effective_series,
+                extension=effective_extension,
+            )
+            + 2
+        )
     for index, (device, value, extension) in enumerate(dword_values):
         ref, effective_extension = _resolve_extended_device_for_family(device, extension, address_profile)
         _check_temporarily_unsupported_device(ref, access_kind="extended_device")
@@ -1143,10 +1146,13 @@ def build_write_random_words_ext_request(
             operation="write_random_words_ext",
         )
         encoded_dword_values.append(_require_write_u32(value, f"dword_values[{index}]"))
-        payload_length += _resolved_extended_device_spec_size(
-            series=effective_series,
-            extension=effective_extension,
-        ) + 4
+        payload_length += (
+            _resolved_extended_device_spec_size(
+                series=effective_series,
+                extension=effective_extension,
+            )
+            + 4
+        )
     _validate_random_write_word_devices(
         word_refs,
         dword_refs,

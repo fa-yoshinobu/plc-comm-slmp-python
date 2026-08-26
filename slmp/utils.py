@@ -390,9 +390,7 @@ async def write_bit_in_word(
     admission and covers both requests, and a successful read is always followed
     by the write even when the selected bit is unchanged.
     """
-    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(
-        client, device, bit_index, value
-    )
+    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(client, device, bit_index, value)
     from .async_client import AsyncSlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, AsyncSlmpClient) else _noop_async_context()
@@ -433,9 +431,7 @@ def write_bit_in_word_sync(
     deadline covers both requests after FIFO admission, and the write is always
     sent after a successful read.
     """
-    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(
-        client, device, bit_index, value
-    )
+    target, normalized_index, normalized_value, is_extended = _prepare_bit_in_word_rmw(client, device, bit_index, value)
     from .client import SlmpClient
 
     turn = client._operation_queue.turn() if isinstance(client, SlmpClient) else nullcontext()
