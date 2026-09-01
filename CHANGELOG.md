@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Docs: Corrected qualified CPU-buffer notation: CPU buffer memory uses `U3En\G` and CPU periodic buffer memory uses only `U3En\HG` with `n` from `0` through `3`; `Un\HG` is not a valid general module form.
+
 ## [5.1.0] - 2026-08-27
 
 - Release: Bumped package metadata and `slmp.__version__` to `5.1.0` for the additive high-level API and profile-limit release.

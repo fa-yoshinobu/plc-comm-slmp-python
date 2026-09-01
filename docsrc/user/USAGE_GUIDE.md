@@ -129,9 +129,10 @@ different CPU or Own Station. Cross-CPU reads remain valid. See the shared
 
 ## Extended device access
 
-Use the extended-device APIs for routed device forms such as `Un\G...`,
-`Un\HG...`, and `Jn\...`. Normal typed and named helpers cover ordinary
-device families such as `D`, `M`, `X`, and `Y`.
+Use the extended-device APIs for routed device forms such as unit-buffer
+`Un\G...`, CPU-buffer `U3En\G...`, CPU periodic-buffer `U3En\HG...`
+(`n` is `0` through `3`), and `Jn\...`. Normal typed and named helpers
+cover ordinary device families such as `D`, `M`, `X`, and `Y`.
 
 `SlmpTarget` controls the SLMP destination header. It does not replace routed
 device notation: `Un\G...` and `Jn\...` still need their own address syntax.
@@ -151,8 +152,12 @@ buffer memory.
 
 | Notation | Description | Example |
 | --- | --- | --- |
-| `Un\G` | Buffer memory word access | `U3\G100` |
-| `Un\HG` | Extended buffer memory word access | `U3E0\HG1000` |
+| `Un\G` | Unit buffer memory word access | `U3\G100` |
+| `U3En\G` (`n = 0..3`) | CPU buffer memory word access | `U3E0\G1000` |
+| `U3En\HG` (`n = 0..3`) | CPU periodic buffer memory word access | `U3E0\HG1000` |
+
+`U3E0\HG...` through `U3E3\HG...` are valid CPU periodic-buffer forms.
+`U0\HG...` and `U3E4\HG...` are invalid.
 
 ```python
 from slmp import SlmpClient, SlmpTarget
