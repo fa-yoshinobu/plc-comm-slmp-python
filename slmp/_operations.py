@@ -1496,41 +1496,6 @@ def decode_self_test_loopback_response(response: _SlmpDecodedResponse, *, expect
     return bytes(body)
 
 
-def build_memory_read_words_request(head_address: int, word_length: int) -> OperationRequest:
-    """Build a direct memory read request for words."""
-
-    _check_u32(head_address, "head_address")
-    if word_length < 1 or word_length > 0x01E0:
-        raise ValueError(f"word_length out of range (1..480): {word_length}")
-    payload = head_address.to_bytes(4, "little") + word_length.to_bytes(2, "little")
-    return OperationRequest(Command.MEMORY_READ, 0x0000, payload)
-
-
-def decode_memory_read_words_response(response: _SlmpDecodedResponse, *, word_length: int) -> list[int]:
-    """Decode a direct memory word-read response."""
-
-    words = decode_device_words(response.data)
-    if len(words) != word_length:
-        raise SlmpError(f"memory read size mismatch: expected={word_length}, actual={len(words)}")
-    return words
-
-
-def build_memory_write_words_request(head_address: int, values: Sequence[int]) -> OperationRequest:
-    """Build a direct memory write request for words."""
-
-    _check_u32(head_address, "head_address")
-    if not values:
-        raise ValueError("values must not be empty")
-    if len(values) > 0x01E0:
-        raise ValueError(f"word length out of range (1..480): {len(values)}")
-    payload = bytearray()
-    payload += head_address.to_bytes(4, "little")
-    payload += len(values).to_bytes(2, "little")
-    for index, value in enumerate(values):
-        payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
-    return OperationRequest(Command.MEMORY_WRITE, 0x0000, bytes(payload))
-
-
 def build_extend_unit_read_bytes_request(head_address: int, byte_length: int, module_no: int) -> OperationRequest:
     """Build an extension-unit byte-read request."""
 
@@ -1550,25 +1515,6 @@ def decode_extend_unit_read_bytes_response(response: _SlmpDecodedResponse, *, by
     return bytes(response.data)
 
 
-def build_extend_unit_read_words_request(head_address: int, word_length: int, module_no: int) -> OperationRequest:
-    """Build an extension-unit word-read request."""
-
-    _check_u32(head_address, "head_address")
-    if word_length < 1 or word_length > 0x03C0:
-        raise ValueError(f"word_length out of range (1..960): {word_length}")
-    return build_extend_unit_read_bytes_request(head_address, word_length * 2, module_no)
-
-
-def decode_extend_unit_read_words_response(response: _SlmpDecodedResponse, *, word_length: int) -> list[int]:
-    """Decode an extension-unit word-read response."""
-
-    data = decode_extend_unit_read_bytes_response(response, byte_length=word_length * 2)
-    words = decode_device_words(data)
-    if len(words) != word_length:
-        raise SlmpError(f"extend unit read word size mismatch: expected={word_length}, actual={len(words)}")
-    return words
-
-
 def build_extend_unit_write_bytes_request(head_address: int, module_no: int, data: bytes) -> OperationRequest:
     """Build an extension-unit byte-write request."""
 
@@ -1581,42 +1527,6 @@ def build_extend_unit_write_bytes_request(head_address: int, module_no: int, dat
     payload += module_no.to_bytes(2, "little")
     payload += data
     return OperationRequest(Command.EXTEND_UNIT_WRITE, 0x0000, payload)
-
-
-def build_extend_unit_write_words_request(
-    head_address: int,
-    module_no: int,
-    values: Sequence[int],
-) -> OperationRequest:
-    """Build an extension-unit word-write request."""
-
-    _check_u32(head_address, "head_address")
-    if not values:
-        raise ValueError("values must not be empty")
-    if len(values) > 0x03C0:
-        raise ValueError(f"word_length out of range (1..960): {len(values)}")
-    payload = bytearray()
-    for index, value in enumerate(values):
-        payload += _require_write_u16(value, f"values[{index}]").to_bytes(2, "little", signed=False)
-    return build_extend_unit_write_bytes_request(head_address, module_no, bytes(payload))
-
-
-def build_extend_unit_write_word_request(head_address: int, module_no: int, value: int) -> OperationRequest:
-    """Build an extension-unit single-word write request."""
-
-    _require_write_u16(value, "value")
-    return build_extend_unit_write_words_request(head_address, module_no, [value])
-
-
-def build_extend_unit_write_dword_request(head_address: int, module_no: int, value: int) -> OperationRequest:
-    """Build an extension-unit single-dword write request."""
-
-    _require_write_u32(value, "value")
-    return build_extend_unit_write_bytes_request(
-        head_address,
-        module_no,
-        int(value).to_bytes(4, "little", signed=False),
-    )
 
 
 def _normalize_abbreviation_labels(labels: Sequence[str]) -> tuple[str, ...]:

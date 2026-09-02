@@ -17,7 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-09-03
+
+- Release: Bumped package metadata and `slmp.__version__` to `5.2.0` for the approved high-level API overhaul.
 - Docs: Corrected qualified CPU-buffer notation: CPU buffer memory uses `U3En\G` and CPU periodic buffer memory uses only `U3En\HG` with `n` from `0` through `3`; `Un\HG` is not a valid general module form.
+- BREAKING: Removed the 20 sync/async public Memory and Extend Unit client callables, with no compatibility aliases or replacement public wrappers. Removed the obsolete `slmp-open-items-recheck` console entry, implementation function, and dedicated launcher; maintained internal tooling uses private codecs where still required.
+- Library: Added canonical `_extended` names for the six sync/async Extended Device method families. The old `_ext` names remain temporary direct delegates with identical validation, errors, result, command, and wire behavior.
+- Library: Added top-level `plc_profile_display_name`; the old top-level `display_name` remains a temporary direct delegate, while `SlmpPlcProfileDescriptor.display_name` is unchanged.
+- Library: Deprecated top-level `read_dwords` and `read_dwords_sync` for one compatibility release. They warn and directly delegate to the canonical single-request helpers; the client methods remain unchanged, and the top-level compatibility names are scheduled for removal in the immediately following release.
+- Library: Added sync/async `read_latest_self_diagnosis_error_code()`, which returns the raw unsigned word from one Direct Read of `SD0` without retry, fallback, classification, or writes.
+- BREAKING: Fixed the existing `DeviceRef` / `parse_device` surface as the profile-bound DeviceAddress API and `SlmpAddress` / `parse_address` / `format_address` / `normalize_address` as the AddressSpec API. `normalize_address` no longer accepts a `DeviceRef`; typed expressions and qualified routes are not accepted as direct devices, plain devices are not accepted as AddressSpec values, and no duplicate naming API was added.
+- Tests: Added public-surface removal, canonical/legacy delegate, warning, profile-display, sync/async parity, and exact SD0 Direct Read coverage.
+- Tooling: Fixed the isolated wheel smoke check so the release workflow's repository `PYTHONPATH` cannot cause a generated local egg-info directory to be mistaken for an installed wheel.
 
 ## [5.1.0] - 2026-08-27
 

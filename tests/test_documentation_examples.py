@@ -109,7 +109,7 @@ class _SyncExtendedClient:
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def read_devices_ext(self, device: str, points: int, *, bit_unit: bool) -> list[int] | list[bool]:
+    def read_devices_extended(self, device: str, points: int, *, bit_unit: bool) -> list[int] | list[bool]:
         self.read_count += 1
         if self.read_count == self.fail_read_at:
             raise _ReadbackError
@@ -117,7 +117,7 @@ class _SyncExtendedClient:
             return [False]
         return list(range(10, 10 + points))
 
-    def write_devices_ext(self, device: str, values: list[int | bool], *, bit_unit: bool) -> None:
+    def write_devices_extended(self, device: str, values: list[int | bool], *, bit_unit: bool) -> None:
         self.writes.append((device, list(values), bit_unit))
         if len(self.writes) == self.fail_write_at:
             raise _OutcomeUnknownError
@@ -251,19 +251,19 @@ def test_state_changing_examples_preserve_confirmed_write_cleanup() -> None:
     assert "write_confirmed = False" in bit_in_word
     assert "if write_confirmed:" in bit_in_word
 
-    module = _block_containing(blocks, 'write_devices_ext("U3\\\\G100"')
+    module = _block_containing(blocks, 'write_devices_extended("U3\\\\G100"')
     assert "write_confirmed = False" in module
     assert "finally:" in module
-    assert 'write_devices_ext("U3\\\\G100", original' in module
+    assert 'write_devices_extended("U3\\\\G100", original' in module
 
-    link = _block_containing(blocks, 'write_devices_ext("J1\\\\SW14"')
+    link = _block_containing(blocks, 'write_devices_extended("J1\\\\SW14"')
     assert "word_write_confirmed = False" in link
     assert "bit_write_confirmed = False" in link
     assert "from slmp import SlmpClient, SlmpOutcomeUnknownError, SlmpTarget" in link
     assert "except SlmpOutcomeUnknownError:" in link
     assert "if not outcome_unknown:" in link
-    assert 'write_devices_ext("J1\\\\X11", original_bit' in link
-    assert 'write_devices_ext("J1\\\\SW14", original_word' in link
+    assert 'write_devices_extended("J1\\\\X11", original_bit' in link
+    assert 'write_devices_extended("J1\\\\SW14", original_word' in link
 
     packed = _block_containing(blocks, 'write_devices("M1000"')
     assert 'read_devices("M1000", 1, bit_unit=False)' in packed
@@ -278,7 +278,10 @@ def test_state_changing_examples_preserve_confirmed_write_cleanup() -> None:
 
 
 def test_module_example_restores_after_readback_failure_but_not_unknown_write() -> None:
-    block = _block_containing(_python_blocks(USAGE_GUIDE.read_text(encoding="utf-8")), 'write_devices_ext("U3\\\\G100"')
+    block = _block_containing(
+        _python_blocks(USAGE_GUIDE.read_text(encoding="utf-8")),
+        'write_devices_extended("U3\\\\G100"',
+    )
 
     client = _SyncExtendedClient(fail_read_at=2)
     try:
@@ -303,7 +306,10 @@ def test_module_example_restores_after_readback_failure_but_not_unknown_write() 
 
 
 def test_link_example_restores_in_reverse_order_and_continues_cleanup() -> None:
-    block = _block_containing(_python_blocks(USAGE_GUIDE.read_text(encoding="utf-8")), 'write_devices_ext("J1\\\\SW14"')
+    block = _block_containing(
+        _python_blocks(USAGE_GUIDE.read_text(encoding="utf-8")),
+        'write_devices_extended("J1\\\\SW14"',
+    )
 
     client = _SyncExtendedClient()
     _run_sync_example(block, client)

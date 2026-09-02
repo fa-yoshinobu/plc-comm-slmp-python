@@ -396,7 +396,7 @@ def capability_profile(plc_profile: object | None) -> CapabilityProfile | None:
     return BUILTIN_CAPABILITY_PROFILES.get(profile_id)
 
 
-def display_name(plc_profile: object | None) -> str:
+def plc_profile_display_name(plc_profile: object | None) -> str:
     """Return the canonical human-readable display name for a PLC profile."""
     profile_id = normalize_profile_id(plc_profile)
     if profile_id is None:
@@ -405,6 +405,11 @@ def display_name(plc_profile: object | None) -> str:
         return _PROFILE_DISPLAY_NAMES[profile_id]
     except KeyError as exc:
         raise ValueError(f"Unsupported plc_profile: {plc_profile!r}.") from exc
+
+
+def display_name(plc_profile: object | None) -> str:
+    """Compatibility delegate for :func:`plc_profile_display_name`."""
+    return plc_profile_display_name(plc_profile)
 
 
 def _capability_limit(plc_profile: object | None, key: str) -> CapabilityLimit | None:

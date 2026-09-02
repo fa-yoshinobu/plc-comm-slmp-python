@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
-from .capability_profiles import _capability_limit, display_name, is_profile_read_only_device
+from .capability_profiles import _capability_limit, is_profile_read_only_device, plc_profile_display_name
 from .constants import (
     DEVICE_CODES,
     DIRECT_MEMORY_CPU_BUFFER,
@@ -115,7 +115,7 @@ class SlmpTrafficStats:
 
 @dataclass(frozen=True)
 class DeviceRef:
-    """Immutable profile-bound semantic device reference.
+    """Immutable profile-bound direct DeviceAddress reference.
 
     Attributes:
         code: Device code string (e.g. 'D', 'X').
@@ -278,7 +278,7 @@ def plc_profile_descriptors() -> tuple[SlmpPlcProfileDescriptor, ...]:
     return tuple(
         SlmpPlcProfileDescriptor(
             canonical_name=profile.value,
-            display_name=display_name(profile),
+            display_name=plc_profile_display_name(profile),
             connectable=profile is not SlmpPlcProfile.QCpu,
             base_profile=_PLC_PROFILE_BASES[profile.value],
         )
@@ -689,7 +689,7 @@ def parse_device(
     *,
     plc_profile: object,
 ) -> DeviceRef:
-    """Parse a device string into a `DeviceRef`.
+    """Parse one direct DeviceAddress string into a `DeviceRef`.
 
     Args:
         value: Device string (e.g. 'D100', 'X1F') or `DeviceRef` object.

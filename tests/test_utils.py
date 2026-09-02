@@ -2,9 +2,10 @@
 
 import struct
 import unittest
+import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from slmp.core import DeviceRef, LongTimerResult, RandomReadResult, SlmpTarget
+from slmp.core import DeviceRef, LongTimerResult, RandomReadResult, SlmpTarget, parse_device
 from slmp.utils import (
     SlmpConnectionOptions,
     _compile_read_plan,
@@ -16,6 +17,8 @@ from slmp.utils import (
     poll_sync,
     read_bits_single_request_sync,
     read_bits_sync,
+    read_dwords,
+    read_dwords_single_request,
     read_dwords_single_request_sync,
     read_dwords_sync,
     read_named,
@@ -133,6 +136,28 @@ class TestParseAddress(unittest.TestCase):
         self.assertEqual(direct_bit.text, "M100:BIT")
         self.assertEqual(direct_bit.dtype, "BIT")
         self.assertEqual(format_address("d100:s", plc_profile="melsec:iq-r"), "D100:S")
+
+    def test_device_address_and_address_spec_surfaces_are_unambiguous(self):
+        profile = "melsec:iq-r"
+        for text in ("D100", "X10"):
+            device = parse_device(text, plc_profile=profile)
+            self.assertEqual(str(device), text)
+            self.assertEqual(parse_device(str(device), plc_profile=profile), device)
+
+        for source, canonical in (("d100:u", "D100:U"), ("d50.a", "D50.A")):
+            address = parse_address(source, plc_profile=profile)
+            self.assertEqual(format_address(address, plc_profile=profile), canonical)
+            self.assertEqual(normalize_address(source, plc_profile=profile), canonical)
+
+        for text in ("D100:U", "D50.A", r"J1\X10", r"U0\G100"):
+            with self.assertRaises(ValueError):
+                parse_device(text, plc_profile=profile)
+        for text in ("D100", "X10", r"J1\X10:BIT", r"U0\G100:U"):
+            with self.assertRaises(ValueError):
+                parse_address(text, plc_profile=profile)
+
+        with self.assertRaisesRegex(ValueError, "AddressSpec"):
+            normalize_address(parse_device("D100", plc_profile=profile), plc_profile=profile)  # type: ignore[arg-type]
 
     def test_public_parse_address_uses_plc_profile(self):
         parsed = parse_address("x100:bit", plc_profile="melsec:iq-f")
@@ -648,11 +673,14 @@ class TestReadWordsSyncSingleRequest(unittest.TestCase):
         client.read_devices.assert_not_called()
 
     def test_read_dwords_sync(self):
-        raw = struct.pack("<I", 100000)
-        lo, hi = struct.unpack("<HH", raw)
-        client = _make_sync_client([lo, hi])
-        result = read_dwords_sync(client, "D0", 1)
+        client = MagicMock()
+        with (
+            patch("slmp.utils.read_dwords_single_request_sync", return_value=[100000]) as canonical,
+            self.assertWarnsRegex(DeprecationWarning, "read_dwords_single_request_sync.*immediately following release"),
+        ):
+            result = read_dwords_sync(client, "D0", 1)
         self.assertEqual(result, [100000])
+        canonical.assert_called_once_with(client, "D0", 1)
 
     def test_read_dwords_single_request_sync(self):
         raw = struct.pack("<II", 100000, 200000)
@@ -660,6 +688,29 @@ class TestReadWordsSyncSingleRequest(unittest.TestCase):
         client = _make_sync_client(words)
         result = read_dwords_single_request_sync(client, "D0", 2)
         self.assertEqual(result, [100000, 200000])
+
+
+class TestReadDWordsAsyncCompatibility(unittest.IsolatedAsyncioTestCase):
+    async def test_read_dwords_warns_and_delegates_directly(self):
+        client = MagicMock()
+        canonical = AsyncMock(return_value=[100000])
+        with (
+            patch("slmp.utils.read_dwords_single_request", new=canonical),
+            self.assertWarnsRegex(DeprecationWarning, "read_dwords_single_request.*immediately following release"),
+        ):
+            result = await read_dwords(client, "D0", 1)
+        self.assertEqual(result, [100000])
+        canonical.assert_awaited_once_with(client, "D0", 1)
+
+    async def test_canonical_read_dwords_remains_warning_free(self):
+        client = MagicMock()
+        client.plc_profile = "melsec:iq-r"
+        client.read_devices = AsyncMock(return_value=[0x5678, 0x1234])
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = await read_dwords_single_request(client, "D0", 1)
+        self.assertEqual(result, [0x12345678])
+        self.assertEqual(caught, [])
 
 
 class TestWriteWordsSyncSingleRequest(unittest.TestCase):

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from slmp import SlmpProfileLimit, SlmpProfileLimitKey, profile_limit
-from slmp.capability_profiles import BUILTIN_CAPABILITY_PROFILES, display_name
+from slmp.capability_profiles import BUILTIN_CAPABILITY_PROFILES, plc_profile_display_name
 from slmp.core import SlmpPlcProfile, plc_profile_descriptors
 
 
@@ -20,7 +20,7 @@ def test_builtin_capability_profiles_match_canonical_fixture() -> None:
     assert sorted(expected) == sorted(BUILTIN_CAPABILITY_PROFILES)
     for profile_id, expected_profile in expected.items():
         actual = BUILTIN_CAPABILITY_PROFILES[profile_id]
-        assert display_name(profile_id) == expected_profile["display_name"]
+        assert plc_profile_display_name(profile_id) == expected_profile["display_name"]
         assert actual.frame == expected_profile["frame"]
         assert actual.compat == expected_profile["compat"]
         assert sorted(actual.features) == sorted(expected_profile["features"])

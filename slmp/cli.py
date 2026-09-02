@@ -938,7 +938,6 @@ def _default_regression_help_scripts() -> tuple[str, ...]:
         "slmp_register_boundary_probe.py",
         "slmp_init_model_docs.py",
         "slmp_other_station_check.py",
-        "slmp_open_items_recheck.py",
         "slmp_pending_live_verification.py",
         "slmp_manual_label_verification.py",
         "slmp_read_soak.py",
@@ -1862,7 +1861,6 @@ def _render_model_docs_readme(*, series: str, model: str, folder_name: str) -> s
             "- `register_boundary_probe_latest.md`",
             "- `special_device_probe_latest.md`",
             "- `g_hg_extended_device_recheck_latest.md`",
-            "- `open_items_recheck_latest.md`",
             "- `pending_live_verification_latest.md`",
             "- `other_station_check_latest.md`",
             "",
@@ -3975,97 +3973,6 @@ def g_hg_extended_device_coverage_main(argv: Sequence[str] | None = None) -> int
     return 0 if summary["NG"] == 0 else 2
 
 
-def open_items_recheck_main(argv: Sequence[str] | None = None) -> int:
-    """Recheck open SLMP items."""
-    parser = argparse.ArgumentParser(description="Recheck open SLMP items")
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--transport", choices=("tcp", "udp"), required=True)
-    parser.add_argument("--timeout", type=float, default=3.0)
-    parser.add_argument("--series", choices=("ql", "iqr"), default="iqr")
-    parser.add_argument("--network", type=_int_auto, required=True)
-    parser.add_argument("--station", type=_int_auto, required=True)
-    parser.add_argument("--module-io", type=_int_auto, required=True)
-    parser.add_argument("--multidrop", type=_int_auto, required=True)
-    parser.add_argument("--cpu-io", type=_int_auto, default=0x03E0, help="CPU buffer start I/O")
-    parser.add_argument(
-        "--output",
-        help="optional markdown output path; default is internal_docs/<series>_<model>/open_items_recheck_latest.md",
-    )
-    args = parser.parse_args(list(argv) if argv is not None else None)
-
-    target = SlmpTarget(
-        network=args.network,
-        station=args.station,
-        module_io=args.module_io,
-        multidrop=args.multidrop,
-    )
-    output_path = _resolve_report_output(
-        output=args.output,
-        series=args.series,
-        host=args.host,
-        port=args.port,
-        transport=args.transport,
-        timeout=args.timeout,
-        target=target,
-        filename="open_items_recheck_latest.md",
-    )
-    rows: list[tuple[str, str, str]] = []
-
-    def record(item: str, status: str, detail: str) -> None:
-        rows.append((item, status, detail))
-        print(f"[{status}] {item}: {detail}")
-
-    with SlmpClient(
-        args.host,
-        port=args.port,
-        transport=args.transport,
-        timeout=args.timeout,
-        plc_series=args.series,
-        default_target=target,
-        _allow_manual_profile=True,
-    ) as cli:
-        for dev in ("LSTC0", "LSTS0", "LTC0", "LTS0"):
-            try:
-                values = cli.read_devices(dev, 1, bit_unit=True)
-                record(f"{dev} read bit", "OK", f"values={values}")
-            except Exception as exc:  # noqa: BLE001
-                record(f"{dev} read bit", "NG", str(exc))
-
-        ext = cli._make_extension_spec(
-            extension_specification=args.cpu_io,
-            extension_specification_modification=0,
-            device_modification_index=0,
-            use_indirect_specification=False,
-            register_mode="none",
-            direct_memory_specification=DIRECT_MEMORY_CPU_BUFFER,
-            series=args.series,
-        )
-        for dev in ("G0", "HG0"):
-            try:
-                values = cli._read_devices_ext_raw(dev, 1, extension=ext, bit_unit=False, series=args.series)
-                record(f"{dev} CPU buffer ext read", "OK", f"values={values}")
-            except Exception as exc:  # noqa: BLE001
-                record(f"{dev} CPU buffer ext read", "NG", str(exc))
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    _write_markdown_report(
-        output_path,
-        title="# Open Items Recheck Report",
-        header_lines=[
-            f"- Date: {now}",
-            f"- Host: {args.host}",
-            f"- Port: {args.port}",
-            f"- Transport: {args.transport}",
-            f"- Series: {args.series}",
-            f"- CPU I/O: 0x{args.cpu_io:04X}",
-        ],
-        rows=rows,
-    )
-    print(f"[DONE] report={output_path}")
-    return 0
-
-
 def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
     """Perform SLMP pending live verification against a live PLC."""
     parser = argparse.ArgumentParser(description="SLMP pending live verification")
@@ -4235,8 +4142,15 @@ def pending_live_verification_main(argv: Sequence[str] | None = None) -> int:
         for module_no in (0x03E0, 0x0000, 0x03FF):
             for head in (0x0000, 0x0002):
                 try:
-                    data = cli.extend_unit_read_bytes(head, 2, module_no)
-                    cli.extend_unit_write_bytes(head, module_no, data)
+                    read_request = _operations.build_extend_unit_read_bytes_request(head, 2, module_no)
+                    data = cli._request_decoded(
+                        read_request.command,
+                        read_request.subcommand,
+                        read_request.payload,
+                        lambda response: _operations.decode_extend_unit_read_bytes_response(response, byte_length=2),
+                    )
+                    write_request = _operations.build_extend_unit_write_bytes_request(head, module_no, data)
+                    cli._request(write_request.command, write_request.subcommand, write_request.payload)
                     add(
                         "0601/1601 extend unit read/write",
                         "OK",

@@ -137,9 +137,6 @@ try {
     else {
         Join-Path $venvDirectory "bin/python"
     }
-    & $consumerPython -m pip install --disable-pip-version-check --no-deps $wheel[0].FullName
-    if ($LASTEXITCODE -ne 0) { throw "Cannot install the wheel into the isolated consumer environment." }
-
     $consumerSmoke = @'
 from importlib.metadata import distribution
 from pathlib import Path
@@ -149,6 +146,13 @@ import slmp
 from slmp import (
     AsyncSlmpClient,
     Command,
+    DeviceRef,
+    format_address,
+    normalize_address,
+    parse_address,
+    parse_device,
+    plc_profile_display_name,
+    SlmpAddress,
     SlmpClient,
     SlmpOutcomeUnknownError,
     SlmpTarget,
@@ -159,13 +163,51 @@ from slmp import (
 module_path = Path(slmp.__file__).resolve()
 site_roots = [Path(item).resolve() for item in site.getsitepackages()]
 assert any(module_path.is_relative_to(root) for root in site_roots), (module_path, site_roots)
-assert distribution("plc-comm-slmp").metadata["Name"] == "plc-comm-slmp"
+dist = distribution("plc-comm-slmp")
+assert dist.metadata["Name"] == "plc-comm-slmp"
+assert "slmp-open-items-recheck" not in {entry.name for entry in dist.entry_points}
 assert Command.DEVICE_READ == 0x0401
 assert Command.DEVICE_WRITE == 0x1401
 assert SlmpClient.__module__.startswith("slmp.")
 assert AsyncSlmpClient.__module__.startswith("slmp.")
 assert SlmpTarget.__module__.startswith("slmp.")
 assert issubclass(SlmpOutcomeUnknownError, Exception)
+assert callable(plc_profile_display_name)
+assert isinstance(parse_device("D100", plc_profile="melsec:iq-r"), DeviceRef)
+typed_address = parse_address("D100:U", plc_profile="melsec:iq-r")
+assert isinstance(typed_address, SlmpAddress)
+assert format_address(typed_address, plc_profile="melsec:iq-r") == "D100:U"
+assert normalize_address("d50.a", plc_profile="melsec:iq-r") == "D50.A"
+assert all(not hasattr(slmp, name) for name in (
+    "DeviceAddress", "AddressSpec",
+    "parse_device_address", "format_device_address", "normalize_device_address",
+    "parse_address_spec", "format_address_spec", "normalize_address_spec",
+))
+canonical_extended = (
+    "read_devices_extended",
+    "write_devices_extended",
+    "read_random_extended",
+    "write_random_words_extended",
+    "write_random_bits_extended",
+    "register_monitor_devices_extended",
+)
+legacy_extended = tuple(name.removesuffix("ended") for name in canonical_extended)
+removed = (
+    "memory_read_words",
+    "memory_write_words",
+    "extend_unit_read_bytes",
+    "extend_unit_read_words",
+    "extend_unit_read_word",
+    "extend_unit_read_dword",
+    "extend_unit_write_bytes",
+    "extend_unit_write_words",
+    "extend_unit_write_word",
+    "extend_unit_write_dword",
+)
+for client_type in (SlmpClient, AsyncSlmpClient):
+    assert all(hasattr(client_type, name) for name in canonical_extended)
+    assert all(hasattr(client_type, name) for name in legacy_extended)
+    assert all(not hasattr(client_type, name) for name in removed)
 for helper in (write_bit_in_word, write_bit_in_word_sync):
     doc = helper.__doc__ or ""
     assert "FIFO turn" in doc
@@ -184,6 +226,8 @@ print(f"[OK] installed wheel import: {module_path}")
         Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
         Push-Location $consumerDirectory
         try {
+            & $consumerPython -m pip install --disable-pip-version-check --no-deps $wheel[0].FullName
+            if ($LASTEXITCODE -ne 0) { throw "Cannot install the wheel into the isolated consumer environment." }
             & $consumerPython -I $consumerSmokePath
             if ($LASTEXITCODE -ne 0) { throw "Installed wheel public API/RMW docstring smoke failed." }
         }

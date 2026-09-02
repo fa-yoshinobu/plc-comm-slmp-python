@@ -37,7 +37,9 @@ from slmp import (
     normalize_address,
     open_and_connect,
     parse_address,
+    parse_device,
     plc_profile_descriptors,
+    plc_profile_display_name,
     poll,
     read_dwords_single_request,
     read_named,
@@ -131,6 +133,7 @@ async def demo_explicit_connect(host: str, port: int, transport: str, timeout: f
               known and should remain stable for the full session.
     """
     options = build_options(host, port, transport, timeout, plc_profile)
+    print(f"[plc_profile_display_name] {plc_profile_display_name(plc_profile)}")
     client = await open_and_connect(options)
     print(f"[connect] plc_profile={client.plc_profile}  frame={client.frame_type!s}  series={client.plc_series!s}")
     await client.close()
@@ -180,6 +183,9 @@ async def demo_contiguous_reads(client: AsyncSlmpClient) -> None:
 
     dwords = await read_dwords_single_request(client, "D0", 4)
     print(f"[read_dwords_single_request] D0-D7 (as 4 x uint32) = {dwords}")
+
+    diagnosis = await client.read_latest_self_diagnosis_error_code()
+    print(f"[read_latest_self_diagnosis_error_code] SD0 = 0x{diagnosis:04X}")
 
 
 async def demo_bit_in_word(client: AsyncSlmpClient) -> None:
@@ -297,8 +303,10 @@ async def demo_shared_fifo_client(host: str, port: int, transport: str, timeout:
 
 
 async def run(args: argparse.Namespace) -> None:
+    device = parse_device("x20", plc_profile=args.plc_profile)
     parsed = parse_address("d200:f", plc_profile=args.plc_profile)
-    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
+    print(f"[parse_device] x20 -> {device}")
+    print(f"[normalize_address] d200:f -> {normalize_address('d200:f', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
     print(f"[format_address] parsed -> {format_address(parsed, plc_profile=args.plc_profile)}")
 

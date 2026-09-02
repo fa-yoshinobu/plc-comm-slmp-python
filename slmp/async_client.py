@@ -666,6 +666,10 @@ class AsyncSlmpClient:
             ),
         )
 
+    async def read_latest_self_diagnosis_error_code(self) -> int:
+        """Read the latest self-diagnosis error code as the raw unsigned value."""
+        return int((await self.read_devices("SD0", 1, bit_unit=False))[0])
+
     async def write_devices(
         self,
         device: str | DeviceRef,
@@ -785,7 +789,7 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    async def read_devices_ext(
+    async def read_devices_extended(
         self,
         device: str | SlmpExtendedDevice,
         points: int,
@@ -815,7 +819,17 @@ class AsyncSlmpClient:
             ),
         )
 
-    async def write_devices_ext(
+    async def read_devices_ext(
+        self,
+        device: str | SlmpExtendedDevice,
+        points: int,
+        *,
+        bit_unit: bool,
+    ) -> list[int] | list[bool]:
+        """Compatibility delegate for :meth:`read_devices_extended`."""
+        return await self.read_devices_extended(device, points, bit_unit=bit_unit)
+
+    async def write_devices_extended(
         self,
         device: str | SlmpExtendedDevice,
         values: Sequence[int | bool],
@@ -835,6 +849,16 @@ class AsyncSlmpClient:
             address_profile=self.plc_profile,
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    async def write_devices_ext(
+        self,
+        device: str | SlmpExtendedDevice,
+        values: Sequence[int | bool],
+        *,
+        bit_unit: bool,
+    ) -> None:
+        """Compatibility delegate for :meth:`write_devices_extended`."""
+        await self.write_devices_extended(device, values, bit_unit=bit_unit)
 
     async def read_random(
         self,
@@ -859,7 +883,7 @@ class AsyncSlmpClient:
             lambda response: _operations.decode_read_random_response(response, operation),
         )
 
-    async def read_random_ext(
+    async def read_random_extended(
         self,
         *,
         word_devices: Sequence[str | SlmpExtendedDevice] = (),
@@ -892,6 +916,15 @@ class AsyncSlmpClient:
             lambda response: _operations.decode_read_random_response(response, operation),
         )
 
+    async def read_random_ext(
+        self,
+        *,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
+    ) -> RandomReadResult:
+        """Compatibility delegate for :meth:`read_random_extended`."""
+        return await self.read_random_extended(word_devices=word_devices, dword_devices=dword_devices)
+
     async def write_random_words(
         self,
         *,
@@ -909,7 +942,7 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    async def write_random_words_ext(
+    async def write_random_words_extended(
         self,
         *,
         word_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
@@ -936,6 +969,15 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
+    async def write_random_words_ext(
+        self,
+        *,
+        word_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
+        dword_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
+    ) -> None:
+        """Compatibility delegate for :meth:`write_random_words_extended`."""
+        await self.write_random_words_extended(word_values=word_values, dword_values=dword_values)
+
     async def write_random_bits(
         self,
         bit_values: Mapping[str | DeviceRef, bool] | Sequence[tuple[str | DeviceRef, bool]],
@@ -950,7 +992,7 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    async def write_random_bits_ext(
+    async def write_random_bits_extended(
         self,
         bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool]],
     ) -> None:
@@ -969,6 +1011,13 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
+    async def write_random_bits_ext(
+        self,
+        bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool]],
+    ) -> None:
+        """Compatibility delegate for :meth:`write_random_bits_extended`."""
+        await self.write_random_bits_extended(bit_values)
+
     async def register_monitor_devices(
         self,
         *,
@@ -986,7 +1035,7 @@ class AsyncSlmpClient:
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    async def register_monitor_devices_ext(
+    async def register_monitor_devices_extended(
         self,
         *,
         word_devices: Sequence[str | SlmpExtendedDevice] = (),
@@ -1012,6 +1061,15 @@ class AsyncSlmpClient:
             address_profile=self.plc_profile,
         )
         await self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    async def register_monitor_devices_ext(
+        self,
+        *,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
+    ) -> None:
+        """Compatibility delegate for :meth:`register_monitor_devices_extended`."""
+        await self.register_monitor_devices_extended(word_devices=word_devices, dword_devices=dword_devices)
 
     async def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
         """Execute one cycle with a nonzero count within the profile monitor limit."""
@@ -1254,43 +1312,6 @@ class AsyncSlmpClient:
         request = _operations.build_write_random_labels_request(points, abbreviation_labels=abbreviation_labels)
         await self._request(request.command, request.subcommand, request.payload)
 
-    # --------------------
-    # Memory
-    # --------------------
-
-    async def memory_read_words(self, head_address: int, word_length: int) -> list[int]:
-        """Read memory words from the PLC."""
-        request = _operations.build_memory_read_words_request(head_address, word_length)
-        return await self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_memory_read_words_response(response, word_length=word_length),
-        )
-
-    async def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
-        """Write memory words to the PLC."""
-        request = _operations.build_memory_write_words_request(head_address, values)
-        await self._request(request.command, request.subcommand, request.payload)
-
-    async def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
-        """Read words from an extend unit."""
-        request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
-        return await self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_extend_unit_read_words_response(
-                response,
-                word_length=word_length,
-            ),
-        )
-
-    async def extend_unit_write_words(self, head_address: int, module_no: int, values: Sequence[int]) -> None:
-        """Write words to an extend unit."""
-        request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
-        await self._request(request.command, request.subcommand, request.payload)
-
     async def read_long_timer(self, *, head_no: int, points: int) -> list[LongTimerResult]:
         """Read long timers from the PLC."""
         head_no, word_points = _operations._validate_long_timer_range(head_no, points, self.plc_profile)
@@ -1350,42 +1371,6 @@ class AsyncSlmpClient:
         """Read long retentive timer contact states."""
         items = await self.read_long_retentive_timer(head_no=head_no, points=points)
         return [item.contact for item in items]
-
-    async def extend_unit_read_bytes(self, head_address: int, byte_length: int, module_no: int) -> bytes:
-        """Read bytes from an extend unit."""
-        request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
-        return await self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_extend_unit_read_bytes_response(
-                response,
-                byte_length=byte_length,
-            ),
-        )
-
-    async def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
-        """Read a single word from an extend unit."""
-        return (await self.extend_unit_read_words(head_address, 1, module_no))[0]
-
-    async def extend_unit_read_dword(self, head_address: int, module_no: int) -> int:
-        """Read a double word from an extend unit."""
-        return int.from_bytes(await self.extend_unit_read_bytes(head_address, 4, module_no), "little", signed=False)
-
-    async def extend_unit_write_bytes(self, head_address: int, module_no: int, data: bytes) -> None:
-        """Write bytes to an extend unit."""
-        request = _operations.build_extend_unit_write_bytes_request(head_address, module_no, data)
-        await self._request(request.command, request.subcommand, request.payload)
-
-    async def extend_unit_write_word(self, head_address: int, module_no: int, value: int) -> None:
-        """Write a single word to an extend unit."""
-        request = _operations.build_extend_unit_write_word_request(head_address, module_no, value)
-        await self._request(request.command, request.subcommand, request.payload)
-
-    async def extend_unit_write_dword(self, head_address: int, module_no: int, value: int) -> None:
-        """Write a double word to an extend unit."""
-        request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
-        await self._request(request.command, request.subcommand, request.payload)
 
     def _next_serial(self) -> int:
         """Get the next serial number for the request."""

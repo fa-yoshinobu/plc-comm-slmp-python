@@ -2,6 +2,51 @@
 
 This document records source migrations required by the cross-library quality overhaul. The approved rationale and acceptance history remain in the workspace decision records.
 
+## SLMP-PY-NEXT-20260903 — Public API cleanup and canonical names
+
+The next release removes the 20 sync/async `memory_*` and `extend_unit_*`
+client callables for commands `0x0613`, `0x1613`, `0x0601`, and `0x1601`.
+There are no compatibility aliases or replacement public wrappers. The private
+codec remains only where maintained internal tooling still needs the wire
+operation. The obsolete `slmp-open-items-recheck` console entry, its
+`open_items_recheck_main` function, and its dedicated launcher are also
+removed. This current decision supersedes the earlier D-132 statement that
+the Extend Unit callables remained public; D-132 continues to record the
+historical CPU-buffer-alias removal in its original release.
+
+Extended Device public client methods now use `_extended` as the canonical
+suffix: `read_devices_extended`, `write_devices_extended`,
+`read_random_extended`, `write_random_words_extended`,
+`write_random_bits_extended`, and `register_monitor_devices_extended`.
+The corresponding `_ext` names remain temporary direct delegates to the same
+implementation; their removal version is a separate decision. New source must
+use the canonical names.
+
+Use top-level `plc_profile_display_name` instead of `display_name`. The old
+top-level name remains a temporary direct delegate. The
+`SlmpPlcProfileDescriptor.display_name` field is unchanged.
+
+Top-level `read_dwords` and `read_dwords_sync` now emit
+`DeprecationWarning` and directly call `read_dwords_single_request` and
+`read_dwords_single_request_sync`. They remain exported for this compatibility
+release only and are removed in the immediately following release. The
+`AsyncSlmpClient.read_dwords` and `SlmpClient.read_dwords` methods are not part
+of this migration and remain unchanged.
+
+Sync and async clients add `read_latest_self_diagnosis_error_code()`. It reads
+one unsigned word from `SD0` in one ordinary Direct Read and returns the raw
+value. It does not classify the value, retry, fall back, clear PLC state, or
+write.
+
+Live-PLC disposition for `DECISION-SLMP-PUBLIC-API-001`, `SL-CLI-001`,
+`SL-NAME-001`, `SL-NAME-004`, `SL-NAME-009`, and `SL-CONVENIENCE-001`:
+no live communication is required for this implementation phase. The removals
+change only the public surface; each migration name directly delegates to its
+canonical implementation; and local sync/async wire-parity tests confirm the
+same requests. The SD0 helper reuses the existing ordinary Direct Read path,
+and deterministic tests confirm exactly one `SD0` word in one request, the raw
+result, and unchanged error propagation. No live PLC communication was run.
+
 ## SLMP-BIT-RMW-20260807 — Complete-route bit-in-word contract
 
 Scope: synchronous and asynchronous Direct and qualified Extended Device complete-word routes.
@@ -1085,6 +1130,24 @@ verified a 102-file self-contained source archive. This repository has no
 independent MkDocs project; maintained user Markdown and generated API source
 are covered by the repository gates. No live PLC communication, registry
 publication, commit, or push was performed.
+
+## 2026-09-03 DeviceAddress / AddressSpec classification
+
+The existing profile-bound `DeviceRef` / `parse_device` pair is the Python
+DeviceAddress surface. The existing `SlmpAddress` / `parse_address` /
+`try_parse_address` / `format_address` / `normalize_address` family is the
+AddressSpec surface. Direct `D100` / `X10` and typed `D100:U` / `D50.A`
+round-trips, cross-grammar rejection, and qualified-route separation are fixed
+by public tests. `normalize_address` no longer accepts a `DeviceRef`, matching
+the other AddressSpec entry points. No synonymous public type, parser,
+formatter, or normalizer was added. This classification changes no device,
+route, request, or wire value, so live PLC verification is not required.
+
+Verification evidence (2026-09-03): `run_ci.bat` passed Ruff lint/format,
+Mypy, public-doc coverage, and 776 tests with 319 subtests. The isolated package
+check built wheel/sdist, installed the wheel, and passed 23 wheel plus 29 sdist
+content assertions including the existing address surfaces and duplicate-API
+absence.
 
 ## 2026-08-02 response-identity, 4E, and ACK migration
 

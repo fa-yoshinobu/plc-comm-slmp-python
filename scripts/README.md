@@ -20,7 +20,6 @@ If you only need a safe first check, use:
 
 If you need to re-run focused live verification, use:
 
-- `slmp_open_items_recheck.py`
 - `slmp_pending_live_verification.py`
 - `slmp_extended_device_device_recheck.py`
 - `slmp_g_hg_extended_device_recheck.py`
@@ -51,8 +50,6 @@ If you need human confirmation, use:
 
 ### Rechecks for maintained areas
 
-- `slmp_open_items_recheck.py`
-  - Re-run the repository-root TODO live-check set when one exists.
 - `slmp_pending_live_verification.py`
   - Re-check maintained command families.
   - Current workflow excludes `1006 remote reset`.

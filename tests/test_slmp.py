@@ -3052,65 +3052,6 @@ class TestDeviceApi(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "total device points"):
             client.write_block(word_blocks=[("D8000", [0] * 952)])
 
-    def test_memory_read_words(self) -> None:
-        """Test test_memory_read_words."""
-        client = FakeClient()
-        client.next_response_data = b"\x11\x11\x22\x22"
-        out = client.memory_read_words(0x1234, 2)
-        self.assertEqual(out, [0x1111, 0x2222])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.MEMORY_READ)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x34\x12\x00\x00\x02\x00")
-
-    def test_extend_unit_write_bytes(self) -> None:
-        """Test test_extend_unit_write_bytes."""
-        client = FakeClient()
-        client.extend_unit_write_bytes(0x10, 0x0003, b"\x01\x02\x03\x04")
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x10\x00\x00\x00\x04\x00\x03\x00\x01\x02\x03\x04")
-
-    def test_extend_unit_word_helpers(self) -> None:
-        """Test test_extend_unit_word_helpers."""
-        client = FakeClient()
-        client.next_response_data = b"\x11\x11\x22\x22"
-        out = client.extend_unit_read_words(0x20, 2, 0x03E0)
-        self.assertEqual(out, [0x1111, 0x2222])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x20\x00\x00\x00\x04\x00\xe0\x03")
-
-        client.extend_unit_write_words(0x20, 0x03E0, [0x3333, 0x4444])
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(subcommand, 0x0000)
-        self.assertEqual(payload, b"\x20\x00\x00\x00\x04\x00\xe0\x03\x33\x33\x44\x44")
-
-        client.next_response_data = b"\x55\x55"
-        self.assertEqual(client.extend_unit_read_word(0x30, 0x03E0), 0x5555)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x30\x00\x00\x00\x02\x00\xe0\x03")
-
-        client.next_response_data = b"\x78\x56\x34\x12"
-        self.assertEqual(client.extend_unit_read_dword(0x34, 0x03E0), 0x12345678)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_READ)
-        self.assertEqual(payload, b"\x34\x00\x00\x00\x04\x00\xe0\x03")
-
-        client.extend_unit_write_word(0x30, 0x03E0, 0x5555)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x30\x00\x00\x00\x02\x00\xe0\x03\x55\x55")
-
-        client.extend_unit_write_dword(0x34, 0x03E0, 0x12345678)
-        command, subcommand, payload, _ = client.last_request
-        self.assertEqual(command, Command.EXTEND_UNIT_WRITE)
-        self.assertEqual(payload, b"\x34\x00\x00\x00\x04\x00\xe0\x03\x78\x56\x34\x12")
-
     def test_cpu_buffer_aliases_and_enum_are_not_public(self) -> None:
         """Extend Unit commands must not be exposed under a CPU-buffer name."""
         import slmp

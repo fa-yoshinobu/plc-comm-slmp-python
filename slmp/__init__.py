@@ -9,10 +9,16 @@ The primary user-facing entry points are:
 - ``poll``
 """
 
-__version__ = "5.1.0"
+__version__ = "5.2.0"
 
 from .async_client import AsyncSlmpClient
-from .capability_profiles import SlmpProfileLimit, SlmpProfileLimitKey, display_name, profile_limit
+from .capability_profiles import (
+    SlmpProfileLimit,
+    SlmpProfileLimitKey,
+    display_name,
+    plc_profile_display_name,
+    profile_limit,
+)
 from .client import SlmpClient
 from .constants import Command, FrameType, ModuleIONo, PLCSeries, RemoteClearMode
 from .core import (
@@ -184,6 +190,7 @@ __all__ = [
     "open_and_connect_sync",
     "parse_address",
     "plc_profile_descriptors",
+    "plc_profile_display_name",
     "profile_limit",
     "parse_device",
     "poll",

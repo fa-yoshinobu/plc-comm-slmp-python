@@ -59,7 +59,6 @@ If the release changes live behavior, also run the focused script for that area.
 
 Typical examples:
 
-- `scripts/slmp_open_items_recheck.py`
 - `scripts/slmp_pending_live_verification.py`
 - `scripts/slmp_device_range_probe.py`
 - `scripts/slmp_register_boundary_probe.py`

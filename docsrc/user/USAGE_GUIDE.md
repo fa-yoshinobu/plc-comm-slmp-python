@@ -7,6 +7,7 @@
 | `SlmpConnectionOptions` | `SlmpConnectionOptions(host: str, plc_profile: object, port: int, transport: str, default_target: SlmpTarget, timeout: float = 3.0, monitoring_timer: int = 16, raise_on_error: bool = True)` | Store stable connection settings. Port, transport, profile, and the complete four-field route are required. |
 | `open_and_connect` | `async def open_and_connect(options: SlmpConnectionOptions) -> AsyncSlmpClient` | Open one async connection. The ordinary client owns its FIFO operation queue. |
 | `open_and_connect_sync` | `def open_and_connect_sync(options: SlmpConnectionOptions) -> SlmpClient` | Open one synchronous connection. |
+| `plc_profile_display_name` | `def plc_profile_display_name(plc_profile) -> str` | Return the canonical human-readable PLC profile name without communication. |
 | `read_typed` | `async def read_typed(client, device, dtype) -> int | float | bool` | Read one typed value. |
 | `write_typed` | `async def write_typed(client, device, dtype, value: int | float | bool) -> None` | Write one typed value. |
 | `read_named` | `async def read_named(client, addresses) -> dict[str, int | float | bool]` | Read a mixed named collection. |
@@ -18,8 +19,9 @@
 | `poll` | `async def poll(client, addresses, interval)` | Yield repeated named read results. |
 | `SlmpClient.read_devices` | `read_devices(device, count, *, bit_unit)` | Generic direct read; an explicit Boolean bit/word unit is mandatory. |
 | `SlmpClient.write_devices` | `write_devices(device, values, *, bit_unit)` | Generic direct write; an explicit Boolean bit/word unit is mandatory. With `bit_unit=True`, every value must be an actual `bool`; integer `0` and `1` are rejected. |
-| `SlmpClient.read_devices_ext` | `read_devices_ext(qualified_device, count, *, bit_unit)` | Read routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
-| `SlmpClient.write_devices_ext` | `write_devices_ext(qualified_device, values, *, bit_unit)` | Write routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
+| `SlmpClient.read_devices_extended` | `read_devices_extended(qualified_device, count, *, bit_unit)` | Read routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
+| `SlmpClient.write_devices_extended` | `write_devices_extended(qualified_device, values, *, bit_unit)` | Write routed devices such as `Un\G...` and `Jn\...`; bit/word unit is mandatory. |
+| `SlmpClient.read_latest_self_diagnosis_error_code` | `read_latest_self_diagnosis_error_code() -> int` | Read the raw unsigned latest self-diagnosis error code from `SD0` in one Direct Read request. |
 
 The synchronous helpers use the same names with `_sync`.
 
@@ -147,7 +149,7 @@ before transport.
 
 ### Module buffer access
 
-Use `read_devices_ext()` and `write_devices_ext()` for intelligent module
+Use `read_devices_extended()` and `write_devices_extended()` for intelligent module
 buffer memory.
 
 | Notation | Description | Example |
@@ -170,16 +172,16 @@ with SlmpClient(
     default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     plc_profile="melsec:iq-r",
 ) as client:
-    original = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
+    original = client.read_devices_extended("U3\\G100", 4, bit_unit=False)
     write_confirmed = False
     try:
-        client.write_devices_ext("U3\\G100", [1, 2, 3, 4], bit_unit=False)
+        client.write_devices_extended("U3\\G100", [1, 2, 3, 4], bit_unit=False)
         write_confirmed = True
-        readback = client.read_devices_ext("U3\\G100", 4, bit_unit=False)
+        readback = client.read_devices_extended("U3\\G100", 4, bit_unit=False)
         print(readback)
     finally:
         if write_confirmed:
-            client.write_devices_ext("U3\\G100", original, bit_unit=False)
+            client.write_devices_extended("U3\\G100", original, bit_unit=False)
 ```
 
 `Un` is the module number in hexadecimal text, for example `U3` or `U3E0`.
@@ -197,13 +199,13 @@ from slmp import SlmpExtendedDevice, SlmpIndexZ
 
 
 device = SlmpExtendedDevice("U3\\D100", SlmpIndexZ(2))
-values = client.read_devices_ext(device, 1, bit_unit=False)
+values = client.read_devices_extended(device, 1, bit_unit=False)
 ```
 
 Extended random-read results retain the full route:
 
 ```python
-result = client.read_random_ext(word_devices=[r"U3E0\HG0", r"U3E1\HG0"])
+result = client.read_random_extended(word_devices=[r"U3E0\HG0", r"U3E1\HG0"])
 print(result.word[r"U3E0\HG0"])
 print(result.word[r"U3E1\HG0"])
 ```
@@ -264,17 +266,17 @@ with SlmpClient(
     default_target=SlmpTarget(network=0, station=0xFF, module_io=0x03FF, multidrop=0),
     plc_profile="melsec:iq-r",
 ) as client:
-    value = client.read_devices_ext("J2\\SW10", 1, bit_unit=False)
-    bits = client.read_devices_ext("J1\\X10", 16, bit_unit=True)
-    original_word = client.read_devices_ext("J1\\SW14", 1, bit_unit=False)
-    original_bit = client.read_devices_ext("J1\\X11", 1, bit_unit=True)
+    value = client.read_devices_extended("J2\\SW10", 1, bit_unit=False)
+    bits = client.read_devices_extended("J1\\X10", 16, bit_unit=True)
+    original_word = client.read_devices_extended("J1\\SW14", 1, bit_unit=False)
+    original_bit = client.read_devices_extended("J1\\X11", 1, bit_unit=True)
     word_write_confirmed = False
     bit_write_confirmed = False
     outcome_unknown = False
     try:
-        client.write_devices_ext("J1\\SW14", [2], bit_unit=False)
+        client.write_devices_extended("J1\\SW14", [2], bit_unit=False)
         word_write_confirmed = True
-        client.write_devices_ext("J1\\X11", [True], bit_unit=True)
+        client.write_devices_extended("J1\\X11", [True], bit_unit=True)
         bit_write_confirmed = True
         print(value, bits)
     except SlmpOutcomeUnknownError:
@@ -283,9 +285,9 @@ with SlmpClient(
     finally:
         if not outcome_unknown:
             if bit_write_confirmed:
-                client.write_devices_ext("J1\\X11", original_bit, bit_unit=True)
+                client.write_devices_extended("J1\\X11", original_bit, bit_unit=True)
             if word_write_confirmed:
-                client.write_devices_ext("J1\\SW14", original_word, bit_unit=False)
+                client.write_devices_extended("J1\\SW14", original_word, bit_unit=False)
 ```
 
 The available link direct device families depend on the PLC route and link
@@ -495,7 +497,10 @@ The canonical contiguous helpers `read_words_single_request*`,
 `write_dwords_single_request*`, `read_bits_single_request*`, and
 `write_bits_single_request*` issue exactly one request or reject invalid counts
 before transport. The older `read_words*`, `read_bits*`, and `write_bits*`
-names remain only as deprecated compatibility delegates. If multiple snapshots
+names, including top-level `read_dwords*`, remain only as deprecated
+compatibility delegates. Top-level `read_dwords` and `read_dwords_sync` are
+removed in the immediately following release; the client methods with those
+names are unchanged. If multiple snapshots
 are acceptable, split them explicitly in application code so their different
 acquisition times remain visible.
 
@@ -521,6 +526,16 @@ Every semantic `DeviceRef` is bound to the exact canonical `plc_profile` used to
 the value, and `parse_device(text, plc_profile=...)` requires it explicitly.
 A `DeviceRef` created for one profile is rejected by a client configured for a
 different profile before any request is sent.
+
+Direct devices and typed high-level expressions use separate existing APIs.
+`parse_device("D100", plc_profile=...)` and `str(ref)` are the DeviceAddress
+round-trip. `parse_address("D100:U", plc_profile=...)`, `D50.A`,
+`format_address`, and `normalize_address` are the AddressSpec round-trip.
+DeviceAddress parsing rejects dtype/bit suffixes and qualified `U...\\...` or
+`J...\\...` routes; AddressSpec parsing rejects plain `D100` / `X10` and
+`DeviceRef` values. Qualified routes continue to use `SlmpExtendedDevice`.
+These names reuse the existing public components; there is no second set of
+`parse_device_address` or `parse_address_spec` aliases.
 
 This is especially visible for `X` and `Y`: `melsec:iq-f` uses octal text,
 while the other supported profiles use hexadecimal text. For example,

@@ -214,15 +214,15 @@ def _parity_cases() -> list[_ParityCase]:
             [b""],
         ),
         _ParityCase(
-            "read_devices_ext",
-            lambda c: c.read_devices_ext(r"U3E0\D300", 2, bit_unit=False),
-            lambda c: c.read_devices_ext(r"U3E0\D300", 2, bit_unit=False),
+            "read_devices_extended",
+            lambda c: c.read_devices_extended(r"U3E0\D300", 2, bit_unit=False),
+            lambda c: c.read_devices_extended(r"U3E0\D300", 2, bit_unit=False),
             [_words(0x1111, 0x2222)],
         ),
         _ParityCase(
-            "write_devices_ext",
-            lambda c: c.write_devices_ext(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
-            lambda c: c.write_devices_ext(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
+            "write_devices_extended",
+            lambda c: c.write_devices_extended(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
+            lambda c: c.write_devices_extended(r"U3E0\D310", [0x1111, 0x2222], bit_unit=False),
             [b""],
         ),
         _ParityCase(
@@ -232,12 +232,12 @@ def _parity_cases() -> list[_ParityCase]:
             [_words(0x1111) + _dwords(0x12345678)],
         ),
         _ParityCase(
-            "read_random_ext",
-            lambda c: c.read_random_ext(
+            "read_random_extended",
+            lambda c: c.read_random_extended(
                 word_devices=[r"U3E0\D410"],
                 dword_devices=[r"U3E0\D510"],
             ),
-            lambda c: c.read_random_ext(
+            lambda c: c.read_random_extended(
                 word_devices=[r"U3E0\D410"],
                 dword_devices=[r"U3E0\D510"],
             ),
@@ -250,12 +250,12 @@ def _parity_cases() -> list[_ParityCase]:
             [b""],
         ),
         _ParityCase(
-            "write_random_words_ext",
-            lambda c: c.write_random_words_ext(
+            "write_random_words_extended",
+            lambda c: c.write_random_words_extended(
                 word_values=[(r"U3E0\D430", 0x1111)],
                 dword_values=[(r"U3E0\D530", 0x12345678)],
             ),
-            lambda c: c.write_random_words_ext(
+            lambda c: c.write_random_words_extended(
                 word_values=[(r"U3E0\D430", 0x1111)],
                 dword_values=[(r"U3E0\D530", 0x12345678)],
             ),
@@ -268,9 +268,9 @@ def _parity_cases() -> list[_ParityCase]:
             [b""],
         ),
         _ParityCase(
-            "write_random_bits_ext",
-            lambda c: c.write_random_bits_ext([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
-            lambda c: c.write_random_bits_ext([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
+            "write_random_bits_extended",
+            lambda c: c.write_random_bits_extended([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
+            lambda c: c.write_random_bits_extended([(r"U3E0\M110", True), (r"U3E0\M111", False)]),
             [b""],
         ),
         _ParityCase(
@@ -280,12 +280,12 @@ def _parity_cases() -> list[_ParityCase]:
             [b""],
         ),
         _ParityCase(
-            "register_monitor_devices_ext",
-            lambda c: c.register_monitor_devices_ext(
+            "register_monitor_devices_extended",
+            lambda c: c.register_monitor_devices_extended(
                 word_devices=[r"U3E0\D610"],
                 dword_devices=[r"U3E0\D710"],
             ),
-            lambda c: c.register_monitor_devices_ext(
+            lambda c: c.register_monitor_devices_extended(
                 word_devices=[r"U3E0\D610"],
                 dword_devices=[r"U3E0\D710"],
             ),
@@ -382,28 +382,10 @@ def _parity_cases() -> list[_ParityCase]:
             [_words(0x0001)],
         ),
         _ParityCase(
-            "memory_read_words",
-            lambda c: c.memory_read_words(0x1000, 2),
-            lambda c: c.memory_read_words(0x1000, 2),
-            [_words(0x1111, 0x2222)],
-        ),
-        _ParityCase(
-            "memory_write_words",
-            lambda c: c.memory_write_words(0x1000, [0x1111, 0x2222]),
-            lambda c: c.memory_write_words(0x1000, [0x1111, 0x2222]),
-            [b""],
-        ),
-        _ParityCase(
-            "extend_unit_read_bytes",
-            lambda c: c.extend_unit_read_bytes(0x2000, 4, 0x03E0),
-            lambda c: c.extend_unit_read_bytes(0x2000, 4, 0x03E0),
-            [b"\x01\x02\x03\x04"],
-        ),
-        _ParityCase(
-            "extend_unit_write_bytes",
-            lambda c: c.extend_unit_write_bytes(0x2000, 0x03E0, b"\x01\x02\x03\x04"),
-            lambda c: c.extend_unit_write_bytes(0x2000, 0x03E0, b"\x01\x02\x03\x04"),
-            [b""],
+            "read_latest_self_diagnosis_error_code",
+            lambda c: c.read_latest_self_diagnosis_error_code(),
+            lambda c: c.read_latest_self_diagnosis_error_code(),
+            [_words(0xC123)],
         ),
         _ParityCase(
             "read_array_labels",

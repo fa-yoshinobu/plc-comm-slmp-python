@@ -36,7 +36,9 @@ from slmp import (
     normalize_address,
     open_and_connect_sync,
     parse_address,
+    parse_device,
     plc_profile_descriptors,
+    plc_profile_display_name,
     poll_sync,
     read_dwords_single_request_sync,
     read_named_sync,
@@ -114,10 +116,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    device = parse_device("x20", plc_profile=args.plc_profile)
     parsed = parse_address("d200:f", plc_profile=args.plc_profile)
-    print(f"[normalize_address] x20 -> {normalize_address('x20', plc_profile=args.plc_profile)}")
+    print(f"[parse_device] x20 -> {device}")
+    print(f"[normalize_address] d200:f -> {normalize_address('d200:f', plc_profile=args.plc_profile)}")
     print(f"[parse_address] d200:f -> {parsed}")
     print(f"[format_address] parsed -> {format_address(parsed, plc_profile=args.plc_profile)}")
+    print(f"[plc_profile_display_name] {plc_profile_display_name(args.plc_profile)}")
 
     # SlmpConnectionOptions:
     #   host             - PLC IP / hostname
@@ -180,6 +185,9 @@ def main() -> None:
 
         dwords = read_dwords_single_request_sync(client, "D0", 4)
         print(f"[read_dwords_single_request_sync] D0-D7 (as 4 x uint32) = {dwords}")
+
+        diagnosis = client.read_latest_self_diagnosis_error_code()
+        print(f"[read_latest_self_diagnosis_error_code] SD0 = 0x{diagnosis:04X}")
 
         # ---------------------------------------------------------------
         # 3. write_bit_in_word_sync

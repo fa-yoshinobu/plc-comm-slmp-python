@@ -23,13 +23,13 @@ API and remain unsigned 16-bit integers.
 | Direct device read/write | `read_devices`, `write_devices` |
 | 32-bit values | `read_dword`, `write_dword`, `read_dwords`, `write_dwords` |
 | Float32 values | `read_float32`, `write_float32`, `read_float32s`, `write_float32s` |
-| Extended direct device read/write | `read_devices_ext`, `write_devices_ext` |
+| Extended direct device read/write | `read_devices_extended`, `write_devices_extended` |
 | Random read | `read_random` |
-| Extended random read | `read_random_ext` |
+| Extended random read | `read_random_extended` |
 | Random word/dword write | `write_random_words` |
-| Extended random word/dword write | `write_random_words_ext` |
+| Extended random word/dword write | `write_random_words_extended` |
 | Random bit write | `write_random_bits` |
-| Extended random bit write | `write_random_bits_ext` |
+| Extended random bit write | `write_random_bits_extended` |
 | Block read/write | `read_block`, `write_block` |
 | Type name | `read_type_name` |
 
@@ -38,7 +38,7 @@ such as `U1\G0`, `U3E0\HG0`, or `J2\SW10` where the route requires it.
 Raw extension fields are not part of the public semantic API. Use
 `SlmpExtendedDevice` with `SlmpIndexZ`, `SlmpIndexLz`, or `SlmpIndirect` only
 when a typed modification is required; otherwise pass the qualified string.
-`read_random_ext` result keys preserve the canonical complete route and typed
+`read_random_extended` result keys preserve the canonical complete route and typed
 modifier, for example `U3E1\HG0`, `J2\W10`, or `U3E0\D100+Z4`. Only the
 Extended Device result-key contract changed; ordinary `read_random` keys remain
 plain canonical device addresses.
@@ -47,12 +47,11 @@ plain canonical device addresses.
 
 | Operation | Public API |
 | --- | --- |
-| Monitor registration/cycle | `register_monitor_devices`, `register_monitor_devices_ext`, `run_monitor_cycle` |
+| Monitor registration/cycle | `register_monitor_devices`, `register_monitor_devices_extended`, `run_monitor_cycle` |
 | Self-test loopback | `self_test_loopback` |
 | Clear PLC error | `clear_error` |
-| Memory command words | `memory_read_words`, `memory_write_words` |
-| Extend-unit command words | `extend_unit_read_words`, `extend_unit_write_words` |
-| HG CPU-buffer words | `read_devices_ext`, `write_devices_ext` with a qualified `U3E0\HG` through `U3E3\HG` address |
+| Latest self-diagnosis error code | `read_latest_self_diagnosis_error_code` (one Direct Read of `SD0`) |
+| HG CPU-buffer words | `read_devices_extended`, `write_devices_extended` with a qualified `U3E0\HG` through `U3E3\HG` address |
 | Label array access | `read_array_labels`, `write_array_labels` |
 | Label random access | `read_random_labels`, `write_random_labels` |
 | Remote CPU control | `remote_run`, `remote_stop`, `remote_pause`, `remote_latch_clear`, `remote_reset` |
@@ -73,14 +72,34 @@ logical length; malformed or trailing data raises `SlmpError`.
 | --- | --- |
 | Connection helper | `open_and_connect`, `open_and_connect_sync` |
 | Profile descriptors | `plc_profile_descriptors`, `SlmpPlcProfileDescriptor` |
+| PLC profile display name | `plc_profile_display_name` |
 | Profile request limits | `profile_limit`, `SlmpProfileLimitKey`, `SlmpProfileLimit` |
 | Typed values | `read_typed`, `write_typed` |
 | Named read/write collections | `read_named`, `write_named`, `poll` (the polling iterator prepares its immutable Random Read payload and compact decode indexes once) |
 | Single-request word/dword read/write | `read_words_single_request`, `read_dwords_single_request`, `write_words_single_request`, `write_dwords_single_request` and synchronous `*_sync` forms |
 | Single-request bit read/write | `read_bits_single_request`, `write_bits_single_request` and synchronous `*_sync` forms |
-| Profile-bound device address | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)` |
-| Named address handling | `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
+| DeviceAddress: profile-bound direct device | `DeviceRef(code, number, plc_profile)`, `parse_device(value, plc_profile=...)`, `str(ref)` |
+| AddressSpec: dtype/bit-selected expression | `SlmpAddress`, `normalize_address`, `parse_address`, `try_parse_address`, `format_address` |
 | Bit-in-word write | `write_bit_in_word`, `write_bit_in_word_sync` (direct or qualified Extended Device route) |
+
+The old top-level `read_dwords` and `read_dwords_sync` names remain for this
+compatibility release only. They emit `DeprecationWarning` and delegate to
+`read_dwords_single_request` and `read_dwords_single_request_sync`; migrate
+before the immediately following release removes them. The client methods
+`AsyncSlmpClient.read_dwords` and `SlmpClient.read_dwords` are unchanged.
+
+The old `_ext` method names and top-level `display_name` remain temporary
+direct delegates for source migration. New code uses the canonical
+`_extended` methods and `plc_profile_display_name`.
+
+`DeviceRef` and `parse_device` are the existing DeviceAddress surface. They
+round-trip direct device text such as `D100` and `X10`; they do not accept
+dtype/bit expressions or qualified `U...\\...` / `J...\\...` routes.
+`SlmpAddress` and the `*_address` helpers are the existing AddressSpec surface.
+They require an explicit dtype or bit selection such as `D100:U` or `D50.A`
+and do not accept a plain direct device or `DeviceRef`. Qualified routes remain
+the separate `SlmpExtendedDevice` contract. No duplicate `DeviceAddress` or
+`AddressSpec` parser/formatter aliases are exported.
 
 `write_named` emits exactly one random-write request. It rejects mixed
 bit/word command families and bit-in-word read-modify-write entries. The

@@ -30,7 +30,6 @@ python scripts/slmp_connection_check.py --host $plcHost --port $plcPort --transp
 
 Run focused live scripts only when the change touches that area:
 
-- `scripts/slmp_open_items_recheck.py`
 - `scripts/slmp_pending_live_verification.py`
 - `scripts/slmp_device_range_probe.py`
 - `scripts/slmp_register_boundary_probe.py`
@@ -56,7 +55,6 @@ python scripts/slmp_device_range_probe.py --help
 python scripts/slmp_register_boundary_probe.py --help
 python scripts/slmp_init_model_docs.py --help
 python scripts/slmp_other_station_check.py --help
-python scripts/slmp_open_items_recheck.py --help
 python scripts/slmp_pending_live_verification.py --help
 python scripts/slmp_manual_label_verification.py --help
 python scripts/slmp_read_soak.py --help

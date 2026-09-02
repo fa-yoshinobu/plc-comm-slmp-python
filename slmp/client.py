@@ -562,6 +562,10 @@ class SlmpClient:
             ),
         )
 
+    def read_latest_self_diagnosis_error_code(self) -> int:
+        """Read the latest self-diagnosis error code as the raw unsigned value."""
+        return int(self.read_devices("SD0", 1, bit_unit=False)[0])
+
     def write_devices(
         self,
         device: str | DeviceRef,
@@ -692,7 +696,7 @@ class SlmpClient:
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    def read_devices_ext(
+    def read_devices_extended(
         self,
         device: str | SlmpExtendedDevice,
         points: int,
@@ -721,6 +725,16 @@ class SlmpClient:
                 bit_unit=bit_unit,
             ),
         )
+
+    def read_devices_ext(
+        self,
+        device: str | SlmpExtendedDevice,
+        points: int,
+        *,
+        bit_unit: bool,
+    ) -> list[int] | list[bool]:
+        """Compatibility delegate for :meth:`read_devices_extended`."""
+        return self.read_devices_extended(device, points, bit_unit=bit_unit)
 
     def _read_devices_ext_raw(
         self,
@@ -765,7 +779,7 @@ class SlmpClient:
             ),
         )
 
-    def write_devices_ext(
+    def write_devices_extended(
         self,
         device: str | SlmpExtendedDevice,
         values: Sequence[int | bool],
@@ -785,6 +799,16 @@ class SlmpClient:
             address_profile=self.plc_profile,
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    def write_devices_ext(
+        self,
+        device: str | SlmpExtendedDevice,
+        values: Sequence[int | bool],
+        *,
+        bit_unit: bool,
+    ) -> None:
+        """Compatibility delegate for :meth:`write_devices_extended`."""
+        self.write_devices_extended(device, values, bit_unit=bit_unit)
 
     def _write_devices_ext_raw(
         self,
@@ -848,7 +872,7 @@ class SlmpClient:
             lambda response: _operations.decode_read_random_response(response, operation),
         )
 
-    def read_random_ext(
+    def read_random_extended(
         self,
         *,
         word_devices: Sequence[str | SlmpExtendedDevice] = (),
@@ -886,6 +910,15 @@ class SlmpClient:
             lambda response: _operations.decode_read_random_response(response, operation),
         )
 
+    def read_random_ext(
+        self,
+        *,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
+    ) -> RandomReadResult:
+        """Compatibility delegate for :meth:`read_random_extended`."""
+        return self.read_random_extended(word_devices=word_devices, dword_devices=dword_devices)
+
     def write_random_words(
         self,
         *,
@@ -909,7 +942,7 @@ class SlmpClient:
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    def write_random_words_ext(
+    def write_random_words_extended(
         self,
         *,
         word_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
@@ -942,6 +975,15 @@ class SlmpClient:
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
+    def write_random_words_ext(
+        self,
+        *,
+        word_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
+        dword_values: Sequence[tuple[str | SlmpExtendedDevice, int]] = (),
+    ) -> None:
+        """Compatibility delegate for :meth:`write_random_words_extended`."""
+        self.write_random_words_extended(word_values=word_values, dword_values=dword_values)
+
     def write_random_bits(
         self,
         bit_values: Mapping[str | DeviceRef, bool] | Sequence[tuple[str | DeviceRef, bool]],
@@ -961,7 +1003,7 @@ class SlmpClient:
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    def write_random_bits_ext(
+    def write_random_bits_extended(
         self,
         bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool]],
     ) -> None:
@@ -984,6 +1026,13 @@ class SlmpClient:
             address_profile=self.plc_profile,
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    def write_random_bits_ext(
+        self,
+        bit_values: Sequence[tuple[str | SlmpExtendedDevice, bool]],
+    ) -> None:
+        """Compatibility delegate for :meth:`write_random_bits_extended`."""
+        self.write_random_bits_extended(bit_values)
 
     def register_monitor_devices(
         self,
@@ -1008,7 +1057,7 @@ class SlmpClient:
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
 
-    def register_monitor_devices_ext(
+    def register_monitor_devices_extended(
         self,
         *,
         word_devices: Sequence[str | SlmpExtendedDevice] = (),
@@ -1040,6 +1089,15 @@ class SlmpClient:
             address_profile=self.plc_profile,
         )
         self._request(request.command, subcommand=request.subcommand, data=request.payload)
+
+    def register_monitor_devices_ext(
+        self,
+        *,
+        word_devices: Sequence[str | SlmpExtendedDevice] = (),
+        dword_devices: Sequence[str | SlmpExtendedDevice] = (),
+    ) -> None:
+        """Compatibility delegate for :meth:`register_monitor_devices_extended`."""
+        self.register_monitor_devices_extended(word_devices=word_devices, dword_devices=dword_devices)
 
     def run_monitor_cycle(self, *, word_points: int, dword_points: int) -> MonitorResult:
         """Execute a monitoring cycle for previously registered devices.
@@ -1219,128 +1277,6 @@ class SlmpClient:
                 )
             )
         return result
-
-    # --------------------
-    # Additional typed command APIs
-    # --------------------
-
-    def memory_read_words(self, head_address: int, word_length: int) -> list[int]:
-        """Read 16-bit words from intelligent function module/special function module buffer memory.
-
-        Args:
-            head_address: Start address.
-            word_length: Number of words to read.
-
-        Returns:
-            List of 16-bit word values.
-
-        """
-        request = _operations.build_memory_read_words_request(head_address, word_length)
-        return self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_memory_read_words_response(response, word_length=word_length),
-        )
-
-    def memory_write_words(self, head_address: int, values: Sequence[int]) -> None:
-        """Write 16-bit words to intelligent function module/special function module buffer memory.
-
-        Args:
-            head_address: Start address.
-            values: Sequence of 16-bit word values to write.
-
-        """
-        request = _operations.build_memory_write_words_request(head_address, values)
-        self._request(request.command, request.subcommand, request.payload)
-
-    def extend_unit_read_bytes(self, head_address: int, byte_length: int, module_no: int) -> bytes:
-        """Read bytes from multiple-CPU shared memory or other extended units.
-
-        Args:
-            head_address: Start address.
-            byte_length: Number of bytes to read.
-            module_no: Module number or unit identification.
-
-        Returns:
-            Read data as bytes.
-
-        """
-        request = _operations.build_extend_unit_read_bytes_request(head_address, byte_length, module_no)
-        return self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_extend_unit_read_bytes_response(
-                response,
-                byte_length=byte_length,
-            ),
-        )
-
-    def extend_unit_read_words(self, head_address: int, word_length: int, module_no: int) -> list[int]:
-        """Read 16-bit words from multiple-CPU shared memory or other extended units.
-
-        Args:
-            head_address: Start address.
-            word_length: Number of words to read.
-            module_no: Module number or unit identification.
-
-        Returns:
-            List of 16-bit word values.
-
-        """
-        request = _operations.build_extend_unit_read_words_request(head_address, word_length, module_no)
-        return self._request_decoded(
-            request.command,
-            request.subcommand,
-            request.payload,
-            lambda response: _operations.decode_extend_unit_read_words_response(
-                response,
-                word_length=word_length,
-            ),
-        )
-
-    def extend_unit_read_word(self, head_address: int, module_no: int) -> int:
-        """Read one 16-bit word from an extend-unit buffer."""
-        return self.extend_unit_read_words(head_address, 1, module_no)[0]
-
-    def extend_unit_read_dword(self, head_address: int, module_no: int) -> int:
-        """Read one 32-bit value from an extend-unit buffer."""
-        return int.from_bytes(self.extend_unit_read_bytes(head_address, 4, module_no), "little", signed=False)
-
-    def extend_unit_write_bytes(self, head_address: int, module_no: int, data: bytes) -> None:
-        """Write bytes to multiple-CPU shared memory or other extended units.
-
-        Args:
-            head_address: Start address.
-            module_no: Module number or unit identification.
-            data: Bytes to write.
-
-        """
-        request = _operations.build_extend_unit_write_bytes_request(head_address, module_no, data)
-        self._request(request.command, request.subcommand, request.payload)
-
-    def extend_unit_write_words(self, head_address: int, module_no: int, values: Sequence[int]) -> None:
-        """Write 16-bit words to multiple-CPU shared memory or other extended units.
-
-        Args:
-            head_address: Start address.
-            module_no: Module number or unit identification.
-            values: Sequence of 16-bit word values to write.
-
-        """
-        request = _operations.build_extend_unit_write_words_request(head_address, module_no, values)
-        self._request(request.command, request.subcommand, request.payload)
-
-    def extend_unit_write_word(self, head_address: int, module_no: int, value: int) -> None:
-        """Write one 16-bit word to an extend-unit buffer."""
-        request = _operations.build_extend_unit_write_word_request(head_address, module_no, value)
-        self._request(request.command, request.subcommand, request.payload)
-
-    def extend_unit_write_dword(self, head_address: int, module_no: int, value: int) -> None:
-        """Write one 32-bit value to an extend-unit buffer."""
-        request = _operations.build_extend_unit_write_dword_request(head_address, module_no, value)
-        self._request(request.command, request.subcommand, request.payload)
 
     def remote_run(self, *, force: bool, clear_mode: RemoteClearMode) -> None:
         """Remote RUN.

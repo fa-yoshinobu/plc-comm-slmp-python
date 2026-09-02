@@ -173,7 +173,7 @@ class SlmpConnectionOptions:
 
 @dataclass(frozen=True)
 class SlmpAddress:
-    """Parsed public SLMP helper-layer address notation."""
+    """Parsed public AddressSpec with an explicit dtype or bit selection."""
 
     text: str
     base_device: str
@@ -402,13 +402,13 @@ async def write_bit_in_word(
             qualified_target = cast(str | SlmpExtendedDevice, target)
             direct_target = cast(str | DeviceRef, target)
             words = (
-                await client.read_devices_ext(qualified_target, 1, bit_unit=False)
+                await client.read_devices_extended(qualified_target, 1, bit_unit=False)
                 if is_extended
                 else await client.read_devices(direct_target, 1, bit_unit=False)
             )
             updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
             if is_extended:
-                await client.write_devices_ext(qualified_target, [updated], bit_unit=False)
+                await client.write_devices_extended(qualified_target, [updated], bit_unit=False)
             else:
                 await client.write_devices(direct_target, [updated], bit_unit=False)
         finally:
@@ -443,13 +443,13 @@ def write_bit_in_word_sync(
             qualified_target = cast(str | SlmpExtendedDevice, target)
             direct_target = cast(str | DeviceRef, target)
             words = (
-                client.read_devices_ext(qualified_target, 1, bit_unit=False)
+                client.read_devices_extended(qualified_target, 1, bit_unit=False)
                 if is_extended
                 else client.read_devices(direct_target, 1, bit_unit=False)
             )
             updated = _update_bit_in_word_value(int(words[0]), normalized_index, normalized_value)
             if is_extended:
-                client.write_devices_ext(qualified_target, [updated], bit_unit=False)
+                client.write_devices_extended(qualified_target, [updated], bit_unit=False)
             else:
                 client.write_devices(direct_target, [updated], bit_unit=False)
         finally:
@@ -703,11 +703,11 @@ def _effective_address_profile(
 
 
 def parse_address(
-    address: str | DeviceRef,
+    address: str,
     *,
     plc_profile: object,
 ) -> SlmpAddress:
-    """Parse public SLMP helper-layer address notation.
+    """Parse public AddressSpec dtype/bit notation.
 
     Supported forms match :func:`read_named`: ``"D100:U"``, ``"D200:F"``,
     ``"D50.A"``, and direct bit devices such as ``"M100:BIT"``.
@@ -748,7 +748,7 @@ def parse_address(
 
 
 def try_parse_address(
-    address: str | DeviceRef,
+    address: str,
     *,
     plc_profile: object,
 ) -> SlmpAddress | None:
@@ -761,11 +761,11 @@ def try_parse_address(
 
 
 def format_address(
-    address: SlmpAddress | str | DeviceRef,
+    address: SlmpAddress | str,
     *,
     plc_profile: object,
 ) -> str:
-    """Return canonical public SLMP address text."""
+    """Return canonical public AddressSpec text."""
 
     if not isinstance(address, SlmpAddress):
         return parse_address(address, plc_profile=plc_profile).text
@@ -781,19 +781,19 @@ def format_address(
 
 
 def normalize_address(
-    address: str | DeviceRef,
+    address: str,
     *,
     plc_profile: object,
 ) -> str:
     """Return the canonical helper-layer form of one SLMP device address.
 
-    The helper accepts free-form user text such as ``" d200:f "`` or an
-    already parsed :class:`DeviceRef`. The result is suitable for logs,
-    configuration files, and cache keys.
+    The helper accepts AddressSpec text such as ``" d200:f "``. Direct
+    :class:`DeviceRef` values belong to :func:`parse_device` and ``str(ref)``;
+    they are not accepted by this typed-address normalizer.
     """
 
     if not isinstance(address, str):
-        return str(address)
+        raise ValueError("normalize_address requires AddressSpec text with an explicit dtype or bit selection")
 
     effective_address_profile = _effective_address_profile(plc_profile=plc_profile)
 
@@ -1502,8 +1502,13 @@ async def read_dwords(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Read a contiguous DWord range using exactly one request."""
-    _validate_unsplit_dword_count(count, 480)
+    """Deprecated compatibility delegate; use :func:`read_dwords_single_request`."""
+    warnings.warn(
+        "read_dwords is deprecated; use read_dwords_single_request; "
+        "read_dwords will be removed in the immediately following release",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return await read_dwords_single_request(client, device, count)
 
 
@@ -1578,8 +1583,13 @@ def read_dwords_sync(
     device: str | DeviceRef,
     count: int,
 ) -> list[int]:
-    """Synchronously read a contiguous DWord range using one request."""
-    _validate_unsplit_dword_count(count, 480)
+    """Deprecated compatibility delegate; use :func:`read_dwords_single_request_sync`."""
+    warnings.warn(
+        "read_dwords_sync is deprecated; use read_dwords_single_request_sync; "
+        "read_dwords_sync will be removed in the immediately following release",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return read_dwords_single_request_sync(client, device, count)
 
 
