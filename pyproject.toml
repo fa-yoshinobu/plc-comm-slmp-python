@@ -43,6 +43,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "twine>=5.1",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.scripts]
