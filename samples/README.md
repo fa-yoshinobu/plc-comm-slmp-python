@@ -9,9 +9,9 @@ Use only test addresses that are safe for your PLC program before you run any wr
 Run samples from the repository root. Use TCP port `1025` for the standard getting-started target and UDP port `1035` when you explicitly choose UDP. For cable-pull reconnect checks, prefer UDP so the sample observes recovery without waiting for TCP socket cleanup.
 
 ```powershell
-python samples/high_level_async.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
-python samples/high_level_sync.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
-python samples/polling_reconnect.py --host 192.168.250.100 --port 1025 --plc-profile melsec:iq-r
+python samples/high_level_async.py --host 192.168.250.100 --transport tcp --port 1025 --plc-profile melsec:iq-r
+python samples/high_level_sync.py --host 192.168.250.100 --transport tcp --port 1025 --plc-profile melsec:iq-r
+python samples/polling_reconnect.py --host 192.168.250.100 --transport tcp --port 1025 --plc-profile melsec:iq-r
 python samples/polling_reconnect.py --host 192.168.250.100 --port 1035 --transport udp --plc-profile melsec:iq-r
 python samples/multi_plc_monitor.py --plc line-a=192.168.250.100,melsec:iq-r,1035,udp --plc line-b=192.168.250.101,melsec:iq-r,1035,udp --tag d100=D100:U --cycles 3 --dry-run
 python samples/config_polling.py --config samples/config_polling.example.json --dry-run
