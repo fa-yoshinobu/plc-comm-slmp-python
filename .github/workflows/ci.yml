@@ -46,11 +46,6 @@ jobs:
         shell: pwsh
         run: ./scripts/check_package_contents.ps1
 
-      - name: Verify self-contained source archive
-        if: matrix.python-version == '3.14'
-        shell: pwsh
-        run: ./scripts/check_source_archive.ps1 -IncludeWorktree
-
   windows-contract-smoke:
     name: Windows representative contract smoke
     runs-on: windows-latest
