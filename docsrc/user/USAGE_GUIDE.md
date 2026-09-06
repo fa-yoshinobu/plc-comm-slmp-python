@@ -84,7 +84,7 @@ async with await open_and_connect(options) as client:
 ```
 
 For `C200`-series password end codes, see the shared
-[SLMP Troubleshooting & Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/troubleshooting-codes/)
+[SLMP Troubleshooting & Codes](https://plc-comm-docs-site.fa-labo.com/plc-setup/slmp/troubleshooting-codes/)
 page.
 
 ## Routing / target station
@@ -127,7 +127,7 @@ SLMP request target automatically. Select the destination CPU explicitly when
 a write must be reflected there. A write can return a normal end code without
 changing the intended CPU buffer when the selected request target identifies a
 different CPU or Own Station. Cross-CPU reads remain valid. See the shared
-[iQ-R target guidance](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/iq-r/#multi-cpu-cpu-buffer-target).
+[iQ-R target guidance](https://plc-comm-docs-site.fa-labo.com/plc-setup/slmp/iq-r/#multi-cpu-cpu-buffer-target).
 
 ## Extended device access
 
@@ -738,7 +738,7 @@ Remove `--dry-run` when you are ready to open PLC connections.
 
 A nonzero PLC end code for a candidate runtime read means only that candidate is unreadable. Timeout, cancellation, transport, lifecycle, malformed-response, and local-validation failures abort the complete catalog read and propagate to the caller; no partial catalog is returned. The full SD/probe sequence owns one client FIFO turn, preventing another operation from interleaving. It does not auto-discover the PLC model.
 The catalog is for diagnostics and application-layer validation. Normal read/write helpers do not use it to reject addresses by configured upper bound before sending a request.
-The source rules for this catalog are maintained in the shared [SLMP device ranges](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/profile-reference/device-ranges/) reference.
+The source rules for this catalog are maintained in the shared [SLMP device ranges](https://plc-comm-docs-site.fa-labo.com/slmp/profile-reference/device-ranges/) reference.
 
 ```python
 import asyncio

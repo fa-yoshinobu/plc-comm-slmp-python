@@ -122,7 +122,7 @@ D100=42
 ## Confirm success
 
 1. Confirm your PLC accepts a TCP connection to `192.168.250.100:1025`.
-2. Confirm the PLC-side communication data code is Binary and the port/open setting matches your transport; see the [MELSEC SLMP PLC Setup Guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/slmp/).
+2. Confirm the PLC-side communication data code is Binary and the port/open setting matches your transport; see the [MELSEC SLMP PLC Setup Guide](https://plc-comm-docs-site.fa-labo.com/plc-setup/slmp/).
 3. Confirm PLC-side RUN-time write permission before running a write example where the PLC exposes that setting.
 4. Confirm `plc_profile` matches your PLC family.
 5. Confirm the first read uses a simple word register such as `D100`.

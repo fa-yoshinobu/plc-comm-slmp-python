@@ -1,5 +1,5 @@
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://fa-yoshinobu.github.io/plc-comm-docs-site/slmp/python/GETTING_STARTED/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://plc-comm-docs-site.fa-labo.com/slmp/python/GETTING_STARTED/)
 
 This folder contains thin wrappers around `slmp.cli`.
 
